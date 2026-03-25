@@ -2,7 +2,7 @@
 name = "agent-execution-platform"
 version = "0.1.0"
 edition = "2021"
-description = "AI Agent Blockchain Execution Platform — execute on-chain transactions for AI agents via relayer network"
+description = "AI Agent Blockchain Execution Platform — hackathon demo (synchronous, in-memory)"
 license = "MIT"
 
 [dependencies]
@@ -11,40 +11,23 @@ tokio = { version = "1", features = ["full"] }
 
 # Web framework
 axum = { version = "0.7", features = ["macros"] }
-tower = { version = "0.4", features = ["full"] }
-tower-http = { version = "0.5", features = ["cors", "trace", "request-id", "limit"] }
-hyper = { version = "1", features = ["full"] }
+tower = "0.4"
+tower-http = { version = "0.5", features = ["cors", "trace"] }
 
 # Serialization
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-
-# Database
-sqlx = { version = "0.7", features = [
-    "runtime-tokio-rustls",
-    "postgres",
-    "uuid",
-    "chrono",
-    "migrate",
-] }
-
-# Redis
-redis = { version = "0.25", features = ["tokio-comp", "connection-manager"] }
 
 # Blockchain — ethers
 ethers = { version = "2", features = ["legacy", "rustls"] }
 
 # Logging / observability
 tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
-
-# HTTP client (price feeds)
-reqwest = { version = "0.12", features = ["json", "rustls-tls"], default-features = false }
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
 # Utilities
 uuid = { version = "1", features = ["v4", "serde"] }
 chrono = { version = "0.4", features = ["serde"] }
-thiserror = "1"
 anyhow = "1"
 dotenvy = "0.15"
 hex = "0.4"

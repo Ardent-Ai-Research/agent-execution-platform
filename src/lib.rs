@@ -1,14 +1,10 @@
-//! AI Agent Blockchain Execution Platform — library root.
+//! AI Agent Blockchain Execution Platform — library root (hackathon edition).
 //!
-//! All modules are declared here so they can be imported with
-//! `use agent_execution_platform::<module>`.
+//! Stripped-down: no DB, no Redis, no payments, no workers.
+//! Synchronous inline execution with in-memory state.
 
 pub mod api;
 pub mod config;
-pub mod db;
 pub mod execution_engine;
-pub mod payments;
-pub mod queue;
 pub mod relayer;
 pub mod types;
-pub mod worker;

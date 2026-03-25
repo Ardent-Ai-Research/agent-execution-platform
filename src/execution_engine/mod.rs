@@ -1,6 +1,7 @@
-//! Execution Engine — the brain of the platform.
+//! Execution Engine — hackathon edition.
 //!
-//! Orchestrates: validation → simulation → pricing → payment check → queue.
+//! Orchestrates: validation → simulation → pricing.
+//! Pricing is hardcoded (no live feed).
 
 pub mod pricing;
 pub mod simulation;
@@ -13,33 +14,24 @@ use tracing::info;
 
 use crate::config::AppConfig;
 use crate::types::{Chain, ExecutionRequest, SimulationResult};
-use pricing::EthPriceCache;
 
-/// Shared state for the execution engine, holding provider references
-/// and the ETH/USD price cache.
+/// Shared state for the execution engine.
 #[derive(Clone)]
 pub struct ExecutionEngine {
     pub config: AppConfig,
     pub eth_provider: Arc<Provider<Http>>,
-    pub price_cache: Arc<EthPriceCache>,
 }
 
 impl ExecutionEngine {
     pub fn new(config: AppConfig) -> Result<Self> {
         let eth_provider = Provider::<Http>::try_from(&config.ethereum_rpc_url)?;
-        let price_cache = Arc::new(EthPriceCache::new(
-            config.eth_price_feed_url.clone(),
-            config.eth_price_cache_ttl_secs,
-        ));
         Ok(Self {
             config,
             eth_provider: Arc::new(eth_provider),
-            price_cache,
         })
     }
 
-    /// Resolve the provider for a given chain.  
-    /// Currently only Ethereum is supported; extend here for multi-chain.
+    /// Resolve the provider for a given chain.
     pub fn provider_for_chain(&self, chain: &Chain) -> Result<Arc<Provider<Http>>> {
         match chain {
             Chain::Ethereum => Ok(self.eth_provider.clone()),
@@ -47,15 +39,13 @@ impl ExecutionEngine {
         }
     }
 
-    // ────────────────────── Validation ────────────────────────────────
+    // ──────────────────── Validation ────────────────────────────────
 
     /// Validate an inbound execution request.
     pub fn validate(&self, req: &ExecutionRequest) -> Result<Chain> {
-        // Chain resolution
         let chain = Chain::from_str_loose(&req.chain)
             .ok_or_else(|| anyhow!("unsupported chain: {}", req.chain))?;
 
-        // Basic address validation (must start with 0x, 42 chars)
         if !req.agent_wallet_address.starts_with("0x") || req.agent_wallet_address.len() != 42 {
             return Err(anyhow!("invalid agent wallet address"));
         }
@@ -65,26 +55,25 @@ impl ExecutionEngine {
         if !req.calldata.starts_with("0x") {
             return Err(anyhow!("calldata must be hex-encoded with 0x prefix"));
         }
-        // Validate calldata is actually valid hex
         let calldata_hex = req.calldata.trim_start_matches("0x");
         if calldata_hex.is_empty() {
-            return Err(anyhow!("calldata is empty — must contain at least a 4-byte function selector"));
+            return Err(anyhow!("calldata is empty"));
         }
         if calldata_hex.len() % 2 != 0 {
-            return Err(anyhow!("calldata has odd-length hex — must be even number of hex characters"));
+            return Err(anyhow!("calldata has odd-length hex"));
         }
         if hex::decode(calldata_hex).is_err() {
             return Err(anyhow!("calldata contains invalid hex characters"));
         }
         if calldata_hex.len() < 8 {
-            return Err(anyhow!("calldata too short — must contain at least a 4-byte function selector (8 hex chars)"));
+            return Err(anyhow!("calldata too short — need at least 4-byte selector"));
         }
 
         info!(chain = %chain, agent = %req.agent_wallet_address, "request validated");
         Ok(chain)
     }
 
-    // ────────────────────── Simulation ────────────────────────────────
+    // ──────────────────── Simulation ────────────────────────────────
 
     /// Simulate the transaction and return gas estimate + return data.
     pub async fn simulate(&self, req: &ExecutionRequest, chain: &Chain) -> Result<SimulationResult> {
@@ -102,18 +91,10 @@ impl ExecutionEngine {
         simulation::simulate_transaction(provider, from, to, calldata, value).await
     }
 
-    // ────────────────────── Pricing ──────────────────────────────────
+    // ──────────────────── Pricing ──────────────────────────────────
 
-    /// Calculate execution cost in USD based on gas estimate.
-    pub async fn estimate_cost(&self, chain: &Chain, gas_estimate: u64) -> Result<f64> {
-        let provider = self.provider_for_chain(chain)?;
-        pricing::calculate_cost(
-            provider,
-            gas_estimate,
-            self.config.gas_price_markup_pct,
-            self.config.platform_fee_usd,
-            &self.price_cache,
-        )
-        .await
+    /// Calculate execution cost in USD (hardcoded for hackathon).
+    pub async fn estimate_cost(&self, _chain: &Chain, gas_estimate: u64) -> Result<f64> {
+        Ok(pricing::calculate_cost_hardcoded(gas_estimate))
     }
 }

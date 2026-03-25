@@ -1,6 +1,6 @@
-//! Core domain types shared across the entire platform.
+//! Core domain types — hackathon edition.
 //!
-//! Every module imports from here so changes propagate cleanly.
+//! Stripped down: no DB-specific derives, no payment types, no job queue types.
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
@@ -9,8 +9,7 @@ use uuid::Uuid;
 // ──────────────────────────── Enumerations ────────────────────────────
 
 /// Blockchain networks we support.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash, sqlx::Type)]
-#[sqlx(type_name = "TEXT")]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 #[serde(rename_all = "lowercase")]
 pub enum Chain {
     Ethereum,
@@ -42,16 +41,11 @@ impl Chain {
     }
 }
 
-/// Lifecycle of an execution request.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, sqlx::Type)]
-#[sqlx(type_name = "TEXT")]
+/// Simplified lifecycle for hackathon demo.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum ExecutionStatus {
-    Pending,
-    PaymentRequired,
-    PaymentVerified,
-    Queued,
-    Executing,
+    Simulated,
     Broadcasting,
     Confirmed,
     Failed,
@@ -107,32 +101,13 @@ pub struct StatusResponse {
 
 // ──────────────────────────── Internal Models ─────────────────────────
 
-/// A fully validated execution job ready for the queue.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ExecutionJob {
-    pub request_id: Uuid,
-    pub agent_wallet: String,
-    pub chain: Chain,
-    pub target_contract: String,
-    pub calldata: String,
-    pub value: String,
-    pub gas_limit: u64,
-    pub created_at: DateTime<Utc>,
-    /// Number of times this job has been attempted (for poison-pill protection).
-    /// Defaults to 0 for newly enqueued jobs.
-    #[serde(default)]
-    pub attempt_count: u32,
-}
-
-/// Result returned by a relayer after broadcasting a transaction.
+/// Result returned by the relayer after broadcasting a transaction.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RelayerResult {
     pub tx_hash: String,
     pub success: bool,
     pub error: Option<String>,
-    /// Block number in which the tx was mined (if confirmed).
     pub block_number: Option<u64>,
-    /// Actual gas used by the on-chain transaction.
     pub gas_used: Option<u64>,
 }
 
@@ -143,23 +118,4 @@ pub struct SimulationResult {
     pub gas_estimate: u64,
     pub return_data: Option<String>,
     pub error: Option<String>,
-}
-
-/// Payment metadata attached after x402 verification.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct PaymentProof {
-    pub payment_id: Uuid,
-    pub payer: String,
-    pub amount_usd: f64,
-    pub token: String,
-    pub chain: String,
-    pub tx_hash: String,
-    pub verified: bool,
-    pub verified_at: DateTime<Utc>,
-    /// The on-chain amount transferred (in token-native units, e.g. 6-decimal USDC).
-    pub confirmed_amount_raw: Option<String>,
-    /// Block confirmations at verification time.
-    pub block_confirmations: Option<u64>,
-    /// The token contract address that was verified on-chain.
-    pub token_contract: Option<String>,
 }

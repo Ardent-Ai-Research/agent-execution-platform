@@ -1,46 +1,49 @@
-//! Service layer — thin wrappers that coordinate between the execution engine,
-//! database, queue, and payment verification for each API endpoint.
+//! Service layer — hackathon edition.
+//!
+//! Inline synchronous execution: validate → simulate → price → broadcast → return.
+//! No payment gate, no queue, no database.
 
 use anyhow::Result;
 use chrono::Utc;
-use redis::aio::ConnectionManager;
-use sqlx::PgPool;
+use std::collections::HashMap;
+use std::sync::Arc;
+use tokio::sync::Mutex;
 use tracing::info;
+use uuid::Uuid;
 
-use crate::db;
+use crate::api::routes::RequestRecord;
 use crate::execution_engine::ExecutionEngine;
-use crate::queue;
+use crate::relayer::orchestrator::RelayerOrchestrator;
 use crate::types::*;
 
-/// Handle a full execution request:
-/// validate → simulate → price → check payment → enqueue.
+/// Handle a full execution request inline:
+/// validate → simulate → price → broadcast → return result.
 pub async fn handle_execute(
     engine: &ExecutionEngine,
-    pool: &PgPool,
-    redis_conn: &mut ConnectionManager,
+    orchestrator: &RelayerOrchestrator,
+    store: &Arc<Mutex<HashMap<Uuid, RequestRecord>>>,
     req: &ExecutionRequest,
-    payment_proof: Option<&PaymentProof>,
 ) -> Result<ExecutionResponse> {
+    let request_id = Uuid::new_v4();
+    let now = Utc::now();
+
     // 1. Validate
     let chain = engine.validate(req)?;
 
-    // 2. Persist initial request
-    let db_row = db::insert_execution_request(pool, req, &ExecutionStatus::Pending).await?;
-    let request_id = db_row.id;
-
-    // 3. Simulate
+    // 2. Simulate
     let sim = engine.simulate(req, &chain).await?;
     if !sim.success {
-        db::update_execution_status(
-            pool,
+        // Store failed record
+        let record = RequestRecord {
             request_id,
-            &ExecutionStatus::Failed,
-            None,
-            sim.error.as_deref(),
-            None,
-            None,
-        )
-        .await?;
+            status: ExecutionStatus::Failed,
+            chain: chain.to_string(),
+            tx_hash: None,
+            cost_usd: None,
+            created_at: now,
+            updated_at: Utc::now(),
+        };
+        store.lock().await.insert(request_id, record);
 
         return Ok(ExecutionResponse {
             request_id,
@@ -52,146 +55,82 @@ pub async fn handle_execute(
         });
     }
 
-    // 4. Price
+    // 3. Price
     let cost = engine.estimate_cost(&chain, sim.gas_estimate).await?;
-    db::update_execution_status(
-        pool,
-        request_id,
-        &ExecutionStatus::PaymentRequired,
-        None,
-        None,
-        Some(sim.gas_estimate as i64),
-        Some(cost),
-    )
-    .await?;
 
-    // 5. Check payment
-    match payment_proof {
-        None => {
-            // No payment yet — return 402-equivalent response
-            return Ok(ExecutionResponse {
-                request_id,
-                status: ExecutionStatus::PaymentRequired,
-                estimated_gas: Some(sim.gas_estimate),
-                estimated_cost_usd: Some(cost),
-                tx_hash: None,
-                message: "payment required — include X-Payment-Proof header".into(),
-            });
-        }
-        Some(proof) => {
-            // Server-side amount cross-check: the on-chain verified payment
-            // must cover the platform's calculated cost, regardless of what
-            // the client claimed in the header.
-            if proof.amount_usd < cost {
-                db::update_execution_status(
-                    pool,
-                    request_id,
-                    &ExecutionStatus::Failed,
-                    None,
-                    Some(&format!(
-                        "underpayment: paid {:.6} USD, required {:.6} USD",
-                        proof.amount_usd, cost
-                    )),
-                    None,
-                    None,
-                )
-                .await?;
+    // 4. Store initial record
+    {
+        let record = RequestRecord {
+            request_id,
+            status: ExecutionStatus::Broadcasting,
+            chain: chain.to_string(),
+            tx_hash: None,
+            cost_usd: Some(cost),
+            created_at: now,
+            updated_at: Utc::now(),
+        };
+        store.lock().await.insert(request_id, record);
+    }
 
-                return Ok(ExecutionResponse {
-                    request_id,
-                    status: ExecutionStatus::Failed,
-                    estimated_gas: Some(sim.gas_estimate),
-                    estimated_cost_usd: Some(cost),
-                    tx_hash: None,
-                    message: format!(
-                        "underpayment: paid {:.6} USD, required {:.6} USD",
-                        proof.amount_usd, cost
-                    ),
-                });
-            }
+    // 5. Execute via relayer (inline, synchronous)
+    let gas_limit = sim.gas_estimate.saturating_mul(120) / 100; // 20% buffer
+    let result = orchestrator
+        .execute(&chain, &req.target_contract, &req.calldata, &req.value, gas_limit)
+        .await;
 
-            // Atomically record payment — returns None if tx_hash already used
-            // (race-condition-safe via UNIQUE constraint + ON CONFLICT DO NOTHING)
-            let inserted = db::insert_payment(pool, request_id, proof).await?;
-            if inserted.is_none() {
-                return Ok(ExecutionResponse {
-                    request_id,
-                    status: ExecutionStatus::Failed,
-                    estimated_gas: Some(sim.gas_estimate),
-                    estimated_cost_usd: Some(cost),
-                    tx_hash: None,
-                    message: format!(
-                        "payment tx {} has already been used (replay rejected)",
-                        proof.tx_hash
-                    ),
-                });
-            }
+    // 6. Update store with result
+    let (final_status, tx_hash, message) = if result.success {
+        (
+            ExecutionStatus::Confirmed,
+            Some(result.tx_hash.clone()),
+            format!("transaction confirmed in block {:?}", result.block_number),
+        )
+    } else if result.error.as_deref() == Some("transaction reverted on-chain") {
+        (
+            ExecutionStatus::Reverted,
+            Some(result.tx_hash.clone()),
+            "transaction reverted on-chain".into(),
+        )
+    } else {
+        (
+            ExecutionStatus::Failed,
+            if result.tx_hash.is_empty() { None } else { Some(result.tx_hash.clone()) },
+            format!("execution failed: {}", result.error.unwrap_or_default()),
+        )
+    };
 
-            db::update_execution_status(
-                pool,
-                request_id,
-                &ExecutionStatus::PaymentVerified,
-                None,
-                None,
-                None,
-                None,
-            )
-            .await?;
+    {
+        let mut s = store.lock().await;
+        if let Some(record) = s.get_mut(&request_id) {
+            record.status = final_status.clone();
+            record.tx_hash = tx_hash.clone();
+            record.updated_at = Utc::now();
         }
     }
 
-    // 6. Enqueue
-    // Apply a 20% gas buffer for the relayer to prevent out-of-gas reverts.
-    // Pricing was already calculated on the raw estimate, so the user isn't
-    // overcharged — the buffer is a safety margin absorbed by the platform.
-    let gas_limit_with_buffer = sim.gas_estimate.saturating_mul(120) / 100;
-
-    let job = ExecutionJob {
-        request_id,
-        agent_wallet: req.agent_wallet_address.clone(),
-        chain,
-        target_contract: req.target_contract.clone(),
-        calldata: req.calldata.clone(),
-        value: req.value.clone(),
-        gas_limit: gas_limit_with_buffer,
-        created_at: Utc::now(),
-        attempt_count: 0,
-    };
-    queue::enqueue_job(redis_conn, &job).await?;
-
-    db::update_execution_status(
-        pool,
-        request_id,
-        &ExecutionStatus::Queued,
-        None,
-        None,
-        None,
-        None,
-    )
-    .await?;
-
-    info!(request_id = %request_id, "execution request queued");
+    info!(request_id = %request_id, status = %final_status, "execution complete");
 
     Ok(ExecutionResponse {
         request_id,
-        status: ExecutionStatus::Queued,
+        status: final_status,
         estimated_gas: Some(sim.gas_estimate),
         estimated_cost_usd: Some(cost),
-        tx_hash: None,
-        message: "execution queued".into(),
+        tx_hash,
+        message,
     })
 }
 
-/// Handle a simulation-only request (no payment, no queue).
+/// Handle a simulation-only request.
 pub async fn handle_simulate(
     engine: &ExecutionEngine,
-    pool: &PgPool,
     req: &ExecutionRequest,
 ) -> Result<ExecutionResponse> {
-    let chain = engine.validate(req)?;
-    let db_row = db::insert_execution_request(pool, req, &ExecutionStatus::Pending).await?;
-    let request_id = db_row.id;
+    let request_id = Uuid::new_v4();
 
+    // 1. Validate
+    let chain = engine.validate(req)?;
+
+    // 2. Simulate
     let sim = engine.simulate(req, &chain).await?;
     let cost = if sim.success {
         Some(engine.estimate_cost(&chain, sim.gas_estimate).await?)
@@ -199,25 +138,10 @@ pub async fn handle_simulate(
         None
     };
 
-    db::update_execution_status(
-        pool,
-        request_id,
-        if sim.success {
-            &ExecutionStatus::Pending
-        } else {
-            &ExecutionStatus::Failed
-        },
-        None,
-        sim.error.as_deref(),
-        Some(sim.gas_estimate as i64),
-        cost,
-    )
-    .await?;
-
     Ok(ExecutionResponse {
         request_id,
         status: if sim.success {
-            ExecutionStatus::Pending
+            ExecutionStatus::Simulated
         } else {
             ExecutionStatus::Failed
         },
