@@ -722,6 +722,9 @@ All configuration is via environment variables (`.env` supported):
 
 ---
 
+## The `msg.sender` Problem
+Right now, the relayer signs the transaction with its own private key, so on-chain `msg.sender` = relayer address, not the AI agent's wallet. This breaks the core premise — agents lose their on-chain identity. Three Viable Approaches; A. Pre-signed tx relay (but agent's wallet pays native gas), B. `EIP-2771` Meta-Transactions (relayer pays gas but only limited to target contracts with `ERC-2771` context), C. `ERC-4337` Account Abstraction (agent with smart wallet, bundler/paymaster pays gas, and target contract needs smart wallets + bundler context). 
+
 ## License
 
 MIT
