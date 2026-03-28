@@ -1,4 +1,6 @@
-# AI Agent Blockchain Execution Platform - UNDER PRODUCTION
+# AI Agent Blockchain Execution Platform - Full version
+
+#### DISCLAIMER: FULL VERSION UNDER DEVELOPMENT CHECK OTHER BRANCH FOR THE LITE VERSION.
 
 A production-hardened backend that allows **AI agents owning their own wallets** to request on-chain transaction execution through an API. The platform simulates transactions, calculates costs, requires payment via the **x402 protocol** with **real on-chain ERC-20 verification**, then sends transactions through a relayer network that abstracts gas payments.
 
