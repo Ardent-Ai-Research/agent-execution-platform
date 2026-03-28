@@ -6,28 +6,6 @@ A backend that allows **AI agents owning their own wallets** to execute on-chain
 
 ---
 
-## The Problem
-
-When a relayer sends a transaction on behalf of an agent, the target contract sees `msg.sender = relayer`. The agent loses its on-chain identity — staking balances, token ownership, governance votes all get attributed to the wrong address.
-
-## The Solution: EIP-2771 Meta-Transactions
-
-```text
-Agent signs EIP-712 message (off-chain, zero gas)
-    ↓
-Platform API validates + simulates the inner call
-    ↓
-Relayer calls MinimalForwarder.execute(request, signature)
-    ↓
-Forwarder verifies signature → calls target with appended agent address
-    ↓
-Target contract (ERC2771Context) → _msgSender() = Agent ✓
-```
-
-The agent never pays gas. The relayer sponsors it. The contract sees the agent as the caller.
-
----
-
 ## Architecture
 
 ```text
