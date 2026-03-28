@@ -1,7 +1,7 @@
-//! Service layer — hackathon edition.
+//! Service layer — EIP-2771 meta-transaction edition.
 //!
 //! Inline synchronous execution: validate → simulate → price → broadcast → return.
-//! No payment gate, no queue, no database.
+//! All executions go through the MinimalForwarder so `_msgSender()` = agent.
 
 use anyhow::Result;
 use chrono::Utc;
@@ -17,7 +17,7 @@ use crate::relayer::orchestrator::RelayerOrchestrator;
 use crate::types::*;
 
 /// Handle a full execution request inline:
-/// validate → simulate → price → broadcast → return result.
+/// validate → simulate → price → build MetaTxParams → broadcast via forwarder → return.
 pub async fn handle_execute(
     engine: &ExecutionEngine,
     orchestrator: &RelayerOrchestrator,
@@ -30,8 +30,8 @@ pub async fn handle_execute(
     // 1. Validate
     let chain = engine.validate(req)?;
 
-    // 2. Simulate
-    let sim = engine.simulate(req, &chain).await?;
+    // 2. Simulate the exact forwarder.execute() call (100% accurate gas)
+    let sim = engine.simulate_full(req, &chain).await?;
     if !sim.success {
         // Store failed record
         let record = RequestRecord {
@@ -55,8 +55,8 @@ pub async fn handle_execute(
         });
     }
 
-    // 3. Price
-    let cost = engine.estimate_cost(&chain, sim.gas_estimate).await?;
+    // 3. Price (full_simulation = true, gas already includes forwarder overhead)
+    let cost = engine.estimate_cost(&chain, sim.gas_estimate, true).await?;
 
     // 4. Store initial record
     {
@@ -72,24 +72,33 @@ pub async fn handle_execute(
         store.lock().await.insert(request_id, record);
     }
 
-    // 5. Execute via relayer (inline, synchronous)
-    let gas_limit = sim.gas_estimate.saturating_mul(120) / 100; // 20% buffer
-    let result = orchestrator
-        .execute(&chain, &req.target_contract, &req.calldata, &req.value, gas_limit)
-        .await;
+    // 5. Build MetaTxParams and execute via forwarder
+    let params = MetaTxParams {
+        agent_address: req.agent_wallet_address.clone(),
+        target_contract: req.target_contract.clone(),
+        calldata: req.calldata.clone(),
+        value: req.value.clone(),
+        signature: req.signature.clone(),
+        forwarder_address: req.forwarder_address.clone(),
+        forwarder_nonce: req.forwarder_nonce,
+        deadline: req.deadline,
+        meta_gas: req.meta_gas,
+    };
+
+    let result = orchestrator.execute(&chain, &params).await;
 
     // 6. Update store with result
     let (final_status, tx_hash, message) = if result.success {
         (
             ExecutionStatus::Confirmed,
             Some(result.tx_hash.clone()),
-            format!("transaction confirmed in block {:?}", result.block_number),
+            format!("meta-tx confirmed in block {:?}", result.block_number),
         )
     } else if result.error.as_deref() == Some("transaction reverted on-chain") {
         (
             ExecutionStatus::Reverted,
             Some(result.tx_hash.clone()),
-            "transaction reverted on-chain".into(),
+            "meta-tx reverted on-chain".into(),
         )
     } else {
         (
@@ -108,7 +117,7 @@ pub async fn handle_execute(
         }
     }
 
-    info!(request_id = %request_id, status = %final_status, "execution complete");
+    info!(request_id = %request_id, status = %final_status, "meta-tx execution complete");
 
     Ok(ExecutionResponse {
         request_id,
@@ -121,6 +130,8 @@ pub async fn handle_execute(
 }
 
 /// Handle a simulation-only request.
+/// Uses inner-call simulation (agent → target) since a valid EIP-712
+/// signature may not be available. Forwarder overhead is added in pricing.
 pub async fn handle_simulate(
     engine: &ExecutionEngine,
     req: &ExecutionRequest,
@@ -130,10 +141,11 @@ pub async fn handle_simulate(
     // 1. Validate
     let chain = engine.validate(req)?;
 
-    // 2. Simulate
-    let sim = engine.simulate(req, &chain).await?;
+    // 2. Simulate inner call only (no forwarder)
+    let sim = engine.simulate_inner(req, &chain).await?;
     let cost = if sim.success {
-        Some(engine.estimate_cost(&chain, sim.gas_estimate).await?)
+        // full_simulation = false → pricing adds ~80k forwarder overhead
+        Some(engine.estimate_cost(&chain, sim.gas_estimate, false).await?)
     } else {
         None
     };

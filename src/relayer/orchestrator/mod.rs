@@ -1,12 +1,13 @@
-//! Relayer Orchestrator — hackathon edition.
+//! Relayer Orchestrator — EIP-2771 meta-transaction edition.
 //!
 //! Single attempt, no retries. Routes to the correct chain relayer.
+//! All executions go through the MinimalForwarder.
 
 use ethers::signers::Signer;
 use tracing::{error, info};
 
 use crate::relayer::ethereum::EthereumRelayer;
-use crate::types::{Chain, RelayerResult};
+use crate::types::{Chain, MetaTxParams, RelayerResult};
 
 /// The orchestrator holds a registry of chain → relayer mappings.
 #[derive(Clone)]
@@ -38,21 +39,14 @@ impl RelayerOrchestrator {
         }
     }
 
-    /// Route to the appropriate relayer and execute (single attempt).
-    pub async fn execute(
-        &self,
-        chain: &Chain,
-        target_contract: &str,
-        calldata: &str,
-        value: &str,
-        gas_limit: u64,
-    ) -> RelayerResult {
-        info!(chain = %chain, "orchestrator routing execution");
+    /// Route to the appropriate relayer and execute the meta-transaction.
+    pub async fn execute(&self, chain: &Chain, params: &MetaTxParams) -> RelayerResult {
+        info!(chain = %chain, agent = %params.agent_address, "orchestrator routing meta-tx");
 
         match chain {
             Chain::Ethereum => {
                 if let Some(ref relayer) = self.ethereum_relayer {
-                    relayer.execute(target_contract, calldata, value, gas_limit).await
+                    relayer.execute_meta_tx(params).await
                 } else {
                     error!("ethereum relayer not configured");
                     RelayerResult {

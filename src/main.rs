@@ -60,7 +60,7 @@ async fn main() -> anyhow::Result<()> {
         .route("/health", get(routes::health_handler))
         .route("/execute", post(routes::execute_handler))
         .route("/simulate", post(routes::simulate_handler))
-        .route("/status/{id}", get(routes::status_handler))
+        .route("/status/:id", get(routes::status_handler))
         .layer(TraceLayer::new_for_http())
         .layer(CorsLayer::permissive())
         .with_state(state);

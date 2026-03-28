@@ -3,3 +3,9 @@
 *.swp
 *.swo
 .DS_Store
+
+# Forge artifacts
+/cache
+/out
+contracts/cache
+contracts/out

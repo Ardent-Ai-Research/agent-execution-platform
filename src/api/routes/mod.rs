@@ -56,7 +56,9 @@ pub async fn execute_handler(
             let is_client_error = err_str.contains("unsupported chain")
                 || err_str.contains("invalid agent wallet")
                 || err_str.contains("invalid target contract")
-                || err_str.contains("calldata");
+                || err_str.contains("calldata")
+                || err_str.contains("invalid forwarder")
+                || err_str.contains("invalid signature");
             let status = if is_client_error {
                 StatusCode::BAD_REQUEST
             } else {
@@ -83,7 +85,9 @@ pub async fn simulate_handler(
             let is_client_error = err_str.contains("unsupported chain")
                 || err_str.contains("invalid agent wallet")
                 || err_str.contains("invalid target contract")
-                || err_str.contains("calldata");
+                || err_str.contains("calldata")
+                || err_str.contains("invalid forwarder")
+                || err_str.contains("invalid signature");
             let status = if is_client_error {
                 StatusCode::BAD_REQUEST
             } else {
