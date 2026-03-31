@@ -2,7 +2,7 @@
 
 A backend that allows **AI agents owning their own wallets** to execute on-chain transactions **without paying gas** while preserving their on-chain identity. Agents sign EIP-712 typed data off-chain; the platform relays it through an [EIP-2771](https://eips.ethereum.org/EIPS/eip-2771) trusted forwarder so the target contract sees `_msgSender() == agent`, not the relayer.
 
-> **Hackathon edition** — synchronous inline execution, in-memory state, no external dependencies (no DB, no Redis). Just `anvil` + `cargo run`.
+> **Lite edition** — synchronous inline execution, in-memory state, no external dependencies (no DB, no Redis). Just `anvil` + `cargo run`.
 
 ---
 
