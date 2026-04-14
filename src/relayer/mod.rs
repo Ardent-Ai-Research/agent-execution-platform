@@ -1,4 +1,6 @@
-//! Relayer subsystem — chain-specific relayers + orchestration layer.
+//! Relayer subsystem — ERC-4337 bundler client, paymaster signing,
+//! and shared utilities.
 
-pub mod ethereum;
-pub mod orchestrator;
+pub mod erc4337;
+pub mod paymaster;
+pub mod utils;

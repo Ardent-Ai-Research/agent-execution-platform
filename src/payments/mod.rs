@@ -23,13 +23,14 @@ use ethers::prelude::*;
 use ethers::types::{H160, H256, U256, U64};
 use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
+use std::collections::HashMap;
 use std::sync::Arc;
 use tracing::{info, warn};
 use uuid::Uuid;
 
 use crate::config::AppConfig;
 use crate::db;
-use crate::types::PaymentProof;
+use crate::types::{Chain, PaymentProof};
 
 // ──────────────────────── Constants ──────────────────────────────────
 
@@ -48,6 +49,8 @@ pub struct PaymentRequiredBody {
     pub payment_address: String,
     pub chain: String,
     pub request_id: String,
+    /// The agent's smart wallet address — fund this with tokens before executing.
+    pub smart_wallet_address: String,
 }
 
 // ──────────────────────── proof header DTO ───────────────────────────
@@ -69,7 +72,8 @@ pub struct PaymentProofHeader {
 #[derive(Clone)]
 pub struct PaymentVerifierState {
     pub config: AppConfig,
-    pub eth_provider: Arc<Provider<Http>>,
+    /// Per-chain providers for verifying payment transactions.
+    pub providers: HashMap<Chain, Arc<Provider<Http>>>,
     pub db_pool: PgPool,
 }
 
@@ -106,33 +110,44 @@ pub async fn verify_payment_on_chain(
         return Err("tx_hash must be a 0x-prefixed 32-byte hex string".into());
     }
     if !proof_header.payer.starts_with("0x") || proof_header.payer.len() != 42 {
-        return Err("payer must be a valid 0x-prefixed Ethereum address".into());
+        return Err("payer must be a valid 0x-prefixed EVM address".into());
     }
 
     let token_upper = proof_header.token.to_uppercase();
 
     // ── 1b. Validate payment chain ──────────────────────────────────
-    // Currently we only have an Ethereum provider for verification.
-    // Reject if the declared chain doesn't match what we can actually query.
-    let payment_chain = proof_header.chain.to_lowercase();
-    let supported_payment_chains = ["ethereum", "eth", "mainnet"];
-    if !supported_payment_chains.contains(&payment_chain.as_str()) {
-        return Err(format!(
-            "payment chain '{}' is not supported for verification (supported: ethereum)",
+    // Resolve the chain to a configured provider.
+    let payment_chain_enum = Chain::from_str_loose(&proof_header.chain)
+        .ok_or_else(|| format!(
+            "payment chain '{}' is not recognized",
             proof_header.chain
-        ));
-    }
+        ))?;
 
-    // ── 2. Validate token is accepted ───────────────────────────────
-    let expected_token_contract = state
+    let provider = state
+        .providers
+        .get(&payment_chain_enum)
+        .ok_or_else(|| format!(
+            "payment chain '{}' is not configured for verification — configure {}_RPC_URL",
+            proof_header.chain,
+            proof_header.chain.to_uppercase()
+        ))?;
+
+    // ── 2. Validate token is accepted on this chain ─────────────────
+    let chain_cfg = state
         .config
+        .chain_config(&payment_chain_enum)
+        .map_err(|e| e.to_string())?;
+
+    let expected_token_contract = chain_cfg
         .accepted_tokens
         .get(&token_upper)
-        .ok_or_else(|| format!("token {} is not accepted for payment", token_upper))?
+        .ok_or_else(|| format!(
+            "token {} is not accepted for payment on {}",
+            token_upper, payment_chain_enum
+        ))?
         .clone();
 
-    let token_decimals = state
-        .config
+    let token_decimals = chain_cfg
         .token_decimals
         .get(&token_upper)
         .copied()
@@ -166,8 +181,7 @@ pub async fn verify_payment_on_chain(
         .parse()
         .map_err(|_| "invalid tx_hash hex".to_string())?;
 
-    let receipt = state
-        .eth_provider
+    let receipt = provider
         .get_transaction_receipt(tx_hash)
         .await
         .map_err(|e| format!("RPC error fetching receipt: {e}"))?
@@ -183,8 +197,7 @@ pub async fn verify_payment_on_chain(
     }
 
     // ── 6. Verify block confirmations ───────────────────────────────
-    let current_block: U64 = state
-        .eth_provider
+    let current_block: U64 = provider
         .get_block_number()
         .await
         .map_err(|e| format!("RPC error fetching block number: {e}"))?;

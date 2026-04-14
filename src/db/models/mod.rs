@@ -5,13 +5,14 @@ use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
 use uuid::Uuid;
 
-// ──────────────────────────── agents ──────────────────────────────────
+// ──────────────────────────── api_keys ───────────────────────────────
 
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
-pub struct Agent {
+pub struct ApiKeyRow {
     pub id: Uuid,
-    pub wallet_address: String,
+    pub key_hash: String,
     pub label: Option<String>,
+    pub is_active: bool,
     pub created_at: DateTime<Utc>,
 }
 
@@ -33,6 +34,9 @@ pub struct ExecutionRequestRow {
     pub error_message: Option<String>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
+    pub agent_id: Option<String>,
+    pub smart_wallet_address: Option<String>,
+    pub callback_url: Option<String>,
 }
 
 // ──────────────────────────── transactions ───────────────────────────
@@ -62,5 +66,16 @@ pub struct PaymentRow {
     pub payment_chain: String,
     pub payment_tx_hash: String,
     pub verified: bool,
+    pub created_at: DateTime<Utc>,
+}
+
+// ──────────────────────────── platform_keys ─────────────────────────
+
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+pub struct PlatformKeyRow {
+    pub id: Uuid,
+    pub purpose: String,
+    pub encrypted_key: String,
+    pub address: String,
     pub created_at: DateTime<Utc>,
 }

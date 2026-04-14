@@ -1,6 +1,6 @@
 [package]
 name = "agent-execution-platform"
-version = "0.1.0"
+version = "1.0.0"
 edition = "2021"
 description = "AI Agent Blockchain Execution Platform — execute on-chain transactions for AI agents via relayer network"
 license = "MIT"
@@ -48,3 +48,14 @@ thiserror = "1"
 anyhow = "1"
 dotenvy = "0.15"
 hex = "0.4"
+
+# Concurrent data structures
+dashmap = "6"
+
+# Encryption (agent signing key storage)
+aes-gcm = "0.10"
+base64 = "0.22"
+sha2 = "0.10"
+hmac = "0.12"
+rand = "0.8"
+zeroize = { version = "1", features = ["derive"] }

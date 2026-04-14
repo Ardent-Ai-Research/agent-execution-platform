@@ -1,7 +1,7 @@
 //! Axum route handlers for the Execution API.
 
 use axum::{
-    extract::{Extension, Path, State},
+    extract::{Extension, Path, Query, Request, State},
     http::StatusCode,
     response::IntoResponse,
     Json,
@@ -11,11 +11,15 @@ use sqlx::PgPool;
 use uuid::Uuid;
 use tracing::{error, info};
 
+use std::collections::HashMap;
+
+use crate::agent_wallet::AgentWalletRegistry;
 use crate::api::services;
 use crate::config::AppConfig;
 use crate::db;
 use crate::execution_engine::ExecutionEngine;
 use crate::payments::PaymentRequiredBody;
+use crate::relayer::erc4337::BundlerClient;
 use crate::types::*;
 
 /// Shared application state injected into every handler.
@@ -25,31 +29,50 @@ pub struct AppState {
     pub redis_conn: ConnectionManager,
     pub engine: ExecutionEngine,
     pub config: AppConfig,
+    pub wallet_registry: AgentWalletRegistry,
+    /// Per-chain bundler clients.  Keyed by [`Chain`].
+    pub bundler_clients: HashMap<Chain, BundlerClient>,
 }
 
 // ────────────────────── POST /execute ────────────────────────────────
 
 pub async fn execute_handler(
     State(state): State<AppState>,
+    Extension(api_ctx): Extension<ApiKeyContext>,
     payment_proof: Option<Extension<PaymentProof>>,
     Json(req): Json<ExecutionRequest>,
 ) -> impl IntoResponse {
-    info!(agent = %req.agent_wallet_address, chain = %req.chain, "POST /execute");
+    info!(agent_id = %req.agent_id, chain = %req.chain, "POST /execute");
 
     let proof_ref = payment_proof.as_ref().map(|p| &p.0);
     let mut redis = state.redis_conn.clone();
 
-    match services::handle_execute(&state.engine, &state.db_pool, &mut redis, &req, proof_ref).await {
+    match services::handle_execute(
+        &state.engine,
+        &state.db_pool,
+        &mut redis,
+        &state.wallet_registry,
+        &state.bundler_clients,
+        api_ctx.api_key_id,
+        &req,
+        proof_ref,
+    ).await {
         Ok(resp) => {
             // If payment is required, return 402
             if resp.status == ExecutionStatus::PaymentRequired {
+                // Resolve the chain to get per-chain accepted tokens
+                let accepted = Chain::from_str_loose(&req.chain)
+                    .and_then(|c| state.config.chains.get(&c))
+                    .map(|cfg| cfg.accepted_tokens.keys().cloned().collect::<Vec<_>>())
+                    .unwrap_or_default();
                 let body = PaymentRequiredBody {
                     error: "payment_required".into(),
                     amount_usd: resp.estimated_cost_usd.unwrap_or(0.0),
-                    accepted_tokens: state.config.accepted_tokens.keys().cloned().collect(),
+                    accepted_tokens: accepted,
                     payment_address: state.config.payment_address.clone(),
                     chain: req.chain.clone(),
                     request_id: resp.request_id.to_string(),
+                    smart_wallet_address: resp.smart_wallet_address.clone().unwrap_or_default(),
                 };
                 return (StatusCode::PAYMENT_REQUIRED, Json(serde_json::to_value(body).unwrap())).into_response();
             }
@@ -62,7 +85,9 @@ pub async fn execute_handler(
             // DB / RPC / queue errors are server faults (500).
             let err_str = e.to_string();
             let is_client_error = err_str.contains("unsupported chain")
-                || err_str.contains("invalid agent wallet")
+                || err_str.contains("not configured")
+                || err_str.contains("no bundler configured")
+                || err_str.contains("agent_id")
                 || err_str.contains("invalid target contract")
                 || err_str.contains("calldata")
                 || err_str.contains("malformed");
@@ -84,17 +109,27 @@ pub async fn execute_handler(
 
 pub async fn simulate_handler(
     State(state): State<AppState>,
+    Extension(api_ctx): Extension<ApiKeyContext>,
     Json(req): Json<ExecutionRequest>,
 ) -> impl IntoResponse {
-    info!(agent = %req.agent_wallet_address, chain = %req.chain, "POST /simulate");
+    info!(agent_id = %req.agent_id, chain = %req.chain, "POST /simulate");
 
-    match services::handle_simulate(&state.engine, &state.db_pool, &req).await {
+    match services::handle_simulate(
+        &state.engine,
+        &state.db_pool,
+        &state.wallet_registry,
+        &state.bundler_clients,
+        api_ctx.api_key_id,
+        &req,
+    ).await {
         Ok(resp) => (StatusCode::OK, Json(serde_json::to_value(resp).unwrap())).into_response(),
         Err(e) => {
             error!(error = %e, "simulate failed");
             let err_str = e.to_string();
             let is_client_error = err_str.contains("unsupported chain")
-                || err_str.contains("invalid agent wallet")
+                || err_str.contains("not configured")
+                || err_str.contains("no bundler configured")
+                || err_str.contains("agent_id")
                 || err_str.contains("invalid target contract")
                 || err_str.contains("calldata")
                 || err_str.contains("malformed");
@@ -199,4 +234,153 @@ pub async fn health_handler(
             }
         })),
     )
+}
+
+// ────────────────────── GET /wallet ──────────────────────────────────
+
+/// Query parameters for `GET /wallet`.
+#[derive(Debug, serde::Deserialize)]
+pub struct WalletQuery {
+    /// The agent identifier (same as used in /execute).
+    pub agent_id: String,
+    /// The blockchain to check deployment status on (default: "ethereum").
+    #[serde(default = "default_chain")]
+    pub chain: String,
+}
+
+fn default_chain() -> String {
+    "ethereum".to_string()
+}
+
+/// Look up (or provision) the agent's smart wallet address.
+///
+/// This is a lightweight, free endpoint that returns the agent's ERC-4337
+/// smart wallet address. The agent should fund this address with whatever
+/// tokens their strategy needs before calling `/execute`.
+///
+/// No payment or simulation is performed.
+pub async fn wallet_handler(
+    State(state): State<AppState>,
+    Extension(api_ctx): Extension<ApiKeyContext>,
+    Query(params): Query<WalletQuery>,
+) -> impl IntoResponse {
+    info!(agent_id = %params.agent_id, chain = %params.chain, "GET /wallet");
+
+    match services::handle_get_wallet(
+        &state.engine,
+        &state.wallet_registry,
+        api_ctx.api_key_id,
+        &params.agent_id,
+        &params.chain,
+    )
+    .await
+    {
+        Ok(resp) => (
+            StatusCode::OK,
+            Json(serde_json::to_value(resp).unwrap()),
+        )
+            .into_response(),
+        Err(e) => {
+            error!(error = %e, "wallet lookup failed");
+            let err_str = e.to_string();
+            let is_client_error = err_str.contains("unsupported chain")
+                || err_str.contains("not configured")
+                || err_str.contains("agent_id");
+            let status = if is_client_error {
+                StatusCode::BAD_REQUEST
+            } else {
+                StatusCode::INTERNAL_SERVER_ERROR
+            };
+            (
+                status,
+                Json(serde_json::json!({ "error": err_str })),
+            )
+                .into_response()
+        }
+    }
+}
+
+// ────────────────────── POST /admin/api-keys ─────────────────────────
+
+/// Request body for API key creation.
+#[derive(Debug, serde::Deserialize)]
+pub struct CreateApiKeyRequest {
+    /// Optional human-readable label for the API key.
+    pub label: Option<String>,
+}
+
+/// Create a new API key (admin-only).
+///
+/// Protected by the `ADMIN_BEARER_TOKEN` env var — callers must send
+/// `Authorization: Bearer <token>`.  Returns the raw API key exactly once;
+/// it is never stored in plaintext.
+pub async fn create_api_key_handler(
+    State(state): State<AppState>,
+    Json(body): Json<CreateApiKeyRequest>,
+) -> impl IntoResponse {
+    info!("POST /admin/api-keys");
+
+    match db::create_api_key(&state.db_pool, body.label.as_deref()).await {
+        Ok((row, raw_key)) => {
+            info!(api_key_id = %row.id, "new API key created");
+            (
+                StatusCode::CREATED,
+                Json(serde_json::json!({
+                    "api_key_id": row.id,
+                    "api_key": raw_key,
+                    "label": row.label,
+                    "created_at": row.created_at,
+                    "message": "Store this API key securely — it will not be shown again."
+                })),
+            )
+                .into_response()
+        }
+        Err(e) => {
+            error!(error = %e, "failed to create API key");
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({ "error": "failed to create API key" })),
+            )
+                .into_response()
+        }
+    }
+}
+
+/// Admin authentication middleware.
+///
+/// Checks the `Authorization: Bearer <token>` header against the
+/// `ADMIN_BEARER_TOKEN` environment variable. If the env var is not set,
+/// the admin endpoints are disabled (all requests get 403).
+pub async fn admin_auth_middleware(
+    req: Request,
+    next: axum::middleware::Next,
+) -> impl IntoResponse {
+    let expected = std::env::var("ADMIN_BEARER_TOKEN").unwrap_or_default();
+
+    if expected.is_empty() {
+        return (
+            StatusCode::FORBIDDEN,
+            Json(serde_json::json!({
+                "error": "admin endpoints disabled — set ADMIN_BEARER_TOKEN env var"
+            })),
+        )
+            .into_response();
+    }
+
+    let provided = req
+        .headers()
+        .get("authorization")
+        .and_then(|v| v.to_str().ok())
+        .and_then(|v| v.strip_prefix("Bearer "))
+        .unwrap_or("");
+
+    if provided != expected {
+        return (
+            StatusCode::UNAUTHORIZED,
+            Json(serde_json::json!({ "error": "invalid admin token" })),
+        )
+            .into_response();
+    }
+
+    next.run(req).await.into_response()
 }

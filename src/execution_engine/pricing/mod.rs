@@ -1,43 +1,48 @@
 //! Gas-cost → USD pricing module.
 //!
-//! Converts a gas estimate + current EIP-1559 fees into a platform cost
+//! Converts a gas estimate + a bundler-provided gas price into a platform cost
 //! denominated in USD.  Uses a live price feed (CoinGecko by default) with
 //! a configurable TTL cache.
 //!
 //! Design principles:
-//! * **No silent fallbacks** — if we can't fetch gas fees or the ETH price,
-//!   the pricing call fails and the request is rejected rather than
-//!   under-quoting and operating at a loss.
-//! * **EIP-1559 aligned** — uses the same `2 × base_fee + priority_fee`
-//!   heuristic as the relayer, so the quoted price matches what we actually
-//!   spend.
+//! * **Multi-chain** — each chain has its own `NativeTokenPriceCache` instance
+//!   pointing at the correct native-token/USD feed (ETH for Ethereum & Base,
+//!   BNB for BSC, etc.).
+//! * **Bundler-authoritative fees** — all UserOperations are submitted through
+//!   the ERC-4337 bundler, so `rundler_getUserOperationGasPrice` is the single
+//!   source of truth for gas pricing.  There is no node-based fallback.
+//! * **No silent fallbacks** — if we can't fetch the native token price, the
+//!   pricing call fails and the request is rejected rather than under-quoting
+//!   and operating at a loss.
 //! * **Cached price feed** — avoids hammering the API on every request while
 //!   staying reasonably fresh (default TTL: 60 s).
 
 use anyhow::{anyhow, Context, Result};
-use ethers::prelude::*;
-use std::sync::Arc;
+use ethers::types::U256;
 use std::time::{Duration, Instant};
 use tokio::sync::RwLock;
 use tracing::info;
 
 // ──────────────────────── Price cache ────────────────────────────────
 
-/// Cached ETH/USD price with expiry.
+/// Cached native-token/USD price with expiry.
 struct CachedPrice {
     price_usd: f64,
     fetched_at: Instant,
 }
 
-/// Thread-safe, TTL-based price cache shared across all pricing calls.
-pub struct EthPriceCache {
+/// Thread-safe, TTL-based native-token/USD price cache.
+///
+/// Each supported chain gets its own instance (ETH/USD for Ethereum & Base,
+/// BNB/USD for BSC, etc.).
+pub struct NativeTokenPriceCache {
     inner: RwLock<Option<CachedPrice>>,
     feed_url: String,
     ttl: Duration,
     http: reqwest::Client,
 }
 
-impl EthPriceCache {
+impl NativeTokenPriceCache {
     /// Create a new cache with the given feed URL and TTL.
     pub fn new(feed_url: String, ttl_secs: u64) -> Self {
         Self {
@@ -51,8 +56,8 @@ impl EthPriceCache {
         }
     }
 
-    /// Get the current ETH/USD price, using the cache if fresh.
-    pub async fn get_eth_usd(&self) -> Result<f64> {
+    /// Get the cached native-token/USD price, refreshing if stale.
+    pub async fn get_native_token_usd(&self) -> Result<f64> {
         // Fast path: read lock, check cache
         {
             let guard = self.inner.read().await;
@@ -80,24 +85,22 @@ impl EthPriceCache {
         Ok(price)
     }
 
-    /// Fetch the ETH/USD price from the configured feed.
+    /// Fetch the native-token/USD price from the configured feed.
     ///
-    /// Expected JSON shape (CoinGecko simple/price):
-    /// ```json
-    /// { "ethereum": { "usd": 3500.42 } }
-    /// ```
-    /// Also supports a flat `{ "usd": 3500.42 }` shape for custom feeds.
+    /// Supports two JSON shapes:
+    /// * CoinGecko nested: `{ "<coin_id>": { "usd": 3500.42 } }`
+    /// * Flat/custom:      `{ "usd": 3500.42 }`
     async fn fetch_price(&self) -> Result<f64> {
         let resp = self
             .http
             .get(&self.feed_url)
             .send()
             .await
-            .context("ETH price feed request failed")?;
+            .context("native token price feed request failed")?;
 
         if !resp.status().is_success() {
             return Err(anyhow!(
-                "ETH price feed returned HTTP {}",
+                "native token price feed returned HTTP {}",
                 resp.status()
             ));
         }
@@ -105,13 +108,18 @@ impl EthPriceCache {
         let body: serde_json::Value = resp
             .json()
             .await
-            .context("failed to parse ETH price feed response")?;
+            .context("failed to parse native token price feed response")?;
 
-        // Try CoinGecko shape first: { "ethereum": { "usd": N } }
+        // Try CoinGecko shape: { "<coin_id>": { "usd": N } }
+        // Works for any coin_id (ethereum, binancecoin, etc.) by scanning
+        // all top-level keys for a nested "usd" field.
         let price = body
-            .get("ethereum")
-            .and_then(|e| e.get("usd"))
-            .and_then(|v| v.as_f64())
+            .as_object()
+            .and_then(|obj| {
+                obj.values()
+                    .filter_map(|v| v.get("usd").and_then(|u| u.as_f64()))
+                    .next()
+            })
             // Fallback: flat { "usd": N }
             .or_else(|| body.get("usd").and_then(|v| v.as_f64()))
             .ok_or_else(|| {
@@ -122,68 +130,39 @@ impl EthPriceCache {
             })?;
 
         if price <= 0.0 {
-            return Err(anyhow!("ETH price feed returned non-positive price: {price}"));
+            return Err(anyhow!("native token price feed returned non-positive price: {price}"));
         }
 
-        info!(eth_usd = price, "ETH/USD price refreshed");
+        info!(native_token_usd = price, feed = %self.feed_url, "native token price refreshed");
         Ok(price)
     }
-}
-
-// ──────────────────────── Fee estimation ─────────────────────────────
-
-/// Estimate the effective EIP-1559 gas price for cost calculation.
-///
-/// Uses the same `2 × base_fee + priority_fee` heuristic as the relayer so
-/// the quoted cost matches what we'll actually spend on-chain.
-async fn estimate_effective_gas_price(provider: &Provider<Http>) -> Result<U256> {
-    let latest_block = provider
-        .get_block(BlockNumber::Latest)
-        .await?
-        .ok_or_else(|| anyhow!("could not fetch latest block for fee estimation"))?;
-
-    let base_fee = latest_block
-        .base_fee_per_gas
-        .ok_or_else(|| anyhow!("chain does not support EIP-1559 (no base_fee_per_gas)"))?;
-
-    let priority_fee = match provider
-        .request::<_, U256>("eth_maxPriorityFeePerGas", ())
-        .await
-    {
-        Ok(fee) if fee > U256::zero() => fee,
-        _ => U256::from(1_500_000_000u64), // 1.5 gwei fallback for priority only
-    };
-
-    // Same formula the relayer uses: max_fee = 2 × base_fee + priority_fee
-    let effective = base_fee * 2 + priority_fee;
-    Ok(effective)
 }
 
 // ──────────────────────── Public API ─────────────────────────────────
 
 /// Calculate the execution cost in USD.
 ///
+/// The caller must supply the `gas_price` (maxFeePerGas) obtained from the
+/// bundler via `BundlerClient::get_gas_prices()`.  This module does NOT
+/// fetch gas prices itself — the bundler is the single source of truth.
+///
 /// Formula:
-///   effective_gas_price = 2 × base_fee + priority_fee  (EIP-1559)
-///   gas_cost_eth        = gas_estimate × effective_gas_price
-///   cost_usd            = gas_cost_eth × live_ETH_USD + markup% + platform_fee
+///   gas_cost_native = gas_estimate × gas_price  (in native token, e.g. ETH or BNB)
+///   cost_usd        = gas_cost_native × live_native_token/USD + markup% + platform_fee
 pub async fn calculate_cost(
-    provider: Arc<Provider<Http>>,
+    gas_price: U256,
     gas_estimate: u64,
     markup_pct: f64,
     platform_fee: f64,
-    price_cache: &EthPriceCache,
+    price_cache: &NativeTokenPriceCache,
 ) -> Result<f64> {
-    // ── 1. EIP-1559 effective gas price (no silent fallback) ────────
-    let gas_price = estimate_effective_gas_price(&provider)
-        .await
-        .context("failed to estimate gas price for cost calculation")?;
+    // ── 1. Gas price provided by caller (from bundler) ────────────
 
-    // ── 2. Live ETH/USD price (no hardcoded constant) ──────────────
-    let eth_usd = price_cache
-        .get_eth_usd()
+    // ── 2. Live native-token/USD price ─────────────────────────────
+    let native_usd = price_cache
+        .get_native_token_usd()
         .await
-        .context("failed to fetch ETH/USD price for cost calculation")?;
+        .context("failed to fetch native token/USD price for cost calculation")?;
 
     // ── 3. Calculate cost ──────────────────────────────────────────
     // Use u128 arithmetic to avoid U256 truncation risk:
@@ -193,15 +172,15 @@ pub async fn calculate_cost(
         .checked_mul(gas_price.as_u128())
         .ok_or_else(|| anyhow!("gas cost overflow: estimate={gas_estimate}, price={gas_price}"))?;
 
-    let gas_cost_eth = gas_cost_wei as f64 / 1e18;
-    let base_cost_usd = gas_cost_eth * eth_usd;
+    let gas_cost_native = gas_cost_wei as f64 / 1e18;
+    let base_cost_usd = gas_cost_native * native_usd;
     let markup = base_cost_usd * (markup_pct / 100.0);
     let total = base_cost_usd + markup + platform_fee;
 
     info!(
         gas_estimate,
         gas_price_gwei = gas_price.as_u64() as f64 / 1e9,
-        eth_usd,
+        native_usd,
         base_cost_usd,
         markup,
         platform_fee,
