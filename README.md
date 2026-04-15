@@ -1284,4 +1284,4 @@ To add a **new** chain beyond the built-in three:
 
 ## License
 
-MIT
+GNU Affero General Public License v3.0 (`AGPL-3.0`)
