@@ -390,10 +390,12 @@ docker compose ps        # STATUS should show "Up" for both
 
 ### Step 3 — Build Solidity Contracts
 
+
 ```bash
 cd contracts
-forge install   # pulls account-abstraction + openzeppelin via git submodules
-forge build     # compiles SimpleAccountFactory.sol, VerifyingPaymaster.sol
+git submodule update --init --recursive   # REQUIRED: fetches contract dependencies
+forge install                            # (optional, updates foundry.toml deps)
+forge build                              # compiles SimpleAccountFactory.sol, VerifyingPaymaster.sol
 cd ..
 ```
 
@@ -1157,11 +1159,13 @@ The `contracts/` directory contains the platform's on-chain components, built wi
 
 ### Building
 
+
 ```bash
 cd contracts
-forge build          # compile contracts → out/
-forge test           # run tests (if any)
-forge script ...     # deploy scripts
+git submodule update --init --recursive   # REQUIRED: fetches contract dependencies
+forge build                              # compile contracts → out/
+forge test                               # run tests (if any)
+forge script ...                         # deploy scripts
 ```
 
 ### Dependencies (git submodules)
@@ -1276,7 +1280,7 @@ To add a **new** chain beyond the built-in three:
 
 ## Known Limitations & TODO
 
-- [ ] **End-to-end on-chain test**: A full execution from `POST /execute` → UserOp submitted → on-chain confirmation requires a funded paymaster on a testnet. Currently tested manually, not automated.
+- [ ] **End-to-end on-chain test**: A full execution from `POST /execute` → UserOp submitted → on-chain confirmation requires a funded paymaster on a testnet. Currently tested manually, not automated. Tip: create custom stablecoin (i.e. USDT/USDC) for x402 payment verification.
 - [ ] **Batch gas estimation**: Batch calls use the same gas estimation path as single calls — may need tuning for large batches.
 - [ ] **Worker unit tests**: The background worker, bundler submission, paymaster signing, and webhook delivery paths are not yet covered by automated tests.
 
