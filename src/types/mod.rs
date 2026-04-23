@@ -232,6 +232,9 @@ pub struct SimulationResult {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PaymentProof {
     pub payment_id: Uuid,
+    /// Optional original quote request ID from a prior 402 response.
+    /// When present, server can lock required payment to that quote.
+    pub quote_request_id: Option<Uuid>,
     pub payer: String,
     pub amount_usd: f64,
     pub token: String,

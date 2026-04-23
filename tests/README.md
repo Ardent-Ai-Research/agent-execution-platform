@@ -2,7 +2,7 @@
 
 > **60 integration & unit tests** in `tests/integration_tests.rs`
 >
-> All tests pass against a live PostgreSQL + Redis + Alchemy Sepolia stack.
+> All tests pass against a live PostgreSQL + Redis + Sepolia stack.
 
 ---
 
@@ -13,7 +13,7 @@
 | Dependency | Why |
 |---|---|
 | **Docker Compose** | PostgreSQL 16 + Redis 7 must be running |
-| **Alchemy Sepolia API key** | Simulation and chain-alias tests hit the live Sepolia bundler |
+| **Sepolia RPC + bundler credentials** | Integration tests hit live chain/bundler endpoints configured in `.env` |
 | **`.env` file** | Must be fully configured (see root `README.md` → Getting Started) |
 
 ### Commands
@@ -89,9 +89,9 @@ cargo test test_wallet -- --test-threads=1
 | `test_simulate_invalid_target_returns_400` | Non-address target → 400 |
 | `test_simulate_empty_calldata_returns_400` | Missing/empty calldata → 400 |
 | `test_simulate_empty_agent_id_returns_400` | Empty agent_id → 400 |
-| `test_simulate_valid_call_against_sepolia` | Live call to Alchemy Sepolia bundler returns a gas estimate or simulation error |
+| `test_simulate_valid_call_against_sepolia` | Live call to Sepolia endpoint returns a gas estimate or simulation error |
 | `test_simulate_batch_calls_empty_rejected` | Empty `batch_calls` array → 400 |
-| `test_simulate_batch_calls_over_limit_rejected` | >10 batch calls → 400 |
+| `test_simulate_batch_calls_over_limit_rejected` | >16 batch calls → 400 |
 
 **Source modules:** `src/api/routes/mod.rs` → `simulate_handler`, `src/execution_engine/simulation/mod.rs`
 
@@ -244,8 +244,7 @@ cargo test test_wallet -- --test-threads=1
 | Gap | Module | Risk |
 |---|---|---|
 | **Payment verification (on-chain)** | `src/payments/mod.rs` | Token transfer receipt parsing and confirmation counting against a real/mock chain are untested. Only the "reject fake proof" path is tested via API. |
-| **Pricing engine** | `src/execution_engine/pricing/mod.rs` | Gas cost → USD conversion, markup calculation, and CoinGecko price fetching have no unit tests. |
-| **Simulation engine internals** | `src/execution_engine/simulation/mod.rs` | The Alchemy `simulateUserOperationAssetChanges` response parsing is not unit-tested (only tested end-to-end via `/simulate`). |
+| **Pricing engine** | `src/execution_engine/pricing/mod.rs` | Gas cost → USD conversion, markup calculation, and native-token price-source handling (JSON/Chainlink) have no unit tests. |
 | **Concurrent request handling** | `src/main.rs` | No stress/load test for the `ConcurrencyLimitLayer` or concurrent worker dequeue behavior. |
 | **Graceful shutdown** | `src/main.rs` | SIGTERM/SIGINT handling and in-flight request draining are untested. |
 | **Relayer utilities** | `src/relayer/utils.rs` | Helper functions in the relayer utils module have no dedicated tests. |
@@ -422,7 +421,7 @@ async fn test_e2e_execute_on_sepolia() {
     // 2. POST /execute with valid payment proof (or auth disabled)
     // 3. Poll GET /status/:id until Confirmed or Failed
     // 4. Assert: status = Confirmed, tx_hash is present
-    // 5. Verify tx on Etherscan/Alchemy
+    // 5. Verify tx on a chain explorer
 }
 ```
 

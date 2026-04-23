@@ -228,6 +228,20 @@ async fn main() -> anyhow::Result<()> {
 
         // Validate entry point at startup (best-effort)
         if let Err(e) = bc.validate_entry_point_supported().await {
+            let error_text = format!("{e:#}").to_lowercase();
+            let is_incompatible = error_text.contains("not currently enabled")
+                || error_text.contains("not supported by bundler")
+                || error_text.contains("incompatible with entrypoint v0.9");
+
+            if is_incompatible {
+                tracing::error!(
+                    chain = %chain,
+                    error = %e,
+                    "bundler is incompatible with EntryPoint v0.9; skipping this chain until configuration is fixed"
+                );
+                continue;
+            }
+
             tracing::warn!(
                 chain = %chain,
                 error = %e,
@@ -453,11 +467,7 @@ async fn main() -> anyhow::Result<()> {
         .layer(middleware::from_fn(routes::admin_auth_middleware))
         .with_state(state.clone());
 
-    let app = Router::new()
-        // Health check (no auth, no payment middleware — for load balancers)
-        .route("/health", get(routes::health_handler))
-        // Admin endpoints (bearer-token auth, no x402 or API key middleware)
-        .nest("/admin", admin_router)
+    let protected_api_router = Router::new()
         // Execution API — x402 middleware applied
         .route("/execute", post(routes::execute_handler))
         .route("/simulate", post(routes::simulate_handler))
@@ -486,7 +496,15 @@ async fn main() -> anyhow::Result<()> {
         .layer(middleware::from_fn_with_state(
             api_key_db_pool,
             api_key_middleware,
-        ))
+        ));
+
+    let app = Router::new()
+        // Health check (no auth, no payment middleware — for load balancers)
+        .route("/health", get(routes::health_handler))
+        // Admin endpoints (bearer-token auth, no x402 or API key middleware)
+        .nest("/admin", admin_router)
+        // Protected API endpoints (x402 + API key auth + per-key rate limit)
+        .merge(protected_api_router)
         .layer(TraceLayer::new_for_http())
         // ── Request body size limit (1 MB — prevents OOM from giant payloads)
         .layer(RequestBodyLimitLayer::new(1024 * 1024))

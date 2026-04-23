@@ -113,6 +113,43 @@ pub async fn get_execution_request(pool: &PgPool, id: Uuid) -> Result<Option<Exe
     Ok(row)
 }
 
+/// Resolve a locked quote cost from a prior request, scoped to the same API key
+/// and the same execution payload.
+pub async fn get_locked_quote_cost(
+    pool: &PgPool,
+    quote_request_id: Uuid,
+    api_key_id: Uuid,
+    req: &crate::types::ExecutionRequest,
+) -> Result<Option<f64>> {
+    let row: Option<(f64,)> = sqlx::query_as(
+        r#"
+        SELECT er.cost_usd
+        FROM execution_requests er
+        JOIN agent_wallets aw ON aw.smart_wallet_address = er.smart_wallet_address
+        WHERE er.id = $1
+          AND aw.api_key_id = $2
+          AND er.chain = $3
+          AND er.target_contract = $4
+          AND er.calldata = $5
+          AND er.value = $6
+          AND COALESCE(er.agent_id, er.agent_wallet) = $7
+          AND er.cost_usd IS NOT NULL
+        LIMIT 1
+        "#,
+    )
+    .bind(quote_request_id)
+    .bind(api_key_id)
+    .bind(&req.chain)
+    .bind(&req.target_contract)
+    .bind(&req.calldata)
+    .bind(&req.value)
+    .bind(&req.agent_id)
+    .fetch_optional(pool)
+    .await?;
+
+    Ok(row.map(|r| r.0))
+}
+
 pub async fn update_execution_status(
     pool: &PgPool,
     id: Uuid,

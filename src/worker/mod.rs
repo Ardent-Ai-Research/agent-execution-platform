@@ -18,7 +18,6 @@ use tracing::{error, info, warn};
 
 use crate::agent_wallet::AgentWalletRegistry;
 use crate::db;
-use crate::execution_engine::simulation;
 use crate::queue::{self, MAX_JOB_ATTEMPTS};
 use crate::relayer::erc4337::BundlerClient;
 use crate::relayer::paymaster::PaymasterSigner;
@@ -303,7 +302,7 @@ async fn execute_erc4337(ctx: &WorkerContext, job: &ExecutionJob) -> RelayerResu
             return RelayerResult {
                 tx_hash: String::new(),
                 success: false,
-                error: Some(format!("invalid smart_wallet_address: {e}")),
+                error: Some(format!("invalid smart_wallet_address: {e:#}")),
                 block_number: None,
                 gas_used: None,
             };
@@ -316,7 +315,7 @@ async fn execute_erc4337(ctx: &WorkerContext, job: &ExecutionJob) -> RelayerResu
             return RelayerResult {
                 tx_hash: String::new(),
                 success: false,
-                error: Some(format!("invalid eoa_address: {e}")),
+                error: Some(format!("invalid eoa_address: {e:#}")),
                 block_number: None,
                 gas_used: None,
             };
@@ -331,7 +330,7 @@ async fn execute_erc4337(ctx: &WorkerContext, job: &ExecutionJob) -> RelayerResu
             return RelayerResult {
                 tx_hash: String::new(),
                 success: false,
-                error: Some(format!("failed to load agent wallet: {e}")),
+                error: Some(format!("failed to load agent wallet: {e:#}")),
                 block_number: None,
                 gas_used: None,
             };
@@ -345,18 +344,73 @@ async fn execute_erc4337(ctx: &WorkerContext, job: &ExecutionJob) -> RelayerResu
         "executing via ERC-4337 bundler"
     );
 
-    // 3. Build the UserOperation (once) with a correctly-sized paymaster
-    //    placeholder for gas estimation, then sign paymaster data over the
-    //    result.  This avoids a double gas-estimation round-trip that would
-    //    produce different gas values from the ones the paymaster signed over.
+    let chain_id: u64 = match bundler_client.provider().get_chainid().await {
+        Ok(id) => id.as_u64(),
+        Err(e) => {
+            return RelayerResult {
+                tx_hash: String::new(),
+                success: false,
+                error: Some(format!("failed to get chain ID: {e:#}")),
+                block_number: None,
+                gas_used: None,
+            };
+        }
+    };
+
+    // 3. Build the UserOperation in a two-phase paymaster flow:
+    //    - if sponsorship is enabled, pre-sign paymaster data over a draft op
+    //      with estimation fee hints so bundler estimation sees a valid
+    //      paymaster signature
+    //    - sign the draft UserOp with the agent key before estimation
+    //    - estimate gas and apply final gas fields
+    //    - re-sign paymaster data over final gas fields
     let paymaster_signer = ctx.paymaster_signers.get(&job.chain);
     let estimation_paymaster = match paymaster_signer {
-        Some(signer) => signer.dummy_paymaster_and_data(),
+        Some(signer) => {
+            let mut draft_op = match bundler_client
+                .build_user_op_draft(job, smart_wallet, Vec::new())
+                .await
+            {
+                Ok(op) => op,
+                Err(e) => {
+                    return RelayerResult {
+                        tx_hash: String::new(),
+                        success: false,
+                        error: Some(format!("failed to build draft UserOperation: {e:#}")),
+                        block_number: None,
+                        gas_used: None,
+                    };
+                }
+            };
+
+            if let Err(e) = bundler_client.apply_estimation_fee_hints(&mut draft_op).await {
+                return RelayerResult {
+                    tx_hash: String::new(),
+                    success: false,
+                    error: Some(format!("failed to apply estimation fee hints: {e:#}")),
+                    block_number: None,
+                    gas_used: None,
+                };
+            }
+
+            match signer.sign_paymaster_data(&draft_op, chain_id).await {
+                Ok(data) => data,
+                Err(e) => {
+                    return RelayerResult {
+                        tx_hash: String::new(),
+                        success: false,
+                        error: Some(format!("paymaster pre-signing failed for estimation: {e:#}")),
+                        block_number: None,
+                        gas_used: None,
+                    };
+                }
+            }
+        }
         None => Vec::new(),
     };
 
     let mut user_op = match bundler_client
-        .build_user_op(job, smart_wallet, estimation_paymaster)
+        .build_user_op_draft(job, smart_wallet, estimation_paymaster)
         .await
     {
         Ok(op) => op,
@@ -364,37 +418,100 @@ async fn execute_erc4337(ctx: &WorkerContext, job: &ExecutionJob) -> RelayerResu
             return RelayerResult {
                 tx_hash: String::new(),
                 success: false,
-                error: Some(format!("failed to build UserOperation: {e}")),
+                error: Some(format!("failed to build draft UserOperation: {e:#}")),
                 block_number: None,
                 gas_used: None,
             };
         }
     };
 
+    if let Err(e) = bundler_client.apply_estimation_fee_hints(&mut user_op).await {
+        return RelayerResult {
+            tx_hash: String::new(),
+            success: false,
+            error: Some(format!("failed to apply estimation fee hints: {e:#}")),
+            block_number: None,
+            gas_used: None,
+        };
+    }
+
+    let draft_op_hash = match bundler_client.user_op_hash(&user_op).await {
+        Ok(h) => h,
+        Err(e) => {
+            return RelayerResult {
+                tx_hash: String::new(),
+                success: false,
+                error: Some(format!("failed to compute draft UserOp hash: {e:#}")),
+                block_number: None,
+                gas_used: None,
+            };
+        }
+    };
+
+    let draft_signature = match ctx.wallet_registry.decrypt_and_sign(&agent_wallet, draft_op_hash) {
+        Ok(sig) => sig,
+        Err(e) => {
+            return RelayerResult {
+                tx_hash: String::new(),
+                success: false,
+                error: Some(format!("failed to sign draft UserOperation: {e:#}")),
+                block_number: None,
+                gas_used: None,
+            };
+        }
+    };
+
+    user_op = bundler_client.apply_signature(user_op, draft_signature);
+
+    let (call_gas, verification_gas, pre_verification_gas) = match bundler_client
+        .estimate_gas_for_user_op(&user_op)
+        .await
+    {
+        Ok(v) => v,
+        Err(e) => {
+            return RelayerResult {
+                tx_hash: String::new(),
+                success: false,
+                error: Some(format!("failed to build UserOperation: bundler gas estimation failed: {e:#}")),
+                block_number: None,
+                gas_used: None,
+            };
+        }
+    };
+
+    let (max_fee, priority_fee) = match bundler_client.get_gas_prices().await {
+        Ok(v) => v,
+        Err(e) => {
+            return RelayerResult {
+                tx_hash: String::new(),
+                success: false,
+                error: Some(format!("failed to fetch bundler gas prices: {e:#}")),
+                block_number: None,
+                gas_used: None,
+            };
+        }
+    };
+
+    bundler_client.apply_gas_fields(
+        &mut user_op,
+        call_gas,
+        verification_gas,
+        pre_verification_gas,
+        max_fee,
+        priority_fee,
+    );
+
     // 4. Sign paymaster data over the built op and splice it in.
     //    The gas fields in user_op are now final — the paymaster signature
     //    will cover the exact same values the EntryPoint sees on-chain.
     if let Some(signer) = paymaster_signer {
-        let chain_id: u64 = match bundler_client.provider().get_chainid().await {
-            Ok(id) => id.as_u64(),
-            Err(e) => {
-                return RelayerResult {
-                    tx_hash: String::new(),
-                    success: false,
-                    error: Some(format!("failed to get chain ID: {e}")),
-                    block_number: None,
-                    gas_used: None,
-                };
-            }
-        };
-
         let signed_pm_data = match signer.sign_paymaster_data(&user_op, chain_id).await {
             Ok(data) => data,
             Err(e) => {
                 return RelayerResult {
                     tx_hash: String::new(),
                     success: false,
-                    error: Some(format!("paymaster signing failed: {e}")),
+                    error: Some(format!("paymaster signing failed: {e:#}")),
                     block_number: None,
                     gas_used: None,
                 };
@@ -414,7 +531,7 @@ async fn execute_erc4337(ctx: &WorkerContext, job: &ExecutionJob) -> RelayerResu
             return RelayerResult {
                 tx_hash: String::new(),
                 success: false,
-                error: Some(format!("failed to compute UserOp hash: {e}")),
+                error: Some(format!("failed to compute UserOp hash: {e:#}")),
                 block_number: None,
                 gas_used: None,
             };
@@ -427,7 +544,7 @@ async fn execute_erc4337(ctx: &WorkerContext, job: &ExecutionJob) -> RelayerResu
             return RelayerResult {
                 tx_hash: String::new(),
                 success: false,
-                error: Some(format!("failed to sign UserOperation: {e}")),
+                error: Some(format!("failed to sign UserOperation: {e:#}")),
                 block_number: None,
                 gas_used: None,
             };
@@ -436,48 +553,7 @@ async fn execute_erc4337(ctx: &WorkerContext, job: &ExecutionJob) -> RelayerResu
 
     let signed_op = bundler_client.apply_signature(user_op, signature);
 
-    // 6. Alchemy-specific preflight simulation of the full UserOperation.
-    if bundler_client.is_alchemy_endpoint() {
-        match simulation::simulate_user_operation_asset_changes(
-            bundler_client.rpc_url(),
-            &signed_op,
-            bundler_client.entry_point(),
-            None,
-        )
-        .await
-        {
-            Ok(sim) if sim.success => {
-                info!(
-                    request_id = %request_id,
-                    changes = sim.changes.len(),
-                    "alchemy UserOperation simulation succeeded"
-                );
-            }
-            Ok(sim) => {
-                return RelayerResult {
-                    tx_hash: String::new(),
-                    success: false,
-                    error: Some(format!(
-                        "alchemy simulation rejected UserOperation: {}",
-                        sim.error.unwrap_or_else(|| "unknown simulation error".into())
-                    )),
-                    block_number: None,
-                    gas_used: None,
-                };
-            }
-            Err(e) => {
-                // Simulation is advisory — a transport/HTTP error should not
-                // block submission.  Log a warning and proceed.
-                warn!(
-                    request_id = %request_id,
-                    error = %e,
-                    "alchemy simulation request failed, proceeding with submission"
-                );
-            }
-        }
-    }
-
-    // 7. Submit to bundler and wait for receipt
+    // 6. Submit to bundler and wait for receipt
     match bundler_client.submit_and_wait(&signed_op).await {
         Ok(result) => {
             let tx_hash = result.tx_hash.clone().unwrap_or_default();
@@ -492,7 +568,7 @@ async fn execute_erc4337(ctx: &WorkerContext, job: &ExecutionJob) -> RelayerResu
         Err(e) => RelayerResult {
             tx_hash: String::new(),
             success: false,
-            error: Some(format!("bundler submission failed: {e}")),
+            error: Some(format!("bundler submission failed: {e:#}")),
             block_number: None,
             gas_used: None,
         },

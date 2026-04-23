@@ -10,7 +10,7 @@
 //! {CHAIN}_PAYMASTER_ADDRESS
 //! {CHAIN}_FACTORY_ADDRESS
 //! {CHAIN}_ENTRY_POINT_ADDRESS  (defaults to canonical v0.9 on all chains)
-//! {CHAIN}_PRICE_FEED_URL       (native token / USD)
+//! {CHAIN}_PRICE_FEED_URL       (native token / USD source)
 //! {CHAIN}_ACCEPTED_TOKENS      (TOKEN=0xAddr pairs for payment verification)
 //! {CHAIN}_TOKEN_DECIMALS       (TOKEN=N decimal mappings)
 //! ```
@@ -43,7 +43,12 @@ pub struct ChainConfig {
     pub factory_address: String,
     /// Address of the EntryPoint contract (default: canonical v0.9).
     pub entry_point_address: String,
-    /// URL for fetching native-token/USD price (ETH/USD, BNB/USD, etc.).
+    /// Native-token/USD source.
+    ///
+    /// Supported formats:
+    /// - `chainlink://0x...` (on-chain Chainlink AggregatorV3 proxy)
+    /// - `0x...` (same as above)
+    /// - `https://...` JSON endpoint that returns a `usd` field
     pub price_feed_url: String,
     /// Accepted payment token symbols → contract addresses on this chain.
     /// e.g. `{"USDC": "0x833589fC...", "USDT": "0xfde4C96c..."}`
@@ -225,10 +230,9 @@ impl AppConfig {
                     .unwrap_or_else(|_| CANONICAL_EP_V09.into()),
                 price_feed_url: std::env::var("ETHEREUM_PRICE_FEED_URL")
                     .or_else(|_| std::env::var("ETH_PRICE_FEED_URL")) // legacy
-                    .unwrap_or_else(|_| {
-                    "https://api.coingecko.com/api/v3/simple/price?ids=ethereum&vs_currencies=usd"
-                        .into()
-                }),
+                    .map_err(|_| anyhow::anyhow!(
+                        "ETHEREUM_PRICE_FEED_URL is required when ETHEREUM_RPC_URL is set"
+                    ))?,
                 accepted_tokens: Self::parse_token_map(
                     &std::env::var("ETHEREUM_ACCEPTED_TOKENS").unwrap_or_default(),
                 ),
@@ -251,12 +255,11 @@ impl AppConfig {
                     .unwrap_or_default(),
                 entry_point_address: std::env::var("BASE_ENTRY_POINT_ADDRESS")
                     .unwrap_or_else(|_| CANONICAL_EP_V09.into()),
-                // Base uses ETH as native gas token — same price feed as Ethereum
+                // Base uses ETH as native gas token, but URL must still be configured explicitly.
                 price_feed_url: std::env::var("BASE_PRICE_FEED_URL")
-                    .unwrap_or_else(|_| {
-                    "https://api.coingecko.com/api/v3/simple/price?ids=ethereum&vs_currencies=usd"
-                        .into()
-                }),
+                    .map_err(|_| anyhow::anyhow!(
+                        "BASE_PRICE_FEED_URL is required when BASE_RPC_URL is set"
+                    ))?,
                 accepted_tokens: Self::parse_token_map(
                     &std::env::var("BASE_ACCEPTED_TOKENS").unwrap_or_default(),
                 ),
@@ -280,10 +283,9 @@ impl AppConfig {
                 entry_point_address: std::env::var("BNB_ENTRY_POINT_ADDRESS")
                     .unwrap_or_else(|_| CANONICAL_EP_V09.into()),
                 price_feed_url: std::env::var("BNB_PRICE_FEED_URL")
-                    .unwrap_or_else(|_| {
-                    "https://api.coingecko.com/api/v3/simple/price?ids=binancecoin&vs_currencies=usd"
-                        .into()
-                }),
+                    .map_err(|_| anyhow::anyhow!(
+                        "BNB_PRICE_FEED_URL is required when BNB_RPC_URL is set"
+                    ))?,
                 accepted_tokens: Self::parse_token_map(
                     &std::env::var("BNB_ACCEPTED_TOKENS").unwrap_or_default(),
                 ),

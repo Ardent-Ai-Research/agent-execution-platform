@@ -46,6 +46,8 @@ pub struct PaymentRequiredBody {
     pub error: String,
     pub amount_usd: f64,
     pub accepted_tokens: Vec<String>,
+    /// Per-token required amount in the smallest unit (e.g., USDC 6 decimals).
+    pub required_amount_raw: HashMap<String, String>,
     pub payment_address: String,
     pub chain: String,
     pub request_id: String,
@@ -58,8 +60,11 @@ pub struct PaymentRequiredBody {
 /// Expected JSON payload inside the `X-Payment-Proof` header.
 #[derive(Debug, Deserialize)]
 pub struct PaymentProofHeader {
+    #[serde(default)]
+    pub request_id: Option<Uuid>,
     pub payer: String,
-    pub amount_usd: f64,
+    #[serde(default)]
+    pub amount_usd: Option<f64>,
     pub token: String,
     pub chain: String,
     pub tx_hash: String,
@@ -103,8 +108,10 @@ pub async fn verify_payment_on_chain(
     if proof_header.tx_hash.is_empty() {
         return Err("tx_hash is required".into());
     }
-    if proof_header.amount_usd <= 0.0 {
-        return Err("amount must be positive".into());
+    if let Some(amount_usd) = proof_header.amount_usd {
+        if amount_usd <= 0.0 {
+            return Err("amount must be positive".into());
+        }
     }
     if !proof_header.tx_hash.starts_with("0x") || proof_header.tx_hash.len() != 66 {
         return Err("tx_hash must be a 0x-prefixed 32-byte hex string".into());
@@ -290,26 +297,28 @@ pub async fn verify_payment_on_chain(
         ));
     }
 
-    // ── 8. Verify amount ────────────────────────────────────────────
-    // Convert the claimed USD amount to the token's smallest unit.
+    // ── 8. Verify amount (if a claimed USD amount is provided) ──────
+    // Convert claimed USD to token's smallest unit.
     // For stablecoins: 1 USD ≈ 1 token unit, so amount_usd * 10^decimals.
-    let required_amount_raw =
-        U256::from((proof_header.amount_usd * 10f64.powi(token_decimals as i32)) as u128);
+    if let Some(claimed_amount_usd) = proof_header.amount_usd {
+        let required_amount_raw =
+            U256::from((claimed_amount_usd * 10f64.powi(token_decimals as i32)) as u128);
 
-    if verified_amount < required_amount_raw {
-        let verified_human =
-            verified_amount.as_u128() as f64 / 10f64.powi(token_decimals as i32);
-        return Err(format!(
-            "underpayment: transferred {:.6} {}, required {:.6} {}",
-            verified_human, token_upper, proof_header.amount_usd, token_upper
-        ));
+        if verified_amount < required_amount_raw {
+            let verified_human =
+                verified_amount.as_u128() as f64 / 10f64.powi(token_decimals as i32);
+            return Err(format!(
+                "underpayment: transferred {:.6} {}, required {:.6} {}",
+                verified_human, token_upper, claimed_amount_usd, token_upper
+            ));
+        }
     }
 
     let verified_human = verified_amount.as_u128() as f64 / 10f64.powi(token_decimals as i32);
 
     info!(
         payer = %proof_header.payer,
-        amount_usd = proof_header.amount_usd,
+        amount_usd = proof_header.amount_usd.unwrap_or(verified_human),
         verified_amount = %verified_human,
         token = %token_upper,
         confirmations,
@@ -319,8 +328,9 @@ pub async fn verify_payment_on_chain(
 
     Ok(PaymentProof {
         payment_id: Uuid::new_v4(),
+        quote_request_id: proof_header.request_id,
         payer: proof_header.payer,
-        amount_usd: proof_header.amount_usd,
+        amount_usd: proof_header.amount_usd.unwrap_or(verified_human),
         token: token_upper,
         chain: proof_header.chain,
         tx_hash: proof_header.tx_hash,

@@ -1,24 +1,31 @@
 //! Gas-cost → USD pricing module.
 //!
 //! Converts a gas estimate + a bundler-provided gas price into a platform cost
-//! denominated in USD.  Uses a live price feed (CoinGecko by default) with
+//! denominated in USD. Uses a configured live price feed URL with
 //! a configurable TTL cache.
 //!
 //! Design principles:
 //! * **Multi-chain** — each chain has its own `NativeTokenPriceCache` instance
 //!   pointing at the correct native-token/USD feed (ETH for Ethereum & Base,
 //!   BNB for BSC, etc.).
-//! * **Bundler-authoritative fees** — all UserOperations are submitted through
-//!   the ERC-4337 bundler, so `rundler_getUserOperationGasPrice` is the single
-//!   source of truth for gas pricing.  There is no node-based fallback.
+//! * **Bundler-first fees** — all UserOperations are submitted through
+//!   the ERC-4337 bundler, and gas pricing is sourced from Candide Voltaire's
+//!   `voltaire_feesPerGas` method.
 //! * **No silent fallbacks** — if we can't fetch the native token price, the
 //!   pricing call fails and the request is rejected rather than under-quoting
 //!   and operating at a loss.
 //! * **Cached price feed** — avoids hammering the API on every request while
 //!   staying reasonably fresh (default TTL: 60 s).
+//! * **Chainlink-native mode** — when `*_PRICE_FEED_URL` is configured as
+//!   `chainlink://0x...` (or just a `0x...` address), price is read directly
+//!   from the on-chain AggregatorV3 proxy (`latestRoundData`, `decimals`).
 
 use anyhow::{anyhow, Context, Result};
-use ethers::types::U256;
+use ethers::{
+    providers::{Http, Middleware, Provider},
+    types::{Address, Bytes, TransactionRequest, U256},
+};
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::RwLock;
 use tracing::info;
@@ -39,16 +46,18 @@ pub struct NativeTokenPriceCache {
     inner: RwLock<Option<CachedPrice>>,
     feed_url: String,
     ttl: Duration,
+    provider: Arc<Provider<Http>>,
     http: reqwest::Client,
 }
 
 impl NativeTokenPriceCache {
     /// Create a new cache with the given feed URL and TTL.
-    pub fn new(feed_url: String, ttl_secs: u64) -> Self {
+    pub fn new(feed_url: String, ttl_secs: u64, provider: Arc<Provider<Http>>) -> Self {
         Self {
             inner: RwLock::new(None),
             feed_url,
             ttl: Duration::from_secs(ttl_secs),
+            provider,
             http: reqwest::Client::builder()
                 .timeout(Duration::from_secs(10))
                 .build()
@@ -87,10 +96,37 @@ impl NativeTokenPriceCache {
 
     /// Fetch the native-token/USD price from the configured feed.
     ///
-    /// Supports two JSON shapes:
-    /// * CoinGecko nested: `{ "<coin_id>": { "usd": 3500.42 } }`
-    /// * Flat/custom:      `{ "usd": 3500.42 }`
+    /// Supported source formats:
+    /// * Chainlink proxy address: `chainlink://0x...` (or raw `0x...`)
+    /// * JSON endpoint: returns nested or flat `usd` field
     async fn fetch_price(&self) -> Result<f64> {
+        if let Some(feed_address) = self.parse_chainlink_address()? {
+            return self.fetch_price_from_chainlink(feed_address).await;
+        }
+
+        self.fetch_price_from_json().await
+    }
+
+    fn parse_chainlink_address(&self) -> Result<Option<Address>> {
+        if let Some(raw) = self.feed_url.strip_prefix("chainlink://") {
+            let addr = raw
+                .parse::<Address>()
+                .map_err(|e| anyhow!("invalid chainlink feed address '{}': {}", raw, e))?;
+            return Ok(Some(addr));
+        }
+
+        if self.feed_url.starts_with("0x") {
+            let addr = self
+                .feed_url
+                .parse::<Address>()
+                .map_err(|e| anyhow!("invalid chainlink feed address '{}': {}", self.feed_url, e))?;
+            return Ok(Some(addr));
+        }
+
+        Ok(None)
+    }
+
+    async fn fetch_price_from_json(&self) -> Result<f64> {
         let resp = self
             .http
             .get(&self.feed_url)
@@ -110,9 +146,9 @@ impl NativeTokenPriceCache {
             .await
             .context("failed to parse native token price feed response")?;
 
-        // Try CoinGecko shape: { "<coin_id>": { "usd": N } }
-        // Works for any coin_id (ethereum, binancecoin, etc.) by scanning
-        // all top-level keys for a nested "usd" field.
+        // Try nested shape: { "<asset>": { "usd": N } }
+        // Works for any top-level key by scanning all values for a nested
+        // "usd" field.
         let price = body
             .as_object()
             .and_then(|obj| {
@@ -134,6 +170,71 @@ impl NativeTokenPriceCache {
         }
 
         info!(native_token_usd = price, feed = %self.feed_url, "native token price refreshed");
+        Ok(price)
+    }
+
+    async fn fetch_price_from_chainlink(&self, feed: Address) -> Result<f64> {
+        const DECIMALS_SELECTOR: [u8; 4] = [0x31, 0x3c, 0xe5, 0x67];
+        const LATEST_ROUND_DATA_SELECTOR: [u8; 4] = [0xfe, 0xaf, 0x96, 0x8c];
+
+        let decimals_resp = self
+            .provider
+            .call(
+                &TransactionRequest::new()
+                    .to(feed)
+                    .data(Bytes::from(DECIMALS_SELECTOR.to_vec()))
+                    .into(),
+                None,
+            )
+            .await
+            .with_context(|| format!("failed to call Chainlink decimals() on {}", feed))?;
+
+        if decimals_resp.len() < 32 {
+            return Err(anyhow!(
+                "Chainlink decimals() returned unexpected length: {}",
+                decimals_resp.len()
+            ));
+        }
+        let decimals = decimals_resp[31] as i32;
+
+        let latest_resp = self
+            .provider
+            .call(
+                &TransactionRequest::new()
+                    .to(feed)
+                    .data(Bytes::from(LATEST_ROUND_DATA_SELECTOR.to_vec()))
+                    .into(),
+                None,
+            )
+            .await
+            .with_context(|| format!("failed to call Chainlink latestRoundData() on {}", feed))?;
+
+        if latest_resp.len() < 64 {
+            return Err(anyhow!(
+                "Chainlink latestRoundData() returned unexpected length: {}",
+                latest_resp.len()
+            ));
+        }
+
+        let mut answer_bytes = [0u8; 32];
+        answer_bytes.copy_from_slice(&latest_resp[32..64]);
+        let answer = U256::from_big_endian(&answer_bytes);
+
+        let raw_answer = answer
+            .to_string()
+            .parse::<f64>()
+            .context("failed to convert Chainlink answer to f64")?;
+        let scale = 10f64.powi(decimals);
+        let price = raw_answer / scale;
+
+        if !price.is_finite() || price <= 0.0 {
+            return Err(anyhow!(
+                "Chainlink price feed returned non-positive or invalid price: {}",
+                price
+            ));
+        }
+
+        info!(native_token_usd = price, feed = %feed, "native token price refreshed (chainlink)");
         Ok(price)
     }
 }

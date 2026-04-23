@@ -8,6 +8,7 @@
 use anyhow::Result;
 use chrono::Utc;
 use ethers::prelude::Middleware;
+use ethers::types::U256;
 use redis::aio::ConnectionManager;
 use sqlx::PgPool;
 use std::collections::HashMap;
@@ -80,8 +81,41 @@ pub async fn handle_execute(
         });
     }
 
-    // 5. Price (includes ERC-4337 overhead)
-    let cost = engine.estimate_cost(&chain, sim.gas_estimate, bundler_client).await?;
+    // 5. Price (includes ERC-4337 overhead), unless a locked quote is provided.
+    let locked_quote_cost = match payment_proof.and_then(|p| p.quote_request_id) {
+        Some(quote_request_id) => {
+            db::get_locked_quote_cost(pool, quote_request_id, api_key_id, req).await?
+        }
+        None => None,
+    };
+
+    if payment_proof.and_then(|p| p.quote_request_id).is_some() && locked_quote_cost.is_none() {
+        db::update_execution_status(
+            pool,
+            request_id,
+            &ExecutionStatus::Failed,
+            None,
+            Some("invalid or mismatched payment quote request_id"),
+            Some(sim.gas_estimate as i64),
+            None,
+        )
+        .await?;
+
+        return Ok(ExecutionResponse {
+            request_id,
+            status: ExecutionStatus::Failed,
+            smart_wallet_address: Some(smart_wallet_str.clone()),
+            estimated_gas: Some(sim.gas_estimate),
+            estimated_cost_usd: None,
+            tx_hash: None,
+            message: "invalid or mismatched payment quote request_id".into(),
+        });
+    }
+
+    let cost = match locked_quote_cost {
+        Some(locked) => locked,
+        None => engine.estimate_cost(&chain, sim.gas_estimate, bundler_client).await?,
+    };
     db::update_execution_status(
         pool,
         request_id,
@@ -107,16 +141,58 @@ pub async fn handle_execute(
             });
         }
         Some(proof) => {
-            // Server-side amount cross-check
-            if proof.amount_usd < cost {
+            // Server-side amount cross-check in raw token units.
+            // Source of truth is on-chain transferred amount (`confirmed_amount_raw`),
+            // not floating-point USD values from headers.
+            let chain_cfg = engine.config.chain_config(&chain)?;
+            let token_upper = proof.token.to_uppercase();
+            let token_decimals = chain_cfg
+                .token_decimals
+                .get(&token_upper)
+                .copied()
+                .unwrap_or(6);
+
+            let required_amount_raw = U256::from((cost * 10f64.powi(token_decimals as i32)) as u128);
+
+            let confirmed_amount_raw = match proof.confirmed_amount_raw.as_deref() {
+                Some(raw) => U256::from_dec_str(raw)
+                    .map_err(|e| anyhow::anyhow!("invalid confirmed_amount_raw in payment proof: {e}"))?,
+                None => {
+                    db::update_execution_status(
+                        pool,
+                        request_id,
+                        &ExecutionStatus::Failed,
+                        None,
+                        Some("payment proof missing confirmed_amount_raw"),
+                        None,
+                        None,
+                    )
+                    .await?;
+
+                    return Ok(ExecutionResponse {
+                        request_id,
+                        status: ExecutionStatus::Failed,
+                        smart_wallet_address: Some(smart_wallet_str.clone()),
+                        estimated_gas: Some(sim.gas_estimate),
+                        estimated_cost_usd: Some(cost),
+                        tx_hash: None,
+                        message: "payment proof missing confirmed_amount_raw".into(),
+                    });
+                }
+            };
+
+            if confirmed_amount_raw < required_amount_raw {
                 db::update_execution_status(
                     pool,
                     request_id,
                     &ExecutionStatus::Failed,
                     None,
                     Some(&format!(
-                        "underpayment: paid {:.6} USD, required {:.6} USD",
-                        proof.amount_usd, cost
+                        "underpayment: paid {} raw {}, required {} raw {}",
+                        confirmed_amount_raw,
+                        token_upper,
+                        required_amount_raw,
+                        token_upper,
                     )),
                     None,
                     None,
@@ -131,8 +207,11 @@ pub async fn handle_execute(
                     estimated_cost_usd: Some(cost),
                     tx_hash: None,
                     message: format!(
-                        "underpayment: paid {:.6} USD, required {:.6} USD",
-                        proof.amount_usd, cost
+                        "underpayment: paid {} raw {}, required {} raw {}",
+                        confirmed_amount_raw,
+                        token_upper,
+                        required_amount_raw,
+                        token_upper,
                     ),
                 });
             }

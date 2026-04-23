@@ -35,6 +35,13 @@ use tracing::info;
 
 use crate::types::UserOperation;
 
+/// Safety margin to absorb local clock skew vs chain timestamp.
+///
+/// If local time is slightly ahead of chain time, setting `validAfter = now`
+/// can make paymaster signatures temporarily "not yet valid" during
+/// `eth_estimateUserOperationGas`. Backdating by a small window avoids this.
+const CLOCK_SKEW_GRACE_SECS: u64 = 30;
+
 // ──────────────────────── Paymaster Signer ───────────────────────────
 
 /// Signs paymaster validation data for UserOperations (EntryPoint v0.9).
@@ -155,9 +162,9 @@ impl PaymasterSigner {
             .unwrap()
             .as_secs();
 
-        // validAfter = now (immediately valid)
+        // validAfter = now - grace (skew-tolerant immediate validity)
         // validUntil = now + validity_window (e.g. 5 minutes from now)
-        let valid_after = U256::from(now);
+        let valid_after = U256::from(now.saturating_sub(CLOCK_SKEW_GRACE_SECS));
         let valid_until = U256::from(now + self.validity_window_secs);
 
         // Compute the hash that the Paymaster contract will verify

@@ -118,7 +118,7 @@ AI Agent (no wallet needed)
 | **Agent-supplied IDs with API key namespacing** | Agents pick their own `agent_id`; the platform combines it with the API key (`{api_key_id}::{agent_id}`) to prevent cross-customer collisions |
 | **Walletless agents** | Agents never handle private keys; the platform generates, encrypts (AES-256-GCM), and stores signing keys server-side |
 | **x402 payment protocol** | Agents pay per-execution via on-chain ERC-20 transfers; the platform verifies Transfer logs on-chain before queuing |
-| **Bundler-authoritative gas pricing** | Gas prices come exclusively from the ERC-4337 bundler (`rundler_getUserOperationGasPrice`) — no node-based EIP-1559 fallback |
+| **Bundler-authoritative gas pricing** | Gas prices come exclusively from Candide Voltaire (`voltaire_feesPerGas`) — no node-based EIP-1559 fallback |
 | **Redis reliable queue (BLMOVE)** | Atomic dequeue into per-worker processing list; crash recovery via LMOVE; dead-letter queue for poison pills |
 | **No gas bumping** | Bundler handles gas pricing for UserOperations; timeout + fresh retry is safer than replacement transactions |
 
@@ -133,7 +133,6 @@ Worker → load agent signing key from AgentWalletRegistry
        → BundlerClient.build_user_op()
        → PaymasterSigner.sign_paymaster_data() (if configured)
        → AgentWalletRegistry.decrypt_and_sign() + BundlerClient.apply_signature()
-       → alchemy_simulateUserOperationAssetChanges() (Alchemy pre-submit check)
        → BundlerClient.submit_and_wait()
        → Bundler → EntryPoint → SimpleAccount.execute() → Target Contract
        → fire_webhook() (async, non-blocking — HMAC-SHA256 signed callback)
@@ -182,7 +181,7 @@ agent-execution-platform/
     ├── execution_engine/
     │   ├── mod.rs                        # Engine: validate, simulate, price (holds provider + cache)
     │   ├── simulation/mod.rs             # eth_call + eth_estimateGas (no silent fallback)
-    │   └── pricing/mod.rs               # Bundler gas price → USD cost (live native-token/USD cache via CoinGecko)
+    │   └── pricing/mod.rs               # Bundler gas price → USD cost (live native-token/USD cache via JSON/Chainlink)
     │
     ├── payments/mod.rs                   # x402 middleware: parse proof header, fetch receipt,
     │                                     #   decode Transfer logs, verify amount/recipient/replay
@@ -280,7 +279,6 @@ run_worker() loop:
     │    └── BundlerClient::build_user_op()
     │    └── PaymasterSigner::sign_paymaster_data()
     │    └── decrypt_and_sign() + apply_signature()
-    │    └── alchemy_simulateUserOperationAssetChanges()
     │    └── BundlerClient::submit_and_wait()
     │         └── Poll UserOperation receipt (120s timeout)
     │

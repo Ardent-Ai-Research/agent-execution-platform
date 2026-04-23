@@ -60,15 +60,29 @@ pub async fn execute_handler(
         Ok(resp) => {
             // If payment is required, return 402
             if resp.status == ExecutionStatus::PaymentRequired {
+                let quoted_usd = resp.estimated_cost_usd.unwrap_or(0.0);
                 // Resolve the chain to get per-chain accepted tokens
-                let accepted = Chain::from_str_loose(&req.chain)
+                let (accepted, required_amount_raw) = Chain::from_str_loose(&req.chain)
                     .and_then(|c| state.config.chains.get(&c))
-                    .map(|cfg| cfg.accepted_tokens.keys().cloned().collect::<Vec<_>>())
-                    .unwrap_or_default();
+                    .map(|cfg| {
+                        let accepted = cfg.accepted_tokens.keys().cloned().collect::<Vec<_>>();
+                        let required_amount_raw = cfg
+                            .accepted_tokens
+                            .keys()
+                            .map(|symbol| {
+                                let decimals = cfg.token_decimals.get(symbol).copied().unwrap_or(6);
+                                let raw = (quoted_usd * 10f64.powi(decimals as i32)) as u128;
+                                (symbol.clone(), raw.to_string())
+                            })
+                            .collect::<HashMap<_, _>>();
+                        (accepted, required_amount_raw)
+                    })
+                    .unwrap_or_else(|| (Vec::new(), HashMap::new()));
                 let body = PaymentRequiredBody {
                     error: "payment_required".into(),
-                    amount_usd: resp.estimated_cost_usd.unwrap_or(0.0),
+                    amount_usd: quoted_usd,
                     accepted_tokens: accepted,
+                    required_amount_raw,
                     payment_address: state.config.payment_address.clone(),
                     chain: req.chain.clone(),
                     request_id: resp.request_id.to_string(),

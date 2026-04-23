@@ -1,20 +1,16 @@
 //! Transaction simulation.
 //!
-//! Two simulation paths:
-//! 1. **Standard**: `eth_call` + `eth_estimateGas` against the node RPC.
-//!    Used during the `/execute` and `/simulate` API request path.
-//! 2. **Alchemy UserOp simulation**: `alchemy_simulateUserOperationAssetChanges`
-//!    against the bundler RPC. Used as a pre-submit safety check in the worker
-//!    before broadcasting a signed UserOperation.
+//! Standard simulation path:
+//! * `eth_call` + `eth_estimateGas` against the chain RPC.
+//!   Used during the `/execute` and `/simulate` API request path.
 
 use anyhow::Result;
 use ethers::prelude::*;
 use ethers::types::{Bytes, TransactionRequest};
-use serde::Deserialize;
 use std::sync::Arc;
 use tracing::{info, warn};
 
-use crate::types::{BatchCall, SimulationResult, UserOperation};
+use crate::types::{BatchCall, SimulationResult};
 
 /// Simulate a transaction against the chain RPC.
 ///
@@ -91,8 +87,7 @@ pub async fn simulate_transaction(
 /// **Limitation**: each call is simulated against the *current* chain state,
 /// not the post-state of previous calls. If call B depends on state changes
 /// from call A (e.g. approve then swap), the simulation of B may be
-/// inaccurate. The Alchemy UserOp preflight simulation in the worker will
-/// catch such issues before broadcast.
+/// inaccurate.
 pub async fn simulate_batch(
     provider: Arc<Provider<Http>>,
     from: Address,
@@ -154,97 +149,5 @@ pub async fn simulate_batch(
         gas_estimate: total_gas,
         return_data: Some(format!("[{}]", return_datas.join(","))),
         error: None,
-    })
-}
-
-/// Result from `alchemy_simulateUserOperationAssetChanges`.
-#[derive(Debug, Clone)]
-pub struct UserOpAssetSimulationResult {
-    pub success: bool,
-    pub error: Option<String>,
-    pub changes: Vec<serde_json::Value>,
-}
-
-#[derive(Debug, Deserialize)]
-struct JsonRpcResponse<T> {
-    result: Option<T>,
-    error: Option<JsonRpcError>,
-}
-
-#[derive(Debug, Deserialize)]
-struct JsonRpcError {
-    message: String,
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct AlchemyAssetChangesResponse {
-    #[serde(default)]
-    changes: Vec<serde_json::Value>,
-    error: Option<serde_json::Value>,
-}
-
-/// Simulate a full ERC-4337 UserOperation using Alchemy and return asset-change data.
-pub async fn simulate_user_operation_asset_changes(
-    bundler_rpc_url: &str,
-    user_op: &UserOperation,
-    entry_point: Address,
-    block_number: Option<String>,
-) -> Result<UserOpAssetSimulationResult> {
-    let http = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(30))
-        .build()?;
-
-    let mut params = vec![
-        serde_json::to_value(user_op)?,
-        serde_json::json!(format!("{entry_point:?}")),
-    ];
-
-    if let Some(block) = block_number {
-        params.push(serde_json::json!(block));
-    }
-
-    let body = serde_json::json!({
-        "jsonrpc": "2.0",
-        "id": 1,
-        "method": "alchemy_simulateUserOperationAssetChanges",
-        "params": params,
-    });
-
-    let resp = http.post(bundler_rpc_url).json(&body).send().await?;
-    if !resp.status().is_success() {
-        let status = resp.status();
-        let text = resp.text().await.unwrap_or_default();
-        return Ok(UserOpAssetSimulationResult {
-            success: false,
-            error: Some(format!("alchemy simulation HTTP {status}: {text}")),
-            changes: Vec::new(),
-        });
-    }
-
-    let parsed: JsonRpcResponse<AlchemyAssetChangesResponse> = resp.json().await?;
-
-    if let Some(err) = parsed.error {
-        return Ok(UserOpAssetSimulationResult {
-            success: false,
-            error: Some(err.message),
-            changes: Vec::new(),
-        });
-    }
-
-    let Some(result) = parsed.result else {
-        return Ok(UserOpAssetSimulationResult {
-            success: false,
-            error: Some("alchemy simulation returned no result".into()),
-            changes: Vec::new(),
-        });
-    };
-
-    let simulation_error = result.error.map(|v| v.to_string());
-
-    Ok(UserOpAssetSimulationResult {
-        success: simulation_error.is_none(),
-        error: simulation_error,
-        changes: result.changes,
     })
 }

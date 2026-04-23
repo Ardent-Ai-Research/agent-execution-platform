@@ -8,9 +8,8 @@
 //! * `eth_getUserOperationByHash` — lookup a UserOp by its hash
 //! * `eth_supportedEntryPoints` — discover supported EntryPoint addresses
 //!
-//! Alchemy-specific endpoints (auto-detected via URL):
-//! * `rundler_getUserOperationGasPrice` — bundler-native fee recommendations
-//! * `rundler_maxPriorityFeePerGas` — priority fee estimate (fallback)
+//! Candide/Voltaire endpoint:
+//! * `voltaire_feesPerGas` — recommended `maxFeePerGas` and `maxPriorityFeePerGas`
 //!
 //! EntryPoint v0.9 changes from v0.6:
 //! * PackedUserOperation — 9 fields with packed bytes32 gas limits/fees
@@ -18,15 +17,20 @@
 //! * `executeBatch(Call[])` where `Call = (address, uint256, bytes)`
 //! * New paymasterAndData layout: paymaster(20) + pmVerifGas(16) + pmPostOp(16) + data
 //!
+//! Internally this module uses packed v0.9 fields for hashing/signing, then
+//! maps into the bundler RPC UserOperation shape (split gas + paymaster fields)
+//! required by Candide's `eth_estimateUserOperationGas` / `eth_sendUserOperation`.
+//!
 //! The bundler is accessed via standard JSON-RPC (same as any Ethereum node)
-//! so this works with Alchemy, Pimlico, Stackup, or a self-hosted rundler.
+//! so this works with Candide Voltaire and other v0.9-compatible bundlers
+//! for standard methods.
 
 use anyhow::{anyhow, Context, Result};
 use ethers::abi::{self, Token};
 use ethers::prelude::*;
 use ethers::types::{Address, Bytes, H256, U256};
 use ethers::utils::keccak256;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::time::Duration;
 use tracing::{info, warn};
 
@@ -51,6 +55,19 @@ const EXECUTE_SELECTOR: [u8; 4] = [0xb6, 0x1d, 0x27, 0xf6]; // 0xb61d27f6
 /// ABI-encodes as `(address,uint256,bytes)[]`.  This replaces the v0.6 two-array
 /// `executeBatch(address[],bytes[])` = 0x18dfb3c7.
 const EXECUTE_BATCH_SELECTOR: [u8; 4] = [0x34, 0xfc, 0xd5, 0xbe]; // 0x34fcd5be
+
+/// Semi-valid 65-byte dummy signature for estimation-time UserOperations.
+///
+/// Some bundlers reject all-zero signatures during request pre-validation with
+/// `-32602 Invalid UserOperation`, even though signature correctness is not
+/// required for gas estimation.
+const DUMMY_USER_OP_SIGNATURE: [u8; 65] = [
+    0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11,
+    0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11,
+    0x22, 0x22, 0x22, 0x22, 0x22, 0x22, 0x22, 0x22, 0x22, 0x22, 0x22, 0x22, 0x22, 0x22, 0x22, 0x22,
+    0x22, 0x22, 0x22, 0x22, 0x22, 0x22, 0x22, 0x22, 0x22, 0x22, 0x22, 0x22, 0x22, 0x22, 0x22, 0x22,
+    0x1b,
+];
 
 // ──────────────────────── EIP-712 Constants (EntryPoint v0.9) ────────
 
@@ -133,11 +150,6 @@ impl BundlerClient {
         self.entry_point
     }
 
-    /// Whether the configured bundler endpoint points to Alchemy.
-    pub fn is_alchemy_endpoint(&self) -> bool {
-        self.rpc_url.contains("alchemy.com")
-    }
-
     /// Build a `PackedUserOperation` (v0.9) for an execution job.
     ///
     /// * **Single call** (default): encodes `BaseAccount.execute(target, value, calldata)`.
@@ -149,6 +161,79 @@ impl BundlerClient {
     /// - `accountGasLimits = uint128(verificationGasLimit) || uint128(callGasLimit)`
     /// - `gasFees = uint128(maxPriorityFeePerGas) || uint128(maxFeePerGas)`
     pub async fn build_user_op(
+        &self,
+        job: &ExecutionJob,
+        smart_wallet: Address,
+        paymaster_and_data: Vec<u8>,
+    ) -> Result<UserOperation> {
+        let mut user_op = self
+            .build_user_op_draft(job, smart_wallet, paymaster_and_data)
+            .await?;
+
+        // Candide validates basic fee fields even during estimation.
+        self.apply_estimation_fee_hints(&mut user_op).await?;
+
+        let (call_gas, verification_gas, pre_verification_gas) = self
+            .estimate_gas(&user_op)
+            .await
+            .context("bundler gas estimation failed")?;
+
+        let (max_fee, priority_fee) = self.get_gas_prices().await?;
+
+        self.apply_gas_fields(
+            &mut user_op,
+            call_gas,
+            verification_gas,
+            pre_verification_gas,
+            max_fee,
+            priority_fee,
+        );
+
+        Ok(user_op)
+    }
+
+    /// Apply fee hints used for pre-estimation validation.
+    ///
+    /// This must be applied consistently to any draft UserOperation that is
+    /// signed by the paymaster before `eth_estimateUserOperationGas`.
+    pub async fn apply_estimation_fee_hints(&self, user_op: &mut UserOperation) -> Result<()> {
+        let (max_fee, priority_fee) = self.get_gas_prices().await?;
+        let gas_fees = pack_two_uint128(priority_fee, max_fee);
+        user_op.gas_fees = format!("0x{}", hex::encode(gas_fees));
+        Ok(())
+    }
+
+    /// Estimate gas for a pre-built UserOperation.
+    pub async fn estimate_gas_for_user_op(
+        &self,
+        user_op: &UserOperation,
+    ) -> Result<(U256, U256, U256)> {
+        self.estimate_gas(user_op).await
+    }
+
+    /// Apply final gas and fee fields to an internal packed UserOperation.
+    pub fn apply_gas_fields(
+        &self,
+        user_op: &mut UserOperation,
+        call_gas: U256,
+        verification_gas: U256,
+        pre_verification_gas: U256,
+        max_fee: U256,
+        priority_fee: U256,
+    ) {
+        let account_gas_limits = pack_two_uint128(verification_gas, call_gas);
+        let gas_fees = pack_two_uint128(priority_fee, max_fee);
+
+        user_op.account_gas_limits = format!("0x{}", hex::encode(account_gas_limits));
+        user_op.pre_verification_gas = format!("{pre_verification_gas:#x}");
+        user_op.gas_fees = format!("0x{}", hex::encode(gas_fees));
+    }
+
+    /// Build a draft `PackedUserOperation` with zeroed gas fields.
+    ///
+    /// This is useful for two-phase paymaster flows where `paymasterAndData`
+    /// must be signed before calling `eth_estimateUserOperationGas`.
+    pub async fn build_user_op_draft(
         &self,
         job: &ExecutionJob,
         smart_wallet: Address,
@@ -179,42 +264,33 @@ impl BundlerClient {
             .get_init_code_if_needed(smart_wallet, job.eoa_address.parse()?)
             .await?;
 
-        // Build a dummy op for gas estimation (zero gas fields)
-        let dummy_account_gas_limits = format!("0x{}", "0".repeat(64));
-        let dummy_gas_fees = format!("0x{}", "0".repeat(64));
-
-        let (call_gas, verification_gas, pre_verification_gas) = self
-            .estimate_gas(&UserOperation {
-                sender: format!("{smart_wallet:?}"),
-                nonce: format!("{nonce:#x}"),
-                init_code: format!("0x{}", hex::encode(&init_code)),
-                call_data: format!("0x{}", hex::encode(&call_data)),
-                account_gas_limits: dummy_account_gas_limits,
-                pre_verification_gas: "0x0".into(),
-                gas_fees: dummy_gas_fees,
-                paymaster_and_data: format!("0x{}", hex::encode(&paymaster_and_data)),
-                signature: format!("0x{}", hex::encode([0u8; 65])), // dummy sig for estimation
-            })
-            .await
-            .context("bundler gas estimation failed")?;
-
-        // Get current gas prices
-        let (max_fee, priority_fee) = self.get_gas_prices().await?;
-
-        // Pack gas fields into bytes32 per v0.9 spec
-        let account_gas_limits = pack_two_uint128(verification_gas, call_gas);
-        let gas_fees = pack_two_uint128(priority_fee, max_fee);
+        // Non-zero placeholders improve compatibility with bundlers that
+        // validate user-op shape before full estimation.
+        let dummy_account_gas_limits = format!(
+            "0x{}",
+            hex::encode(pack_two_uint128(
+                U256::from(300_000u64),
+                U256::from(300_000u64),
+            ))
+        );
+        let dummy_gas_fees = format!(
+            "0x{}",
+            hex::encode(pack_two_uint128(
+                U256::from(1_000_000_000u64),
+                U256::from(10_000_000_000u64),
+            ))
+        );
 
         Ok(UserOperation {
             sender: format!("{smart_wallet:?}"),
             nonce: format!("{nonce:#x}"),
             init_code: format!("0x{}", hex::encode(&init_code)),
             call_data: format!("0x{}", hex::encode(&call_data)),
-            account_gas_limits: format!("0x{}", hex::encode(account_gas_limits)),
-            pre_verification_gas: format!("{pre_verification_gas:#x}"),
-            gas_fees: format!("0x{}", hex::encode(gas_fees)),
+            account_gas_limits: dummy_account_gas_limits,
+            pre_verification_gas: "0x186a0".into(),
+            gas_fees: dummy_gas_fees,
             paymaster_and_data: format!("0x{}", hex::encode(&paymaster_and_data)),
-            signature: "0x".into(), // placeholder — will be set after signing
+            signature: format!("0x{}", hex::encode(DUMMY_USER_OP_SIGNATURE)),
         })
     }
 
@@ -255,17 +331,25 @@ impl BundlerClient {
 
     /// `eth_sendUserOperation(userOp, entryPoint)` → userOpHash
     async fn send_user_operation(&self, user_op: &UserOperation) -> Result<String> {
+        let payload = self
+            .rpc_user_operation_payload(user_op)
+            .context("failed to convert UserOperation to bundler RPC format")?;
+
         let response: JsonRpcResponse<String> = self
             .rpc_call(
                 "eth_sendUserOperation",
-                serde_json::json!([user_op, format!("{:?}", self.entry_point)]),
+                serde_json::json!([payload, format!("{:?}", self.entry_point)]),
             )
             .await?;
 
         response.result.ok_or_else(|| {
             anyhow!(
                 "bundler rejected UserOperation: {}",
-                response.error.map(|e| e.message).unwrap_or_default()
+                response
+                    .error
+                    .as_ref()
+                    .map(format_json_rpc_error)
+                    .unwrap_or_else(|| "no RPC error details".into())
             )
         })
     }
@@ -316,7 +400,50 @@ impl BundlerClient {
                 supported
             ));
         }
+
+        self.validate_entry_point_version_enabled().await?;
+
         info!(entry_point = %configured, "bundler entry point validated ✓");
+        Ok(())
+    }
+
+    /// Probe whether this bundler endpoint has EntryPoint v0.9 enabled.
+    ///
+    /// Some providers may list the v0.9 EntryPoint address in
+    /// `eth_supportedEntryPoints` but still reject v0.9 estimation calls unless
+    /// the feature is enabled for the API key/project.
+    async fn validate_entry_point_version_enabled(&self) -> Result<()> {
+        let probe_params = serde_json::json!([
+            {},
+            format!("{:?}", self.entry_point)
+        ]);
+
+        let response: JsonRpcResponse<serde_json::Value> = self
+            .rpc_call("eth_estimateUserOperationGas", probe_params)
+            .await?;
+
+        if let Some(err) = response.error {
+            let message_lc = err.message.to_lowercase();
+            if message_lc.contains("entrypoint version 0.9 is not currently enabled") {
+                return Err(anyhow!(
+                    "bundler endpoint does not have EntryPoint v0.9 enabled ({}). \
+set {{CHAIN}}_BUNDLER_RPC_URL to a v0.9-enabled ERC-4337 endpoint (or enable v0.9 for your current provider/project)",
+                    format_json_rpc_error(&err)
+                ));
+            }
+
+            if message_lc.contains("method not found")
+                || message_lc.contains("unsupported")
+                || message_lc.contains("entrypoint")
+            {
+                return Err(anyhow!(
+                    "bundler endpoint appears incompatible with EntryPoint v0.9 ({}). \
+use a v0.9-compatible bundler URL for this chain",
+                    format_json_rpc_error(&err)
+                ));
+            }
+        }
+
         Ok(())
     }
 
@@ -337,14 +464,18 @@ impl BundlerClient {
     /// `eth_estimateUserOperationGas(userOp, entryPoint[, stateOverride])` → gas estimates
     ///
     /// The optional `state_override` parameter allows modifying contract state
-    /// before estimation (e.g. setting token balances for simulation).  Alchemy
-    /// and most modern bundlers support this as the third JSON-RPC parameter.
+    /// before estimation (e.g. setting token balances for simulation). Modern
+    /// bundlers may support this as the third JSON-RPC parameter.
     async fn estimate_gas(
         &self,
         user_op: &UserOperation,
     ) -> Result<(U256, U256, U256)> {
+        let payload = self
+            .rpc_user_operation_payload(user_op)
+            .context("failed to convert UserOperation to bundler RPC format")?;
+
         let params = vec![
-            serde_json::to_value(user_op)?,
+            payload,
             serde_json::json!(format!("{:?}", self.entry_point)),
         ];
 
@@ -358,7 +489,11 @@ impl BundlerClient {
         let estimate = response.result.ok_or_else(|| {
             anyhow!(
                 "gas estimation failed: {}",
-                response.error.map(|e| e.message).unwrap_or_default()
+                response
+                    .error
+                    .as_ref()
+                    .map(format_json_rpc_error)
+                    .unwrap_or_else(|| "no RPC error details".into())
             )
         })?;
 
@@ -380,49 +515,65 @@ impl BundlerClient {
         Ok((call_gas, verification_gas, pre_verification_gas))
     }
 
-    /// Fetch gas price recommendations from the bundler via
-    /// `rundler_getUserOperationGasPrice`.
-    ///
-    /// Returns `(maxFeePerGas, maxPriorityFeePerGas)` from the bundler's
-    /// `suggested` tier.  All UserOperations go through the bundler, so
-    /// the bundler is the authoritative source for fee recommendations.
+    /// Fetch gas price recommendations from Candide Voltaire via
+    /// `voltaire_feesPerGas`.
     async fn fetch_gas_prices_from_bundler(&self) -> Result<(U256, U256)> {
-        let response: JsonRpcResponse<RundlerGasPriceResponse> = self
-            .rpc_call("rundler_getUserOperationGasPrice", serde_json::json!([]))
+        let response: JsonRpcResponse<VoltaireFeesPerGasResponse> = self
+            .rpc_call("voltaire_feesPerGas", serde_json::json!([]))
             .await?;
 
         let result = response.result.ok_or_else(|| {
             anyhow!(
-                "rundler_getUserOperationGasPrice returned no result: {}",
-                response.error.map(|e| e.message).unwrap_or_default()
+                "voltaire_feesPerGas returned no result: {}",
+                response
+                    .error
+                    .as_ref()
+                    .map(format_json_rpc_error)
+                    .unwrap_or_else(|| "no RPC error details".into())
             )
         })?;
 
-        info!(
-            base_fee = %result.base_fee,
-            block_number = %result.block_number,
-            current_priority_fee = %result.current_priority_fee,
-            "bundler gas price snapshot"
-        );
+        let mut max_fee = U256::from_str_radix(result.max_fee_per_gas.trim_start_matches("0x"), 16)
+            .context("invalid voltaire_feesPerGas maxFeePerGas")?;
 
-        let max_fee = U256::from_str_radix(
-            result.suggested.max_fee_per_gas.trim_start_matches("0x"),
+        let mut max_priority = U256::from_str_radix(
+            result.max_priority_fee_per_gas.trim_start_matches("0x"),
             16,
         )
-        .context("invalid rundler suggested maxFeePerGas")?;
-
-        let max_priority = U256::from_str_radix(
-            result
-                .suggested
-                .max_priority_fee_per_gas
-                .trim_start_matches("0x"),
-            16,
-        )
-        .context("invalid rundler suggested maxPriorityFeePerGas")?;
+        .context("invalid voltaire_feesPerGas maxPriorityFeePerGas")?;
 
         if max_fee.is_zero() {
-            return Err(anyhow!("bundler returned zero maxFeePerGas"));
+            return Err(anyhow!("voltaire_feesPerGas returned zero maxFeePerGas"));
         }
+
+        // Safety floor: Candide's recommended fees can be very tight and may
+        // become invalid by the time `eth_estimateUserOperationGas` validates.
+        // Keep EIP-1559-compatible floor: maxFee >= 2*baseFee + priority.
+        if let Some(block) = self
+            .provider
+            .get_block(BlockNumber::Latest)
+            .await
+            .context("failed to fetch latest block for fee floor")?
+        {
+            if let Some(base_fee) = block.base_fee_per_gas {
+                let required_min = base_fee
+                    .saturating_mul(U256::from(2u64))
+                    .saturating_add(max_priority);
+                if max_fee < required_min {
+                    max_fee = required_min;
+                }
+            }
+        }
+
+        if max_priority > max_fee {
+            max_priority = max_fee;
+        }
+
+        info!(
+            max_fee_wei = %max_fee,
+            max_priority_wei = %max_priority,
+            "bundler gas price snapshot (voltaire_feesPerGas)"
+        );
 
         Ok((max_fee, max_priority))
     }
@@ -539,11 +690,7 @@ impl BundlerClient {
         Ok(init_code)
     }
 
-    /// Get current gas prices from the bundler.
-    ///
-    /// All UserOperations are submitted through the bundler, so it is the
-    /// single source of truth for fee recommendations.  This is also used
-    /// by the pricing module for cost estimation.
+    /// Get current gas prices from Candide Voltaire.
     pub async fn get_gas_prices(&self) -> Result<(U256, U256)> {
         self.fetch_gas_prices_from_bundler().await
     }
@@ -599,6 +746,45 @@ impl BundlerClient {
         eip712_msg.extend_from_slice(&struct_hash);
 
         Ok(keccak256(&eip712_msg))
+    }
+
+    /// Convert internal packed v0.9 representation into Candide RPC
+    /// UserOperation shape.
+    fn to_rpc_user_operation(&self, op: &UserOperation) -> Result<RpcUserOperation> {
+        let (verification_gas, call_gas) = unpack_two_uint128_from_hex(&op.account_gas_limits)?;
+        let (max_priority_fee, max_fee) = unpack_two_uint128_from_hex(&op.gas_fees)?;
+
+        let (factory, factory_data) = split_init_code(&op.init_code)?;
+        let paymaster_fields = split_paymaster_and_data(&op.paymaster_and_data)?;
+
+        Ok(RpcUserOperation {
+            sender: op.sender.clone(),
+            nonce: op.nonce.clone(),
+            factory,
+            factory_data,
+            call_data: op.call_data.clone(),
+            call_gas_limit: format!("{call_gas:#x}"),
+            verification_gas_limit: format!("{verification_gas:#x}"),
+            pre_verification_gas: op.pre_verification_gas.clone(),
+            max_fee_per_gas: format!("{max_fee:#x}"),
+            max_priority_fee_per_gas: format!("{max_priority_fee:#x}"),
+            paymaster: paymaster_fields.paymaster,
+            paymaster_verification_gas_limit: paymaster_fields.paymaster_verification_gas_limit,
+            paymaster_post_op_gas_limit: paymaster_fields.paymaster_post_op_gas_limit,
+            paymaster_data: paymaster_fields.paymaster_data,
+            paymaster_signature: paymaster_fields.paymaster_signature,
+            signature: op.signature.clone(),
+        })
+    }
+
+    fn rpc_user_operation_payload(
+        &self,
+        op: &UserOperation,
+    ) -> Result<serde_json::Value> {
+        // Voltaire parses v0.9 UserOperation payloads with a strict schema
+        // (16 fields total), so we send only the canonical field set.
+        let base_rpc = self.to_rpc_user_operation(op)?;
+        serde_json::to_value(&base_rpc).map_err(Into::into)
     }
 
     /// Poll the bundler for a UserOperation receipt until it appears or timeout.
@@ -715,7 +901,23 @@ struct JsonRpcResponse<T> {
 
 #[derive(Debug, Deserialize)]
 struct JsonRpcError {
+    #[serde(default)]
+    code: Option<i64>,
     message: String,
+    #[serde(default)]
+    data: Option<serde_json::Value>,
+}
+
+fn format_json_rpc_error(err: &JsonRpcError) -> String {
+    let mut parts = Vec::new();
+    if let Some(code) = err.code {
+        parts.push(format!("code={code}"));
+    }
+    parts.push(format!("message={}", err.message));
+    if let Some(data) = &err.data {
+        parts.push(format!("data={data}"));
+    }
+    parts.join(", ")
 }
 
 #[derive(Debug, Deserialize)]
@@ -735,6 +937,7 @@ struct UserOpReceiptResponse {
 #[allow(dead_code)]
 struct GasEstimateResponse {
     call_gas_limit: String,
+    #[serde(alias = "verificationGas")]
     verification_gas_limit: String,
     pre_verification_gas: String,
     /// Paymaster verification gas (returned by v0.9 bundlers when paymaster is used).
@@ -743,29 +946,6 @@ struct GasEstimateResponse {
     /// Paymaster post-op gas (returned by v0.9 bundlers when paymaster is used).
     #[serde(default)]
     paymaster_post_op_gas_limit: Option<String>,
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct RundlerGasPriceResponse {
-    /// Current base fee from the latest block.
-    #[serde(default)]
-    base_fee: String,
-    /// Latest block number the recommendation is based on.
-    #[serde(default)]
-    block_number: String,
-    /// Current priority fee observed by the bundler.
-    #[serde(default)]
-    current_priority_fee: String,
-    /// Suggested maxFeePerGas and maxPriorityFeePerGas with safety buffers.
-    suggested: SuggestedGasPrice,
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct SuggestedGasPrice {
-    max_priority_fee_per_gas: String,
-    max_fee_per_gas: String,
 }
 
 /// Response from `eth_getUserOperationByHash` (v0.9 packed format).
@@ -785,6 +965,37 @@ pub struct UserOpByHashResponse {
     pub block_number: Option<String>,
     pub block_hash: Option<String>,
     pub transaction_hash: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct RpcUserOperation {
+    sender: String,
+    nonce: String,
+    factory: Option<String>,
+    factory_data: Option<String>,
+    call_data: String,
+    call_gas_limit: String,
+    verification_gas_limit: String,
+    pre_verification_gas: String,
+    max_fee_per_gas: String,
+    max_priority_fee_per_gas: String,
+    paymaster: Option<String>,
+    paymaster_verification_gas_limit: Option<String>,
+    paymaster_post_op_gas_limit: Option<String>,
+    paymaster_data: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    paymaster_signature: Option<String>,
+    signature: String,
+}
+
+#[derive(Debug)]
+struct RpcPaymasterFields {
+    paymaster: Option<String>,
+    paymaster_verification_gas_limit: Option<String>,
+    paymaster_post_op_gas_limit: Option<String>,
+    paymaster_data: Option<String>,
+    paymaster_signature: Option<String>,
 }
 
 use crate::relayer::utils::{parse_hex_bytes, parse_hex_u256};
@@ -824,4 +1035,86 @@ fn parse_hex_bytes32(s: &str) -> Result<[u8; 32]> {
         return Err(anyhow!("bytes32 value too long: {} bytes", bytes.len()));
     }
     Ok(result)
+}
+
+fn unpack_two_uint128_from_hex(s: &str) -> Result<(U256, U256)> {
+    let packed = parse_hex_bytes32(s)?;
+
+    let mut high_buf = [0u8; 32];
+    high_buf[16..32].copy_from_slice(&packed[..16]);
+    let high = U256::from_big_endian(&high_buf);
+
+    let mut low_buf = [0u8; 32];
+    low_buf[16..32].copy_from_slice(&packed[16..32]);
+    let low = U256::from_big_endian(&low_buf);
+
+    Ok((high, low))
+}
+
+fn split_init_code(init_code_hex: &str) -> Result<(Option<String>, Option<String>)> {
+    let init_code = parse_hex_bytes(init_code_hex)?;
+    if init_code.is_empty() {
+        return Ok((None, None));
+    }
+    if init_code.len() < 20 {
+        return Err(anyhow!(
+            "invalid initCode length {}; expected >= 20 bytes",
+            init_code.len()
+        ));
+    }
+
+    let factory = format!("0x{}", hex::encode(&init_code[..20]));
+    let factory_data = format!("0x{}", hex::encode(&init_code[20..]));
+    Ok((Some(factory), Some(factory_data)))
+}
+
+fn split_paymaster_and_data(paymaster_and_data_hex: &str) -> Result<RpcPaymasterFields> {
+    let bytes = parse_hex_bytes(paymaster_and_data_hex)?;
+    if bytes.is_empty() {
+        return Ok(RpcPaymasterFields {
+            paymaster: None,
+            paymaster_verification_gas_limit: None,
+            paymaster_post_op_gas_limit: None,
+            paymaster_data: None,
+            paymaster_signature: None,
+        });
+    }
+
+    if bytes.len() < 52 {
+        return Err(anyhow!(
+            "invalid paymasterAndData length {}; expected >= 52 bytes",
+            bytes.len()
+        ));
+    }
+
+    let paymaster = format!("0x{}", hex::encode(&bytes[0..20]));
+
+    let mut verif_buf = [0u8; 32];
+    verif_buf[16..32].copy_from_slice(&bytes[20..36]);
+    let pm_verif = U256::from_big_endian(&verif_buf);
+
+    let mut postop_buf = [0u8; 32];
+    postop_buf[16..32].copy_from_slice(&bytes[36..52]);
+    let pm_postop = U256::from_big_endian(&postop_buf);
+
+    // Candide accepts v0.9 with legacy-compatible paymasterData carrying the
+    // full paymaster tail (including any embedded signature), while
+    // paymasterSignature remains null.
+    let tail = &bytes[52..];
+    let paymaster_data = Some(format!("0x{}", hex::encode(tail)));
+
+    Ok(RpcPaymasterFields {
+        paymaster: Some(paymaster),
+        paymaster_verification_gas_limit: Some(format!("{pm_verif:#x}")),
+        paymaster_post_op_gas_limit: Some(format!("{pm_postop:#x}")),
+        paymaster_data,
+        paymaster_signature: None,
+    })
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct VoltaireFeesPerGasResponse {
+    max_priority_fee_per_gas: String,
+    max_fee_per_gas: String,
 }

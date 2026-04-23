@@ -39,11 +39,13 @@ impl ExecutionEngine {
         for (chain, chain_cfg) in &config.chains {
             let provider = Provider::<Http>::try_from(&chain_cfg.rpc_url)
                 .map_err(|e| anyhow!("failed to create provider for {}: {}", chain, e))?;
-            providers.insert(chain.clone(), Arc::new(provider));
+            let provider = Arc::new(provider);
+            providers.insert(chain.clone(), provider.clone());
 
             let cache = Arc::new(NativeTokenPriceCache::new(
                 chain_cfg.price_feed_url.clone(),
                 config.price_cache_ttl_secs,
+                provider,
             ));
             price_caches.insert(chain.clone(), cache);
 
@@ -206,9 +208,8 @@ impl ExecutionEngine {
 
     /// Calculate execution cost in USD based on gas estimate.
     ///
-    /// Gas prices are fetched from the bundler via `rundler_getUserOperationGasPrice`.
-    /// There is no node-based fallback — the bundler is the authoritative source
-    /// for fee recommendations since all UserOperations go through it.
+    /// Gas prices are resolved by `BundlerClient::get_gas_prices()` via
+    /// Candide Voltaire's `voltaire_feesPerGas` method.
     ///
     /// For ERC-4337, the total gas includes the UserOp overhead (verification
     /// gas + pre-verification gas) on top of the call gas. We add a buffer
@@ -219,7 +220,6 @@ impl ExecutionEngine {
         gas_estimate: u64,
         bundler_client: &BundlerClient,
     ) -> Result<f64> {
-        // Fetch gas price from the bundler (single source of truth)
         let (max_fee_per_gas, _max_priority_fee) = bundler_client.get_gas_prices().await?;
 
         // ERC-4337 overhead: ~100k gas for verification + pre-verification.
