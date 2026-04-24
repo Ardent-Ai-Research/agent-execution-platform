@@ -9,7 +9,7 @@ A production-hardened Rust backend that enables **AI agents to execute on-chain 
 - **EntryPoint v0.9** — `PackedUserOperation` fully integrated with batch transaction support (`executeBatch`)
 - **Smart wallet provisioning** — on-chain `factory.getAddress()` for deterministic CREATE2 addresses
 - **Webhook push notifications** — HMAC-SHA256 signed payloads delivered to agent callback URLs
-- **60 integration tests** — covering API routes, middleware, DB, Redis queue, encryption, rate limiting, and on-chain RPC calls
+- **72 automated tests** — `35` external integration tests + `37` module tests (see `tests/README.md`)
 - **Solidity contracts** — SimpleAccountFactory + VerifyingPaymaster, built with Foundry
 
 ---
@@ -338,10 +338,9 @@ routes::status_handler()
 | **Poison-pill protection**       | Max 3 attempts → dead-letter queue + status marked Failed           |
 | **Panic-safe workers**           | `tokio::spawn` boundary + supervisor auto-restart with cooldown     |
 | **ERC-4337 execution**           | UserOperations submitted through bundler — no EOA nonce management  |
-| **Alchemy preflight simulation** | `alchemy_simulateUserOperationAssetChanges` rejects bad UserOps before broadcast |
-| **Bundler-native gas pricing**   | `rundler_getUserOperationGasPrice` for accurate fee estimation (no node fallback) |
+| **Bundler-native gas pricing**   | Candide Voltaire `voltaire_feesPerGas` is used for fee estimation (no node fallback) |
 | **Webhook HMAC signing**         | `X-Webhook-Signature: sha256=<hex>` HMAC-SHA256 over payload, keyed with API key hash |
-| **Webhook security**             | HTTPS-only callbacks, no redirect following, exponential backoff (3 retries) |
+| **Webhook delivery safety**      | No redirect following, request/connect timeouts, exponential backoff (3 attempts) |
 | **Live price feed**              | CoinGecko native-token/USD with per-chain TTL cache (no hardcoded prices) |
 | **Deep health check**            | Pings DB + Redis — returns 503 if either is degraded                |
 | **Overflow protection**          | u128 arithmetic for gas cost calculation                            |
@@ -361,7 +360,7 @@ that can accept API requests. Every step is explicit; nothing is assumed.
 | **Rust** | 1.75+ | `curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \| sh` |
 | **Docker & Docker Compose** | latest | [docs.docker.com](https://docs.docker.com/get-docker/) |
 | **Foundry** | latest | `curl -L https://foundry.paradigm.xyz \| bash && foundryup` |
-| **An Alchemy account** | free tier | [alchemy.com](https://www.alchemy.com/) — needed for Sepolia RPC + bundler |
+| **RPC + bundler provider account** | free tier is fine | Any Sepolia-capable RPC plus ERC-4337 bundler endpoint (Alchemy/Candide/other compatible providers) |
 
 ### Step 1 — Clone & Enter the Repo
 
@@ -1280,7 +1279,8 @@ To add a **new** chain beyond the built-in three:
 
 - [ ] **End-to-end on-chain test**: A full execution from `POST /execute` → UserOp submitted → on-chain confirmation requires a funded paymaster on a testnet. Currently tested manually, not automated. Tip: create custom stablecoin (i.e. USDT/USDC) for x402 payment verification.
 - [ ] **Batch gas estimation**: Batch calls use the same gas estimation path as single calls — may need tuning for large batches.
-- [ ] **Worker unit tests**: The background worker, bundler submission, paymaster signing, and webhook delivery paths are not yet covered by automated tests.
+- [ ] **Worker loop orchestration tests**: Retry/DLQ helpers are covered, but a full `run_worker` iteration harness with controllable fakes is still pending.
+- [ ] **Positive payment verification unit tests**: Add direct mocked coverage of on-chain receipt/log happy paths in `src/payments/mod.rs`.
 
 ---
 
