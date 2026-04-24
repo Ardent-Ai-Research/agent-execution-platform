@@ -191,6 +191,30 @@ fn compute_signature(body: &str, secret: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use axum::{
+        extract::State,
+        http::{HeaderMap, StatusCode},
+        routing::post,
+        Router,
+    };
+    use std::sync::Arc;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    use tokio::sync::Mutex;
+
+    fn sample_payload() -> WebhookPayload {
+        WebhookPayload {
+            event_id: Uuid::new_v4(),
+            event_type: "execution.completed".into(),
+            request_id: Uuid::new_v4(),
+            status: ExecutionStatus::Confirmed,
+            chain: "ethereum".into(),
+            tx_hash: Some("0xabc".into()),
+            cost_usd: Some(1.23),
+            error: None,
+            created_at: Utc::now(),
+            completed_at: Utc::now(),
+        }
+    }
 
     #[test]
     fn test_signature_deterministic() {
@@ -211,5 +235,99 @@ mod tests {
         let sig1 = compute_signature(r#"{"a":1}"#, "secret");
         let sig2 = compute_signature(r#"{"a":2}"#, "secret");
         assert_ne!(sig1, sig2);
+    }
+
+    #[tokio::test]
+    async fn test_deliver_sends_post_with_hmac_header() {
+        let hit_count = Arc::new(AtomicUsize::new(0));
+        let captured_sig: Arc<Mutex<Option<String>>> = Arc::new(Mutex::new(None));
+
+        async fn handler(
+            State((hits, sig_store)): State<(Arc<AtomicUsize>, Arc<Mutex<Option<String>>>)>,
+            headers: HeaderMap,
+        ) -> StatusCode {
+            hits.fetch_add(1, Ordering::SeqCst);
+            let sig = headers
+                .get("x-webhook-signature")
+                .and_then(|v| v.to_str().ok())
+                .map(ToString::to_string);
+            *sig_store.lock().await = sig;
+            StatusCode::OK
+        }
+
+        let app = Router::new()
+            .route("/", post(handler))
+            .with_state((Arc::clone(&hit_count), Arc::clone(&captured_sig)));
+
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("bind");
+        let addr = listener.local_addr().expect("addr");
+        let server = tokio::spawn(async move {
+            axum::serve(listener, app).await.expect("serve");
+        });
+
+        let client = build_http_client();
+        let payload = sample_payload();
+        let secret = "test-secret";
+
+        let delivered = deliver(
+            &client,
+            &format!("http://{addr}"),
+            &payload,
+            secret,
+        )
+        .await;
+
+        assert!(delivered);
+        assert_eq!(hit_count.load(Ordering::SeqCst), 1);
+
+        let body = serde_json::to_string(&payload).expect("payload json");
+        let expected_sig = compute_signature(&body, secret);
+        assert_eq!(captured_sig.lock().await.as_deref(), Some(expected_sig.as_str()));
+
+        server.abort();
+    }
+
+    #[tokio::test]
+    async fn test_deliver_retries_on_5xx_then_succeeds() {
+        let hit_count = Arc::new(AtomicUsize::new(0));
+
+        async fn handler(State(hits): State<Arc<AtomicUsize>>) -> StatusCode {
+            let n = hits.fetch_add(1, Ordering::SeqCst) + 1;
+            if n < 3 {
+                StatusCode::INTERNAL_SERVER_ERROR
+            } else {
+                StatusCode::OK
+            }
+        }
+
+        let app = Router::new()
+            .route("/", post(handler))
+            .with_state(Arc::clone(&hit_count));
+
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("bind");
+        let addr = listener.local_addr().expect("addr");
+        let server = tokio::spawn(async move {
+            axum::serve(listener, app).await.expect("serve");
+        });
+
+        let client = build_http_client();
+        let payload = sample_payload();
+
+        let delivered = deliver(
+            &client,
+            &format!("http://{addr}"),
+            &payload,
+            "retry-secret",
+        )
+        .await;
+
+        assert!(delivered);
+        assert_eq!(hit_count.load(Ordering::SeqCst), 3);
+
+        server.abort();
     }
 }

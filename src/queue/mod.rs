@@ -32,6 +32,9 @@ const DLQ_KEY: &str = "execution_jobs:dead_letter";
 /// Maximum number of attempts before a job is moved to the dead-letter queue.
 pub const MAX_JOB_ATTEMPTS: u32 = 3;
 
+#[cfg(test)]
+pub(crate) static TEST_QUEUE_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
 /// Create a Redis connection manager (multiplexed, reconnect-aware).
 pub async fn create_redis_connection(redis_url: &str) -> Result<ConnectionManager> {
     let client = redis::Client::open(redis_url)?;
@@ -186,4 +189,103 @@ pub async fn queue_length(conn: &mut ConnectionManager) -> Result<u64> {
 pub async fn dlq_length(conn: &mut ConnectionManager) -> Result<u64> {
     let len: u64 = conn.llen(DLQ_KEY).await?;
     Ok(len)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::types::Chain;
+    use uuid::Uuid;
+
+    async fn setup_redis() -> ConnectionManager {
+        dotenvy::dotenv().ok();
+        let redis_url = std::env::var("REDIS_URL").expect("REDIS_URL env var");
+        create_redis_connection(&redis_url)
+            .await
+            .expect("create redis connection")
+    }
+
+    async fn clear_keys(conn: &mut ConnectionManager, worker_id: u32) {
+        let processing = format!("execution_jobs:processing:{worker_id}");
+        let _: () = redis::cmd("DEL")
+            .arg("execution_jobs")
+            .arg(processing)
+            .arg("execution_jobs:dead_letter")
+            .query_async(conn)
+            .await
+            .expect("clear queue keys");
+    }
+
+    fn sample_job(attempt_count: u32) -> ExecutionJob {
+        ExecutionJob {
+            request_id: Uuid::new_v4(),
+            agent_id: "queue-test".into(),
+            smart_wallet_address: "0x1234567890abcdef1234567890abcdef12345678".into(),
+            eoa_address: "0xabcdefabcdefabcdefabcdefabcdefabcdefabcd".into(),
+            chain: Chain::Ethereum,
+            target_contract: "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238".into(),
+            calldata: "0xa9059cbb".into(),
+            value: "0".into(),
+            gas_limit: 100_000,
+            created_at: chrono::Utc::now(),
+            attempt_count,
+            batch_calls: None,
+            callback_url: None,
+            api_key_hash: None,
+        }
+    }
+
+    #[tokio::test]
+    async fn test_queue_enqueue_and_dequeue() {
+        let _guard = TEST_QUEUE_LOCK.lock().expect("queue test lock");
+        let mut conn = setup_redis().await;
+        let worker_id = 199u32;
+        clear_keys(&mut conn, worker_id).await;
+
+        let job = sample_job(0);
+        enqueue_job(&mut conn, &job).await.expect("enqueue job");
+        assert!(queue_length(&mut conn).await.expect("queue length") >= 1);
+
+        let dequeued = dequeue_job(&mut conn, 1.0, worker_id)
+            .await
+            .expect("dequeue job")
+            .expect("job present");
+        assert_eq!(dequeued.request_id, job.request_id);
+
+        ack_job(&mut conn, &dequeued, worker_id).await.expect("ack job");
+        clear_keys(&mut conn, worker_id).await;
+    }
+
+    #[tokio::test]
+    async fn test_queue_recover_stale_jobs() {
+        let _guard = TEST_QUEUE_LOCK.lock().expect("queue test lock");
+        let mut conn = setup_redis().await;
+        let worker_id = 197u32;
+        clear_keys(&mut conn, worker_id).await;
+
+        let proc_key = format!("execution_jobs:processing:{worker_id}");
+        let payload = serde_json::to_string(&sample_job(1)).expect("serialize job");
+        let _: () = redis::AsyncCommands::lpush(&mut conn, &proc_key, &payload)
+            .await
+            .expect("push processing payload");
+
+        let recovered = recover_stale_jobs(&mut conn, worker_id)
+            .await
+            .expect("recover stale jobs");
+        assert!(recovered >= 1);
+        clear_keys(&mut conn, worker_id).await;
+    }
+
+    #[tokio::test]
+    async fn test_queue_dead_letter() {
+        let _guard = TEST_QUEUE_LOCK.lock().expect("queue test lock");
+        let mut conn = setup_redis().await;
+        let worker_id = 198u32;
+        clear_keys(&mut conn, worker_id).await;
+
+        let job = sample_job(MAX_JOB_ATTEMPTS);
+        push_to_dlq(&mut conn, &job).await.expect("push dlq");
+        assert!(dlq_length(&mut conn).await.expect("dlq length") >= 1);
+        clear_keys(&mut conn, worker_id).await;
+    }
 }

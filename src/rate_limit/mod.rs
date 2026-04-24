@@ -160,3 +160,47 @@ pub async fn rate_limit_middleware(
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_rate_limiter_allows_burst() {
+        let limiter = RateLimiter::new(10.0, 5.0);
+        let key = Uuid::new_v4();
+
+        for index in 0..5 {
+            assert!(limiter.check(key).is_ok(), "request {index} should pass");
+        }
+        assert!(limiter.check(key).is_err());
+    }
+
+    #[test]
+    fn test_rate_limiter_independent_keys() {
+        let limiter = RateLimiter::new(1.0, 1.0);
+        let key_one = Uuid::new_v4();
+        let key_two = Uuid::new_v4();
+
+        assert!(limiter.check(key_one).is_ok());
+        assert!(limiter.check(key_two).is_ok());
+        assert!(limiter.check(key_one).is_err());
+    }
+
+    #[test]
+    fn test_rate_limiter_retry_after() {
+        let limiter = RateLimiter::new(10.0, 1.0);
+        let key = Uuid::new_v4();
+
+        limiter.check(key).expect("first token consumed");
+        let retry_after = limiter.check(key).expect_err("should be rate limited");
+        assert!(retry_after > 0.0 && retry_after < 1.0);
+    }
+
+    #[test]
+    fn test_rate_limiter_evict_stale() {
+        let limiter = RateLimiter::new(1000.0, 1.0);
+        limiter.check(Uuid::new_v4()).expect("initial check");
+        limiter.evict_stale();
+    }
+}

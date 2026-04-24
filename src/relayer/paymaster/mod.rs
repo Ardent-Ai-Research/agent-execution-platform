@@ -262,3 +262,78 @@ impl PaymasterSigner {
 }
 
 use crate::relayer::utils::{parse_hex_bytes, parse_hex_u256};
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn sample_user_op() -> UserOperation {
+        UserOperation {
+            sender: "0x1111111111111111111111111111111111111111".into(),
+            nonce: "0x1".into(),
+            init_code: "0x".into(),
+            call_data: "0xabcdef".into(),
+            account_gas_limits: format!("0x{}", "00".repeat(32)),
+            pre_verification_gas: "0x186a0".into(),
+            gas_fees: format!("0x{}", "00".repeat(32)),
+            paymaster_and_data: "0x".into(),
+            signature: format!("0x{}", "11".repeat(65)),
+        }
+    }
+
+    fn test_signer() -> PaymasterSigner {
+        PaymasterSigner::new(
+            "0x2222222222222222222222222222222222222222"
+                .parse()
+                .expect("paymaster"),
+            "0x59c6995e998f97a5a0044966f0945389dc9e86dae88f4f0de0f8f154f5f9d2d4",
+            300,
+        )
+        .expect("signer")
+    }
+
+    #[test]
+    fn test_dummy_paymaster_and_data_has_v09_length() {
+        let signer = test_signer();
+        let data = signer.dummy_paymaster_and_data();
+        assert_eq!(data.len(), 181);
+        assert_eq!(
+            &data[..20],
+            &hex::decode("2222222222222222222222222222222222222222").expect("hex")
+        );
+    }
+
+    #[tokio::test]
+    async fn test_sign_paymaster_data_layout_and_signature_recovery() {
+        let signer = test_signer();
+        let user_op = sample_user_op();
+        let chain_id = 11155111u64;
+
+        let data = signer
+            .sign_paymaster_data(&user_op, chain_id)
+            .await
+            .expect("sign paymaster data");
+
+        assert_eq!(data.len(), 181);
+
+        let sig_offset = 20 + 16 + 16 + 64;
+        let sig = ethers::types::Signature::try_from(&data[sig_offset..]).expect("signature");
+
+        let mut valid_until_bytes = [0u8; 32];
+        valid_until_bytes.copy_from_slice(&data[52..84]);
+        let valid_until = U256::from_big_endian(&valid_until_bytes);
+
+        let mut valid_after_bytes = [0u8; 32];
+        valid_after_bytes.copy_from_slice(&data[84..116]);
+        let valid_after = U256::from_big_endian(&valid_after_bytes);
+
+        let hash = signer
+            .compute_paymaster_hash(&user_op, chain_id, valid_until, valid_after)
+            .expect("hash");
+
+        let recovered = sig
+            .recover(ethers::utils::hash_message(hash))
+            .expect("recover signer");
+        assert_eq!(recovered, signer.signing_key.address());
+    }
+}

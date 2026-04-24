@@ -259,6 +259,127 @@ pub struct ApiKeyContext {
     pub label: Option<String>,
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_chain_from_str_loose() {
+        assert_eq!(Chain::from_str_loose("ethereum"), Some(Chain::Ethereum));
+        assert_eq!(Chain::from_str_loose("eth"), Some(Chain::Ethereum));
+        assert_eq!(Chain::from_str_loose("mainnet"), Some(Chain::Ethereum));
+        assert_eq!(Chain::from_str_loose("ETHEREUM"), Some(Chain::Ethereum));
+        assert_eq!(Chain::from_str_loose("base"), Some(Chain::Base));
+        assert_eq!(Chain::from_str_loose("bnb"), Some(Chain::Bnb));
+        assert_eq!(Chain::from_str_loose("bsc"), Some(Chain::Bnb));
+        assert_eq!(Chain::from_str_loose("binance"), Some(Chain::Bnb));
+        assert_eq!(Chain::from_str_loose("solana"), None);
+        assert_eq!(Chain::from_str_loose("polygon"), None);
+        assert_eq!(Chain::from_str_loose(""), None);
+    }
+
+    #[test]
+    fn test_chain_display() {
+        assert_eq!(Chain::Ethereum.to_string(), "ethereum");
+        assert_eq!(Chain::Base.to_string(), "base");
+        assert_eq!(Chain::Bnb.to_string(), "bnb");
+    }
+
+    #[test]
+    fn test_chain_ids() {
+        assert_eq!(Chain::Ethereum.chain_id(), 1);
+        assert_eq!(Chain::Base.chain_id(), 8453);
+        assert_eq!(Chain::Bnb.chain_id(), 56);
+    }
+
+    #[test]
+    fn test_execution_status_display() {
+        assert_eq!(ExecutionStatus::Pending.to_string(), "pending");
+        assert_eq!(ExecutionStatus::PaymentRequired.to_string(), "payment_required");
+        assert_eq!(ExecutionStatus::PaymentVerified.to_string(), "payment_verified");
+        assert_eq!(ExecutionStatus::Queued.to_string(), "queued");
+        assert_eq!(ExecutionStatus::Broadcasting.to_string(), "broadcasting");
+        assert_eq!(ExecutionStatus::Confirmed.to_string(), "confirmed");
+        assert_eq!(ExecutionStatus::Failed.to_string(), "failed");
+        assert_eq!(ExecutionStatus::Reverted.to_string(), "reverted");
+    }
+
+    #[test]
+    fn test_execution_job_serde_round_trip() {
+        let job = ExecutionJob {
+            request_id: Uuid::new_v4(),
+            agent_id: "serde".into(),
+            smart_wallet_address: "0xaaaa".into(),
+            eoa_address: "0xbbbb".into(),
+            chain: Chain::Ethereum,
+            target_contract: "0xcccc".into(),
+            calldata: "0xdddd".into(),
+            value: "123".into(),
+            gas_limit: 42_000,
+            created_at: Utc::now(),
+            attempt_count: 2,
+            batch_calls: Some(vec![BatchCall {
+                target_contract: "0xeeee".into(),
+                calldata: "0xffff".into(),
+                value: "456".into(),
+            }]),
+            callback_url: Some("https://example.com/cb".into()),
+            api_key_hash: Some("abc123".into()),
+        };
+
+        let json = serde_json::to_string(&job).expect("serialize execution job");
+        let round_trip: ExecutionJob = serde_json::from_str(&json).expect("deserialize execution job");
+        assert_eq!(round_trip.request_id, job.request_id);
+        assert_eq!(round_trip.attempt_count, 2);
+        assert_eq!(round_trip.batch_calls.expect("batch calls").len(), 1);
+    }
+
+    #[test]
+    fn test_user_operation_serde() {
+        let op = UserOperation {
+            sender: "0x1111111111111111111111111111111111111111".into(),
+            nonce: "0x01".into(),
+            init_code: "0x".into(),
+            call_data: "0xabcdef".into(),
+            account_gas_limits: format!("0x{}", "0".repeat(64)),
+            pre_verification_gas: "0x5208".into(),
+            gas_fees: format!("0x{}", "0".repeat(64)),
+            paymaster_and_data: "0x".into(),
+            signature: "0x".into(),
+        };
+
+        let value = serde_json::to_value(&op).expect("serialize user operation");
+        assert!(value.get("sender").is_some());
+        assert!(value.get("callData").is_some());
+        assert!(value.get("accountGasLimits").is_some());
+        assert!(value.get("gasFees").is_some());
+    }
+
+    #[test]
+    fn test_payment_proof_serde() {
+        let proof = PaymentProof {
+            payment_id: Uuid::new_v4(),
+            quote_request_id: None,
+            payer: "0x1234".into(),
+            amount_usd: 1.5,
+            token: "USDC".into(),
+            chain: "ethereum".into(),
+            tx_hash: "0xabcd".into(),
+            verified: true,
+            verified_at: Utc::now(),
+            confirmed_amount_raw: Some("1500000".into()),
+            block_confirmations: Some(12),
+            token_contract: Some("0x5678".into()),
+        };
+
+        let json = serde_json::to_string(&proof).expect("serialize payment proof");
+        let round_trip: PaymentProof =
+            serde_json::from_str(&json).expect("deserialize payment proof");
+        assert_eq!(round_trip.amount_usd, 1.5);
+        assert!(round_trip.verified);
+    }
+}
+
 // ──────────────────────── ERC-4337 Types ──────────────────────────────
 
 /// An ERC-4337 PackedUserOperation as defined by EntryPoint v0.9.

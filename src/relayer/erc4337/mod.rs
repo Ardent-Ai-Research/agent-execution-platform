@@ -1118,3 +1118,149 @@ struct VoltaireFeesPerGasResponse {
     max_priority_fee_per_gas: String,
     max_fee_per_gas: String,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use axum::{extract::State, http::StatusCode, routing::post, Json, Router};
+    use serde_json::Value;
+    use std::sync::Arc;
+    use tokio::sync::Mutex;
+
+    fn test_client(rpc_url: String) -> BundlerClient {
+        let provider = Arc::new(
+            Provider::<Http>::try_from("http://127.0.0.1:8545").expect("provider url"),
+        );
+        BundlerClient::new(
+            rpc_url,
+            "0x433709009b8330fda32311df1c2afa402ed8d009"
+                .parse()
+                .expect("entry point"),
+            "0x0000000000000000000000000000000000000001"
+                .parse()
+                .expect("factory"),
+            provider,
+        )
+    }
+
+    fn sample_user_op(paymaster_and_data: String) -> UserOperation {
+        let account_gas_limits = format!(
+            "0x{}",
+            hex::encode(pack_two_uint128(U256::from(300_000u64), U256::from(200_000u64)))
+        );
+        let gas_fees = format!(
+            "0x{}",
+            hex::encode(pack_two_uint128(U256::from(2_000_000_000u64), U256::from(20_000_000_000u64)))
+        );
+
+        UserOperation {
+            sender: "0x1111111111111111111111111111111111111111".into(),
+            nonce: "0x1".into(),
+            init_code: "0x".into(),
+            call_data: "0xabcdef".into(),
+            account_gas_limits,
+            pre_verification_gas: "0x186a0".into(),
+            gas_fees,
+            paymaster_and_data,
+            signature: format!("0x{}", "11".repeat(65)),
+        }
+    }
+
+    fn make_paymaster_and_data() -> String {
+        let mut bytes = Vec::new();
+        bytes.extend_from_slice(
+            &hex::decode("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa").expect("paymaster"),
+        );
+
+        let mut pm_verif = [0u8; 32];
+        U256::from(100_000u64).to_big_endian(&mut pm_verif);
+        bytes.extend_from_slice(&pm_verif[16..32]);
+
+        let mut pm_post = [0u8; 32];
+        U256::from(50_000u64).to_big_endian(&mut pm_post);
+        bytes.extend_from_slice(&pm_post[16..32]);
+
+        bytes.extend_from_slice(&[0x55u8; 64]);
+        bytes.extend_from_slice(&[0x66u8; 65]);
+        format!("0x{}", hex::encode(bytes))
+    }
+
+    #[test]
+    fn test_pack_unpack_two_uint128_round_trip() {
+        let high = U256::from(123_456_789u64);
+        let low = U256::from(987_654_321u64);
+        let packed = format!("0x{}", hex::encode(pack_two_uint128(high, low)));
+        let (unpacked_high, unpacked_low) = unpack_two_uint128_from_hex(&packed).expect("unpack");
+        assert_eq!(unpacked_high, high);
+        assert_eq!(unpacked_low, low);
+    }
+
+    #[test]
+    fn test_split_paymaster_and_data_v09_layout() {
+        let fields = split_paymaster_and_data(&make_paymaster_and_data()).expect("split");
+        assert_eq!(
+            fields.paymaster.as_deref(),
+            Some("0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
+        );
+        assert_eq!(fields.paymaster_verification_gas_limit.as_deref(), Some("0x186a0"));
+        assert_eq!(fields.paymaster_post_op_gas_limit.as_deref(), Some("0xc350"));
+        assert!(fields.paymaster_data.is_some());
+        assert!(fields.paymaster_signature.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_send_user_operation_uses_canonical_rpc_fields() {
+        let captured_body: Arc<Mutex<Option<Value>>> = Arc::new(Mutex::new(None));
+        let captured_body_state = Arc::clone(&captured_body);
+
+        async fn handler(
+            State(captured): State<Arc<Mutex<Option<Value>>>>,
+            Json(body): Json<Value>,
+        ) -> (StatusCode, Json<Value>) {
+            *captured.lock().await = Some(body);
+            (
+                StatusCode::OK,
+                Json(serde_json::json!({
+                    "jsonrpc": "2.0",
+                    "id": 1,
+                    "result": "0x1234"
+                })),
+            )
+        }
+
+        let app = Router::new()
+            .route("/", post(handler))
+            .with_state(captured_body_state);
+
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("bind");
+        let addr = listener.local_addr().expect("addr");
+        let server = tokio::spawn(async move {
+            axum::serve(listener, app).await.expect("serve");
+        });
+
+        let client = test_client(format!("http://{addr}"));
+        let user_op = sample_user_op(make_paymaster_and_data());
+
+        let result = client.send_user_operation(&user_op).await.expect("send user op");
+        assert_eq!(result, "0x1234");
+
+        let body = captured_body
+            .lock()
+            .await
+            .clone()
+            .expect("captured json-rpc request body");
+
+        assert_eq!(body["method"], "eth_sendUserOperation");
+
+        let user_op_payload = body["params"][0].as_object().expect("user op object");
+        assert!(user_op_payload.contains_key("verificationGasLimit"));
+        assert!(user_op_payload.contains_key("preVerificationGas"));
+        assert!(user_op_payload.contains_key("maxFeePerGas"));
+        assert!(user_op_payload.contains_key("maxPriorityFeePerGas"));
+        assert!(!user_op_payload.contains_key("verificationGas"));
+
+        server.abort();
+    }
+}

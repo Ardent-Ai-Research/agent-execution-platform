@@ -330,3 +330,169 @@ pub async fn insert_platform_key(
     .await?;
     Ok(row)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::types::{ExecutionRequest, PaymentProof};
+
+    async fn setup_pool() -> PgPool {
+        dotenvy::dotenv().ok();
+        let database_url = std::env::var("DATABASE_URL").expect("DATABASE_URL env var");
+        let pool = create_pool(&database_url).await.expect("create pool");
+        run_migrations(&pool).await.expect("run migrations");
+        pool
+    }
+
+    fn sample_request(agent_id: &str) -> ExecutionRequest {
+        ExecutionRequest {
+            agent_id: agent_id.into(),
+            chain: "ethereum".into(),
+            target_contract: "0x1234567890abcdef1234567890abcdef12345678".into(),
+            calldata: "0xdeadbeef".into(),
+            value: "0".into(),
+            strategy_id: None,
+            batch_calls: None,
+            callback_url: None,
+        }
+    }
+
+    #[tokio::test]
+    async fn test_db_api_key_create_and_lookup() {
+        let pool = setup_pool().await;
+
+        let (row, raw_key) = create_api_key(&pool, Some("db-test"))
+            .await
+            .expect("create api key");
+        assert!(raw_key.starts_with("ak_"));
+        assert!(row.is_active);
+
+        let found = get_api_key_by_raw(&pool, &raw_key)
+            .await
+            .expect("lookup api key")
+            .expect("api key exists");
+        assert_eq!(found.id, row.id);
+    }
+
+    #[tokio::test]
+    async fn test_db_api_key_wrong_key_returns_none() {
+        let pool = setup_pool().await;
+        let found = get_api_key_by_raw(&pool, "ak_does_not_exist")
+            .await
+            .expect("lookup non-existent key");
+        assert!(found.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_db_execution_request_lifecycle() {
+        let pool = setup_pool().await;
+        let req = sample_request("lifecycle");
+
+        let row = insert_execution_request(
+            &pool,
+            &req,
+            &ExecutionStatus::Pending,
+            Some("0xaaaa"),
+            None,
+        )
+        .await
+        .expect("insert request");
+        assert_eq!(row.status, "pending");
+
+        let fetched = get_execution_request(&pool, row.id)
+            .await
+            .expect("fetch request")
+            .expect("request exists");
+        assert_eq!(fetched.id, row.id);
+
+        update_execution_status(
+            &pool,
+            row.id,
+            &ExecutionStatus::Queued,
+            None,
+            None,
+            Some(100_000),
+            Some(0.05),
+        )
+        .await
+        .expect("update request status");
+
+        let updated = get_execution_request(&pool, row.id)
+            .await
+            .expect("fetch updated request")
+            .expect("request exists");
+        assert_eq!(updated.status, "queued");
+        assert_eq!(updated.gas_estimate, Some(100_000));
+    }
+
+    #[tokio::test]
+    async fn test_db_payment_replay_protection() {
+        let pool = setup_pool().await;
+        let req = sample_request("replay");
+        let row = insert_execution_request(
+            &pool,
+            &req,
+            &ExecutionStatus::PaymentRequired,
+            None,
+            None,
+        )
+        .await
+        .expect("insert request");
+
+        let tx_hash = format!("0x{}", hex::encode(uuid::Uuid::new_v4().as_bytes().repeat(2)));
+        let proof = PaymentProof {
+            payment_id: uuid::Uuid::new_v4(),
+            quote_request_id: None,
+            payer: "0x0000000000000000000000000000000000000001".into(),
+            amount_usd: 0.05,
+            token: "USDC".into(),
+            chain: "ethereum".into(),
+            tx_hash: tx_hash.clone(),
+            verified: true,
+            verified_at: chrono::Utc::now(),
+            confirmed_amount_raw: Some("50000".into()),
+            block_confirmations: Some(10),
+            token_contract: Some("0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238".into()),
+        };
+
+        assert!(insert_payment(&pool, row.id, &proof)
+            .await
+            .expect("insert payment")
+            .is_some());
+        assert!(insert_payment(&pool, row.id, &proof)
+            .await
+            .expect("insert replay")
+            .is_none());
+        assert!(payment_tx_hash_exists(&pool, &tx_hash)
+            .await
+            .expect("tx hash exists"));
+    }
+
+    #[tokio::test]
+    async fn test_db_platform_keys() {
+        let pool = setup_pool().await;
+        let purpose = format!("test_key_{}", uuid::Uuid::new_v4());
+
+        assert!(get_platform_key(&pool, &purpose)
+            .await
+            .expect("get missing key")
+            .is_none());
+
+        assert!(insert_platform_key(&pool, &purpose, "enc_data", "0xaabb")
+            .await
+            .expect("insert platform key")
+            .is_some());
+
+        let fetched = get_platform_key(&pool, &purpose)
+            .await
+            .expect("get platform key")
+            .expect("platform key exists");
+        assert_eq!(fetched.purpose, purpose);
+        assert_eq!(fetched.address, "0xaabb");
+
+        assert!(insert_platform_key(&pool, &purpose, "other", "0xccdd")
+            .await
+            .expect("duplicate platform key")
+            .is_none());
+    }
+}

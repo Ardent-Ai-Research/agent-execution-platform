@@ -723,3 +723,189 @@ async fn re_enqueue_with_bump(
         );
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::agent_wallet::AgentWalletRegistry;
+    use crate::db;
+    use crate::queue;
+    use crate::types::ExecutionRequest;
+    use ethers::providers::{Http, Provider};
+    use redis::aio::ConnectionManager;
+    use sqlx::PgPool;
+    use std::sync::Arc;
+    use uuid::Uuid;
+
+    async fn setup_db_pool() -> PgPool {
+        dotenvy::dotenv().ok();
+        let database_url = std::env::var("DATABASE_URL").expect("DATABASE_URL env var");
+        let pool = db::create_pool(&database_url).await.expect("db pool");
+        db::run_migrations(&pool).await.expect("migrations");
+        pool
+    }
+
+    async fn setup_redis() -> ConnectionManager {
+        dotenvy::dotenv().ok();
+        let redis_url = std::env::var("REDIS_URL").expect("REDIS_URL env var");
+        queue::create_redis_connection(&redis_url)
+            .await
+            .expect("redis connection")
+    }
+
+    fn make_worker_context(db_pool: PgPool) -> WorkerContext {
+        let registry = AgentWalletRegistry::new(
+            db_pool.clone(),
+            &"00".repeat(32),
+            ethers::types::Address::zero(),
+            Arc::new(Provider::<Http>::try_from("http://127.0.0.1:8545").expect("provider")),
+        )
+        .expect("wallet registry");
+
+        WorkerContext {
+            db_pool,
+            wallet_registry: registry,
+            bundler_clients: HashMap::new(),
+            paymaster_signers: HashMap::new(),
+            webhook_client: reqwest::Client::new(),
+        }
+    }
+
+    async fn clear_queue_keys(conn: &mut ConnectionManager, worker_id: u32) {
+        let processing_key = format!("execution_jobs:processing:{worker_id}");
+        let _: () = redis::cmd("DEL")
+            .arg("execution_jobs")
+            .arg(&processing_key)
+            .arg("execution_jobs:dead_letter")
+            .query_async(conn)
+            .await
+            .expect("clear keys");
+    }
+
+    fn sample_request(agent_id: &str) -> ExecutionRequest {
+        ExecutionRequest {
+            agent_id: agent_id.into(),
+            chain: "ethereum".into(),
+            target_contract: "0x1111111111111111111111111111111111111111".into(),
+            calldata: "0xabcdef12".into(),
+            value: "0".into(),
+            strategy_id: None,
+            batch_calls: None,
+            callback_url: None,
+        }
+    }
+
+    fn sample_job(request_id: Uuid, attempt_count: u32) -> ExecutionJob {
+        ExecutionJob {
+            request_id,
+            agent_id: "worker-gap-test".into(),
+            smart_wallet_address: "0x2222222222222222222222222222222222222222".into(),
+            eoa_address: "0x3333333333333333333333333333333333333333".into(),
+            chain: Chain::Ethereum,
+            target_contract: "0x1111111111111111111111111111111111111111".into(),
+            calldata: "0xabcdef12".into(),
+            value: "0".into(),
+            gas_limit: 100_000,
+            created_at: chrono::Utc::now(),
+            attempt_count,
+            batch_calls: None,
+            callback_url: None,
+            api_key_hash: None,
+        }
+    }
+
+    #[tokio::test]
+    async fn test_reenqueue_with_bump_requeues_job_with_incremented_attempt() {
+        let _guard = queue::TEST_QUEUE_LOCK.lock().expect("queue test lock");
+        let pool = setup_db_pool().await;
+        let mut redis_conn = setup_redis().await;
+        let worker_id = 901u32;
+        clear_queue_keys(&mut redis_conn, worker_id).await;
+
+        let ctx = make_worker_context(pool.clone());
+
+        let row = db::insert_execution_request(
+            &pool,
+            &sample_request("worker-requeue"),
+            &ExecutionStatus::Queued,
+            None,
+            None,
+        )
+        .await
+        .expect("insert request");
+
+        let job = sample_job(row.id, 0);
+        queue::enqueue_job(&mut redis_conn, &job)
+            .await
+            .expect("enqueue");
+
+        let dequeued = queue::dequeue_job(&mut redis_conn, 1.0, worker_id)
+            .await
+            .expect("dequeue")
+            .expect("job present");
+
+        re_enqueue_with_bump(&mut redis_conn, &ctx, &dequeued, worker_id).await;
+
+        let retried = queue::dequeue_job(&mut redis_conn, 1.0, worker_id)
+            .await
+            .expect("dequeue retried")
+            .expect("retried job");
+        assert_eq!(retried.request_id, row.id);
+        assert_eq!(retried.attempt_count, 1);
+
+        queue::ack_job(&mut redis_conn, &retried, worker_id)
+            .await
+            .expect("ack retried");
+        clear_queue_keys(&mut redis_conn, worker_id).await;
+    }
+
+    #[tokio::test]
+    async fn test_reenqueue_with_bump_moves_to_dlq_at_max_attempts() {
+        let _guard = queue::TEST_QUEUE_LOCK.lock().expect("queue test lock");
+        let pool = setup_db_pool().await;
+        let mut redis_conn = setup_redis().await;
+        let worker_id = 902u32;
+        clear_queue_keys(&mut redis_conn, worker_id).await;
+
+        let ctx = make_worker_context(pool.clone());
+
+        let row = db::insert_execution_request(
+            &pool,
+            &sample_request("worker-dlq"),
+            &ExecutionStatus::Queued,
+            None,
+            None,
+        )
+        .await
+        .expect("insert request");
+
+        let job = sample_job(row.id, MAX_JOB_ATTEMPTS - 1);
+        queue::enqueue_job(&mut redis_conn, &job)
+            .await
+            .expect("enqueue");
+
+        let dequeued = queue::dequeue_job(&mut redis_conn, 1.0, worker_id)
+            .await
+            .expect("dequeue")
+            .expect("job present");
+
+        re_enqueue_with_bump(&mut redis_conn, &ctx, &dequeued, worker_id).await;
+
+        let dlq_len = queue::dlq_length(&mut redis_conn).await.expect("dlq length");
+        assert_eq!(dlq_len, 1);
+
+        let updated = db::get_execution_request(&pool, row.id)
+            .await
+            .expect("get request")
+            .expect("request row");
+        assert_eq!(updated.status, "failed");
+        assert!(
+            updated
+                .error_message
+                .unwrap_or_default()
+                .contains("exhausted")
+        );
+
+        clear_queue_keys(&mut redis_conn, worker_id).await;
+    }
+}

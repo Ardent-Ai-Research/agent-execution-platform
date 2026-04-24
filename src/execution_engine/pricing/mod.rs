@@ -291,3 +291,83 @@ pub async fn calculate_cost(
 
     Ok(total)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use axum::{extract::State, routing::get, Json, Router};
+    use serde_json::json;
+    use std::sync::Arc;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    fn dummy_provider() -> Arc<Provider<Http>> {
+        Arc::new(Provider::<Http>::try_from("http://127.0.0.1:8545").expect("provider"))
+    }
+
+    #[tokio::test]
+    async fn test_calculate_cost_gas_to_usd_conversion() {
+        async fn price_handler() -> Json<serde_json::Value> {
+            Json(json!({"ethereum": {"usd": 3000.0}}))
+        }
+
+        let app = Router::new().route("/", get(price_handler));
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("bind");
+        let addr = listener.local_addr().expect("addr");
+        let server = tokio::spawn(async move {
+            axum::serve(listener, app).await.expect("serve");
+        });
+
+        let cache = NativeTokenPriceCache::new(format!("http://{addr}"), 60, dummy_provider());
+
+        let total = calculate_cost(
+            U256::from(20_000_000_000u64),
+            100_000,
+            10.0,
+            0.01,
+            &cache,
+        )
+        .await
+        .expect("calculate cost");
+
+        assert!((total - 6.61).abs() < 0.000_001);
+        server.abort();
+    }
+
+    #[tokio::test]
+    async fn test_native_price_cache_ttl_refreshes_after_expiry() {
+        async fn price_handler(State(hits): State<Arc<AtomicUsize>>) -> Json<serde_json::Value> {
+            hits.fetch_add(1, Ordering::SeqCst);
+            Json(json!({"usd": 2500.0}))
+        }
+
+        let hit_count = Arc::new(AtomicUsize::new(0));
+        let app = Router::new()
+            .route("/", get(price_handler))
+            .with_state(Arc::clone(&hit_count));
+
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("bind");
+        let addr = listener.local_addr().expect("addr");
+        let server = tokio::spawn(async move {
+            axum::serve(listener, app).await.expect("serve");
+        });
+
+        let cache = NativeTokenPriceCache::new(format!("http://{addr}"), 1, dummy_provider());
+
+        let first = cache.get_native_token_usd().await.expect("first fetch");
+        let second = cache.get_native_token_usd().await.expect("cache hit");
+        assert_eq!(first, 2500.0);
+        assert_eq!(second, 2500.0);
+        assert_eq!(hit_count.load(Ordering::SeqCst), 1);
+
+        tokio::time::sleep(Duration::from_millis(1100)).await;
+        let third = cache.get_native_token_usd().await.expect("refresh fetch");
+        assert_eq!(third, 2500.0);
+        assert_eq!(hit_count.load(Ordering::SeqCst), 2);
+
+        server.abort();
+    }
+}

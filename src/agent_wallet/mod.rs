@@ -485,3 +485,36 @@ pub fn decrypt_key_hex(encryption_key: &[u8; 32], encrypted_b64: &str) -> Result
 
     Ok(key_hex)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_encryption_round_trip() {
+        let key = [0x42u8; 32];
+        let plaintext = "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890";
+
+        let encrypted = encrypt_key_hex(&key, plaintext).expect("encrypt");
+        let decrypted = decrypt_key_hex(&key, &encrypted).expect("decrypt");
+        assert_eq!(decrypted, plaintext);
+    }
+
+    #[test]
+    fn test_encryption_wrong_key_fails() {
+        let key1 = [0x42u8; 32];
+        let key2 = [0x43u8; 32];
+        let plaintext = "secret_key_data";
+
+        let encrypted = encrypt_key_hex(&key1, plaintext).expect("encrypt");
+        assert!(decrypt_key_hex(&key2, &encrypted).is_err());
+    }
+
+    #[test]
+    fn test_encryption_nonce_uniqueness() {
+        let key = [0x42u8; 32];
+        let encrypted_one = encrypt_key_hex(&key, "same").expect("encrypt one");
+        let encrypted_two = encrypt_key_hex(&key, "same").expect("encrypt two");
+        assert_ne!(encrypted_one, encrypted_two);
+    }
+}

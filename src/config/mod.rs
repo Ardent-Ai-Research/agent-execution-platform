@@ -364,3 +364,23 @@ impl AppConfig {
         self.chains.keys().collect()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_config_loads_correctly() {
+        dotenvy::dotenv().ok();
+        let config = AppConfig::from_env().expect("load app config from env");
+
+        assert!(!config.chains.is_empty());
+        assert!(config.chains.contains_key(&Chain::Ethereum));
+
+        let ethereum = config.chain_config(&Chain::Ethereum).expect("ethereum chain config");
+        assert!(!ethereum.rpc_url.is_empty());
+        assert!(!ethereum.bundler_rpc_url.is_empty());
+        assert!(ethereum.accepted_tokens.contains_key("USDC"));
+        assert_eq!(ethereum.token_decimals.get("USDC"), Some(&6));
+    }
+}
