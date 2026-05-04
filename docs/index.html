@@ -2033,14 +2033,16 @@
               <div class="form-box-title">Access Request</div>
               <div class="form-box-status">Accepting applications</div>
             </div>
-            <div class="form-body" id="form-fields">
+            <form class="form-body" id="waitlist-form" novalidate>
               <div class="f-row">
                 <label class="f-label">Email Address</label>
                 <input
                   type="email"
                   class="f-input"
                   id="f-email"
+                  name="email"
                   placeholder="you@example.com"
+                  required
                 />
               </div>
               <div class="f-row">
@@ -2049,7 +2051,9 @@
                   type="text"
                   class="f-input"
                   id="f-project"
+                  name="project"
                   placeholder="my-agent-project"
+                  required
                 />
               </div>
               <div class="f-row">
@@ -2062,17 +2066,26 @@
                 <textarea
                   class="f-input"
                   id="f-msg"
+                  name="message"
                   placeholder="Tell us briefly..."
                 ></textarea>
               </div>
-              <button class="f-submit" onclick="handleWaitlist()">
+              <input
+                type="text"
+                name="_gotcha"
+                tabindex="-1"
+                autocomplete="off"
+                style="display: none"
+              />
+              <button class="f-submit" id="f-submit" type="submit">
                 <span>→ Request My API Key</span>
               </button>
+              <p class="f-note" id="form-error" style="display: none; color: rgba(244, 63, 94, 0.9)"></p>
               <p class="f-note">
                 Privacy-first. Email used only for API key delivery and
                 critical updates.
               </p>
-            </div>
+            </form>
             <div class="form-success-state" id="form-success">
               <span class="success-icon">OK</span>
               <div class="success-title">Request Received</div>
@@ -2471,18 +2484,91 @@
       );
       revealEls.forEach((el) => ro.observe(el));
 
-      // FORM
-      function handleWaitlist() {
-        const email = document.getElementById("f-email").value.trim();
-        if (!email || !email.includes("@")) {
-          const inp = document.getElementById("f-email");
-          inp.style.borderColor = "rgba(244,63,94,0.6)";
-          inp.focus();
-          setTimeout(() => (inp.style.borderColor = ""), 2000);
+      // FORM (Formspree AJAX)
+      const FORMSPREE_ENDPOINT = "https://formspree.io/f/xbdwgvqy";
+      const waitlistForm = document.getElementById("waitlist-form");
+      const waitlistEmail = document.getElementById("f-email");
+      const waitlistProject = document.getElementById("f-project");
+      const waitlistSubmit = document.getElementById("f-submit");
+      const waitlistError = document.getElementById("form-error");
+
+      function showWaitlistError(message) {
+        if (!waitlistError) {
           return;
         }
-        document.getElementById("form-fields").style.display = "none";
-        document.getElementById("form-success").style.display = "block";
+        waitlistError.textContent = message;
+        waitlistError.style.display = "block";
+      }
+
+      function clearWaitlistError() {
+        if (!waitlistError) {
+          return;
+        }
+        waitlistError.textContent = "";
+        waitlistError.style.display = "none";
+      }
+
+      if (waitlistForm) {
+        waitlistForm.addEventListener("submit", async (event) => {
+          event.preventDefault();
+          clearWaitlistError();
+
+          const email = waitlistEmail.value.trim();
+          const project = waitlistProject.value.trim();
+
+          if (!email || !email.includes("@")) {
+            waitlistEmail.style.borderColor = "rgba(244,63,94,0.6)";
+            waitlistEmail.focus();
+            setTimeout(() => (waitlistEmail.style.borderColor = ""), 2000);
+            showWaitlistError("Please enter a valid email address.");
+            return;
+          }
+
+          if (!project) {
+            waitlistProject.style.borderColor = "rgba(244,63,94,0.6)";
+            waitlistProject.focus();
+            setTimeout(() => (waitlistProject.style.borderColor = ""), 2000);
+            showWaitlistError("Please enter your agent or project name.");
+            return;
+          }
+
+          const originalLabel = waitlistSubmit.innerHTML;
+          waitlistSubmit.disabled = true;
+          waitlistSubmit.innerHTML = "<span>Submitting...</span>";
+
+          try {
+            const formData = new FormData(waitlistForm);
+            formData.append("source", "ardent-landing");
+            formData.append("_subject", "New Ardent API key request");
+
+            const response = await fetch(FORMSPREE_ENDPOINT, {
+              method: "POST",
+              body: formData,
+              headers: {
+                Accept: "application/json",
+              },
+            });
+
+            if (!response.ok) {
+              let errorMessage = "Submission failed. Please try again.";
+              try {
+                const payload = await response.json();
+                if (payload?.errors?.length) {
+                  errorMessage = payload.errors.map((e) => e.message).join(" ");
+                }
+              } catch (_) {}
+              throw new Error(errorMessage);
+            }
+
+            document.getElementById("waitlist-form").style.display = "none";
+            document.getElementById("form-success").style.display = "block";
+          } catch (error) {
+            showWaitlistError(error.message || "Could not submit right now.");
+          } finally {
+            waitlistSubmit.disabled = false;
+            waitlistSubmit.innerHTML = originalLabel;
+          }
+        });
       }
 
       // NAV scroll
