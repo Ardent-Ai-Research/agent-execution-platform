@@ -125,7 +125,8 @@ impl PaymasterSigner {
 
         // pmVerificationGasLimit (16 bytes, uint128 big-endian)
         let mut pm_verif_buf = [0u8; 32];
-        self.pm_verification_gas_limit.to_big_endian(&mut pm_verif_buf);
+        self.pm_verification_gas_limit
+            .to_big_endian(&mut pm_verif_buf);
         buf.extend_from_slice(&pm_verif_buf[16..32]);
 
         // pmPostOpGasLimit (16 bytes, uint128 big-endian)
@@ -175,16 +176,10 @@ impl PaymasterSigner {
         // `MessageHashUtils.toEthSignedMessageHash()` ("\x19Ethereum Signed Message:\n32" prefix)
         // before ECDSA.recover, so we must use `sign_message` (which adds the same prefix)
         // rather than `sign_hash` (which signs the raw hash).
-        let signature = self
-            .signing_key
-            .sign_message(hash)
-            .await?;
+        let signature = self.signing_key.sign_message(hash).await?;
 
         // Encode time parameters as paymasterData prefix
-        let time_params = abi::encode(&[
-            Token::Uint(valid_until),
-            Token::Uint(valid_after),
-        ]);
+        let time_params = abi::encode(&[Token::Uint(valid_until), Token::Uint(valid_after)]);
 
         let sig_bytes = signature.to_vec();
 
@@ -197,7 +192,8 @@ impl PaymasterSigner {
 
         // pmVerificationGasLimit (16 bytes, uint128 big-endian)
         let mut pm_verif_buf = [0u8; 32];
-        self.pm_verification_gas_limit.to_big_endian(&mut pm_verif_buf);
+        self.pm_verification_gas_limit
+            .to_big_endian(&mut pm_verif_buf);
         paymaster_and_data.extend_from_slice(&pm_verif_buf[16..32]);
 
         // pmPostOpGasLimit (16 bytes, uint128 big-endian)

@@ -140,8 +140,7 @@ pub async fn simulate_batch(
 
     info!(
         calls = batch_calls.len(),
-        total_gas,
-        "batch simulation succeeded"
+        total_gas, "batch simulation succeeded"
     );
 
     Ok(SimulationResult {

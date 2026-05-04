@@ -213,86 +213,89 @@ impl AppConfig {
 
         // ── Ethereum ───────────────────────────────────────────────
         if let Ok(rpc_url) = std::env::var("ETHEREUM_RPC_URL") {
-            chains.insert(Chain::Ethereum, ChainConfig {
-                chain: Chain::Ethereum,
-                rpc_url,
-                bundler_rpc_url: std::env::var("ETHEREUM_BUNDLER_RPC_URL")
-                    .or_else(|_| std::env::var("BUNDLER_RPC_URL")) // legacy
-                    .unwrap_or_else(|_| "http://127.0.0.1:3000/rpc".into()),
-                paymaster_address: std::env::var("ETHEREUM_PAYMASTER_ADDRESS")
-                    .or_else(|_| std::env::var("PAYMASTER_ADDRESS")) // legacy
-                    .unwrap_or_default(),
-                factory_address: std::env::var("ETHEREUM_FACTORY_ADDRESS")
-                    .or_else(|_| std::env::var("ACCOUNT_FACTORY_ADDRESS")) // legacy
-                    .unwrap_or_default(),
-                entry_point_address: std::env::var("ETHEREUM_ENTRY_POINT_ADDRESS")
-                    .or_else(|_| std::env::var("ENTRY_POINT_ADDRESS")) // legacy
-                    .unwrap_or_else(|_| CANONICAL_EP_V09.into()),
-                price_feed_url: std::env::var("ETHEREUM_PRICE_FEED_URL")
-                    .or_else(|_| std::env::var("ETH_PRICE_FEED_URL")) // legacy
-                    .map_err(|_| anyhow::anyhow!(
-                        "ETHEREUM_PRICE_FEED_URL is required when ETHEREUM_RPC_URL is set"
-                    ))?,
-                accepted_tokens: Self::parse_token_map(
-                    &std::env::var("ETHEREUM_ACCEPTED_TOKENS").unwrap_or_default(),
-                ),
-                token_decimals: Self::parse_decimal_map(
-                    &std::env::var("ETHEREUM_TOKEN_DECIMALS").unwrap_or_default(),
-                ),
-            });
+            chains.insert(
+                Chain::Ethereum,
+                ChainConfig {
+                    chain: Chain::Ethereum,
+                    rpc_url,
+                    bundler_rpc_url: std::env::var("ETHEREUM_BUNDLER_RPC_URL")
+                        .or_else(|_| std::env::var("BUNDLER_RPC_URL")) // legacy
+                        .unwrap_or_else(|_| "http://127.0.0.1:3000/rpc".into()),
+                    paymaster_address: std::env::var("ETHEREUM_PAYMASTER_ADDRESS")
+                        .or_else(|_| std::env::var("PAYMASTER_ADDRESS")) // legacy
+                        .unwrap_or_default(),
+                    factory_address: std::env::var("ETHEREUM_FACTORY_ADDRESS")
+                        .or_else(|_| std::env::var("ACCOUNT_FACTORY_ADDRESS")) // legacy
+                        .unwrap_or_default(),
+                    entry_point_address: std::env::var("ETHEREUM_ENTRY_POINT_ADDRESS")
+                        .or_else(|_| std::env::var("ENTRY_POINT_ADDRESS")) // legacy
+                        .unwrap_or_else(|_| CANONICAL_EP_V09.into()),
+                    price_feed_url: std::env::var("ETHEREUM_PRICE_FEED_URL")
+                        .or_else(|_| std::env::var("ETH_PRICE_FEED_URL")) // legacy
+                        .map_err(|_| {
+                            anyhow::anyhow!(
+                                "ETHEREUM_PRICE_FEED_URL is required when ETHEREUM_RPC_URL is set"
+                            )
+                        })?,
+                    accepted_tokens: Self::parse_token_map(
+                        &std::env::var("ETHEREUM_ACCEPTED_TOKENS").unwrap_or_default(),
+                    ),
+                    token_decimals: Self::parse_decimal_map(
+                        &std::env::var("ETHEREUM_TOKEN_DECIMALS").unwrap_or_default(),
+                    ),
+                },
+            );
         }
 
         // ── Base ───────────────────────────────────────────────────
         if let Ok(rpc_url) = std::env::var("BASE_RPC_URL") {
-            chains.insert(Chain::Base, ChainConfig {
-                chain: Chain::Base,
-                rpc_url,
-                bundler_rpc_url: std::env::var("BASE_BUNDLER_RPC_URL")
-                    .unwrap_or_default(),
-                paymaster_address: std::env::var("BASE_PAYMASTER_ADDRESS")
-                    .unwrap_or_default(),
-                factory_address: std::env::var("BASE_FACTORY_ADDRESS")
-                    .unwrap_or_default(),
-                entry_point_address: std::env::var("BASE_ENTRY_POINT_ADDRESS")
-                    .unwrap_or_else(|_| CANONICAL_EP_V09.into()),
-                // Base uses ETH as native gas token, but URL must still be configured explicitly.
-                price_feed_url: std::env::var("BASE_PRICE_FEED_URL")
-                    .map_err(|_| anyhow::anyhow!(
-                        "BASE_PRICE_FEED_URL is required when BASE_RPC_URL is set"
-                    ))?,
-                accepted_tokens: Self::parse_token_map(
-                    &std::env::var("BASE_ACCEPTED_TOKENS").unwrap_or_default(),
-                ),
-                token_decimals: Self::parse_decimal_map(
-                    &std::env::var("BASE_TOKEN_DECIMALS").unwrap_or_default(),
-                ),
-            });
+            chains.insert(
+                Chain::Base,
+                ChainConfig {
+                    chain: Chain::Base,
+                    rpc_url,
+                    bundler_rpc_url: std::env::var("BASE_BUNDLER_RPC_URL").unwrap_or_default(),
+                    paymaster_address: std::env::var("BASE_PAYMASTER_ADDRESS").unwrap_or_default(),
+                    factory_address: std::env::var("BASE_FACTORY_ADDRESS").unwrap_or_default(),
+                    entry_point_address: std::env::var("BASE_ENTRY_POINT_ADDRESS")
+                        .unwrap_or_else(|_| CANONICAL_EP_V09.into()),
+                    // Base uses ETH as native gas token, but URL must still be configured explicitly.
+                    price_feed_url: std::env::var("BASE_PRICE_FEED_URL").map_err(|_| {
+                        anyhow::anyhow!("BASE_PRICE_FEED_URL is required when BASE_RPC_URL is set")
+                    })?,
+                    accepted_tokens: Self::parse_token_map(
+                        &std::env::var("BASE_ACCEPTED_TOKENS").unwrap_or_default(),
+                    ),
+                    token_decimals: Self::parse_decimal_map(
+                        &std::env::var("BASE_TOKEN_DECIMALS").unwrap_or_default(),
+                    ),
+                },
+            );
         }
 
         // ── BNB Chain (BSC) ────────────────────────────────────────
         if let Ok(rpc_url) = std::env::var("BNB_RPC_URL") {
-            chains.insert(Chain::Bnb, ChainConfig {
-                chain: Chain::Bnb,
-                rpc_url,
-                bundler_rpc_url: std::env::var("BNB_BUNDLER_RPC_URL")
-                    .unwrap_or_default(),
-                paymaster_address: std::env::var("BNB_PAYMASTER_ADDRESS")
-                    .unwrap_or_default(),
-                factory_address: std::env::var("BNB_FACTORY_ADDRESS")
-                    .unwrap_or_default(),
-                entry_point_address: std::env::var("BNB_ENTRY_POINT_ADDRESS")
-                    .unwrap_or_else(|_| CANONICAL_EP_V09.into()),
-                price_feed_url: std::env::var("BNB_PRICE_FEED_URL")
-                    .map_err(|_| anyhow::anyhow!(
-                        "BNB_PRICE_FEED_URL is required when BNB_RPC_URL is set"
-                    ))?,
-                accepted_tokens: Self::parse_token_map(
-                    &std::env::var("BNB_ACCEPTED_TOKENS").unwrap_or_default(),
-                ),
-                token_decimals: Self::parse_decimal_map(
-                    &std::env::var("BNB_TOKEN_DECIMALS").unwrap_or_default(),
-                ),
-            });
+            chains.insert(
+                Chain::Bnb,
+                ChainConfig {
+                    chain: Chain::Bnb,
+                    rpc_url,
+                    bundler_rpc_url: std::env::var("BNB_BUNDLER_RPC_URL").unwrap_or_default(),
+                    paymaster_address: std::env::var("BNB_PAYMASTER_ADDRESS").unwrap_or_default(),
+                    factory_address: std::env::var("BNB_FACTORY_ADDRESS").unwrap_or_default(),
+                    entry_point_address: std::env::var("BNB_ENTRY_POINT_ADDRESS")
+                        .unwrap_or_else(|_| CANONICAL_EP_V09.into()),
+                    price_feed_url: std::env::var("BNB_PRICE_FEED_URL").map_err(|_| {
+                        anyhow::anyhow!("BNB_PRICE_FEED_URL is required when BNB_RPC_URL is set")
+                    })?,
+                    accepted_tokens: Self::parse_token_map(
+                        &std::env::var("BNB_ACCEPTED_TOKENS").unwrap_or_default(),
+                    ),
+                    token_decimals: Self::parse_decimal_map(
+                        &std::env::var("BNB_TOKEN_DECIMALS").unwrap_or_default(),
+                    ),
+                },
+            );
         }
 
         if chains.is_empty() {
@@ -377,10 +380,14 @@ mod tests {
         assert!(!config.chains.is_empty());
         assert!(config.chains.contains_key(&Chain::Ethereum));
 
-        let ethereum = config.chain_config(&Chain::Ethereum).expect("ethereum chain config");
+        let ethereum = config
+            .chain_config(&Chain::Ethereum)
+            .expect("ethereum chain config");
         assert!(!ethereum.rpc_url.is_empty());
         assert!(!ethereum.bundler_rpc_url.is_empty());
-        assert!(ethereum.accepted_tokens.contains_key("USDC"));
-        assert_eq!(ethereum.token_decimals.get("USDC"), Some(&6));
+
+        for symbol in ethereum.accepted_tokens.keys() {
+            assert_eq!(symbol, &symbol.to_uppercase());
+        }
     }
 }

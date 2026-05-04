@@ -97,7 +97,11 @@ pub async fn dequeue_job(
 
 /// Acknowledge a successfully processed job by removing it from this worker's
 /// processing list.
-pub async fn ack_job(conn: &mut ConnectionManager, job: &ExecutionJob, worker_id: u32) -> Result<()> {
+pub async fn ack_job(
+    conn: &mut ConnectionManager,
+    job: &ExecutionJob,
+    worker_id: u32,
+) -> Result<()> {
     let proc_key = processing_key(worker_id);
     let payload = serde_json::to_string(job)?;
     // LREM: remove one occurrence of the payload from the processing list
@@ -115,7 +119,11 @@ pub async fn ack_job(conn: &mut ConnectionManager, job: &ExecutionJob, worker_id
 ///
 /// Removes the job from the processing list and pushes it to the DLQ.
 /// Use [`push_to_dlq`] instead if the job was already acknowledged/removed.
-pub async fn move_to_dlq(conn: &mut ConnectionManager, job: &ExecutionJob, worker_id: u32) -> Result<()> {
+pub async fn move_to_dlq(
+    conn: &mut ConnectionManager,
+    job: &ExecutionJob,
+    worker_id: u32,
+) -> Result<()> {
     let proc_key = processing_key(worker_id);
     let payload = serde_json::to_string(job)?;
 
@@ -173,7 +181,10 @@ pub async fn recover_stale_jobs(conn: &mut ConnectionManager, worker_id: u32) ->
     }
 
     if recovered > 0 {
-        warn!(worker_id, recovered, "recovered stale jobs from previous worker instance");
+        warn!(
+            worker_id,
+            recovered, "recovered stale jobs from previous worker instance"
+        );
     }
 
     Ok(recovered)
@@ -252,7 +263,9 @@ mod tests {
             .expect("job present");
         assert_eq!(dequeued.request_id, job.request_id);
 
-        ack_job(&mut conn, &dequeued, worker_id).await.expect("ack job");
+        ack_job(&mut conn, &dequeued, worker_id)
+            .await
+            .expect("ack job");
         clear_keys(&mut conn, worker_id).await;
     }
 

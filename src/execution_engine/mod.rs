@@ -114,7 +114,9 @@ impl ExecutionEngine {
         // Decide between batch and single-call validation
         if let Some(ref batch_calls) = req.batch_calls {
             if batch_calls.is_empty() {
-                return Err(anyhow!("batch_calls is present but empty — provide at least one call"));
+                return Err(anyhow!(
+                    "batch_calls is present but empty — provide at least one call"
+                ));
             }
             if batch_calls.len() > 16 {
                 return Err(anyhow!(
@@ -123,11 +125,8 @@ impl ExecutionEngine {
                 ));
             }
             for (i, call) in batch_calls.iter().enumerate() {
-                Self::validate_call_fields(
-                    &call.target_contract,
-                    &call.calldata,
-                )
-                .map_err(|e| anyhow!("batch_calls[{i}]: {e}"))?;
+                Self::validate_call_fields(&call.target_contract, &call.calldata)
+                    .map_err(|e| anyhow!("batch_calls[{i}]: {e}"))?;
             }
         } else {
             // Single-call mode — original validation
@@ -149,10 +148,14 @@ impl ExecutionEngine {
         }
         let calldata_hex = calldata.trim_start_matches("0x");
         if calldata_hex.is_empty() {
-            return Err(anyhow!("calldata is empty — must contain at least a 4-byte function selector"));
+            return Err(anyhow!(
+                "calldata is empty — must contain at least a 4-byte function selector"
+            ));
         }
         if calldata_hex.len() % 2 != 0 {
-            return Err(anyhow!("calldata has odd-length hex — must be even number of hex characters"));
+            return Err(anyhow!(
+                "calldata has odd-length hex — must be even number of hex characters"
+            ));
         }
         if hex::decode(calldata_hex).is_err() {
             return Err(anyhow!("calldata contains invalid hex characters"));
@@ -184,12 +187,7 @@ impl ExecutionEngine {
 
         if let Some(ref batch_calls) = req.batch_calls {
             // Batch mode: simulate each call individually, sum gas, fail on first revert
-            simulation::simulate_batch(
-                provider,
-                smart_wallet_address,
-                batch_calls,
-            )
-            .await
+            simulation::simulate_batch(provider, smart_wallet_address, batch_calls).await
         } else {
             // Single-call mode
             let to: Address = req.target_contract.parse()?;
@@ -200,7 +198,8 @@ impl ExecutionEngine {
                 U256::from_dec_str(&req.value)?
             };
 
-            simulation::simulate_transaction(provider, smart_wallet_address, to, calldata, value).await
+            simulation::simulate_transaction(provider, smart_wallet_address, to, calldata, value)
+                .await
         }
     }
 
@@ -220,6 +219,21 @@ impl ExecutionEngine {
         gas_estimate: u64,
         bundler_client: &BundlerClient,
     ) -> Result<f64> {
+        self.estimate_cost_with_mode(chain, gas_estimate, bundler_client, true)
+            .await
+    }
+
+    /// Calculate execution cost in USD with optional platform fee.
+    ///
+    /// `include_platform_fee = false` keeps gas pricing/markup but removes the
+    /// fixed platform fee component from the payable amount.
+    pub async fn estimate_cost_with_mode(
+        &self,
+        chain: &Chain,
+        gas_estimate: u64,
+        bundler_client: &BundlerClient,
+        include_platform_fee: bool,
+    ) -> Result<f64> {
         let (max_fee_per_gas, _max_priority_fee) = bundler_client.get_gas_prices().await?;
 
         // ERC-4337 overhead: ~100k gas for verification + pre-verification.
@@ -227,11 +241,17 @@ impl ExecutionEngine {
 
         let price_cache = self.price_cache_for_chain(chain)?;
 
+        let platform_fee = if include_platform_fee {
+            self.config.platform_fee_usd
+        } else {
+            0.0
+        };
+
         pricing::calculate_cost(
             max_fee_per_gas,
             total_gas_with_aa_overhead,
             self.config.gas_price_markup_pct,
-            self.config.platform_fee_usd,
+            platform_fee,
             &price_cache,
         )
         .await

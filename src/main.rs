@@ -41,11 +41,8 @@ use agent_execution_platform::{
     execution_engine::ExecutionEngine,
     queue,
     rate_limit::{self, RateLimiter},
-    relayer::{
-        erc4337::BundlerClient,
-        paymaster::PaymasterSigner,
-    },
-    types::ApiKeyContext,
+    relayer::{erc4337::BundlerClient, paymaster::PaymasterSigner},
+    types::{ApiKeyContext, PaymentMode},
     worker::{self, WorkerContext},
 };
 
@@ -108,6 +105,7 @@ async fn api_key_middleware(
         req.extensions_mut().insert(ApiKeyContext {
             api_key_id: uuid::Uuid::nil(),
             label: Some("dev-bypass".into()),
+            payment_mode: PaymentMode::Sponsored,
         });
         return next.run(req).await.into_response();
     }
@@ -124,27 +122,28 @@ async fn api_key_middleware(
             axum::Json(serde_json::json!({ "error": "missing X-API-Key header" })),
         )
             .into_response(),
-        Some(raw_key) => {
-            match db::get_api_key_by_raw(&db_pool, &raw_key).await {
-                Ok(Some(api_key_row)) => {
-                    req.extensions_mut().insert(ApiKeyContext {
-                        api_key_id: api_key_row.id,
-                        label: api_key_row.label,
-                    });
-                    next.run(req).await.into_response()
-                }
-                Ok(None) => (
-                    StatusCode::UNAUTHORIZED,
-                    axum::Json(serde_json::json!({ "error": "invalid API key" })),
-                )
-                    .into_response(),
-                Err(_) => (
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    axum::Json(serde_json::json!({ "error": "authentication service error" })),
-                )
-                    .into_response(),
+        Some(raw_key) => match db::get_api_key_by_raw(&db_pool, &raw_key).await {
+            Ok(Some(api_key_row)) => {
+                let payment_mode = PaymentMode::from_str_loose(&api_key_row.payment_mode)
+                    .unwrap_or(PaymentMode::Manual);
+                req.extensions_mut().insert(ApiKeyContext {
+                    api_key_id: api_key_row.id,
+                    label: api_key_row.label,
+                    payment_mode,
+                });
+                next.run(req).await.into_response()
             }
-        }
+            Ok(None) => (
+                StatusCode::UNAUTHORIZED,
+                axum::Json(serde_json::json!({ "error": "invalid API key" })),
+            )
+                .into_response(),
+            Err(_) => (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                axum::Json(serde_json::json!({ "error": "authentication service error" })),
+            )
+                .into_response(),
+        },
     }
 }
 
@@ -181,7 +180,10 @@ async fn main() -> anyhow::Result<()> {
     // ── Agent Wallet Registry (ERC-4337) ────────────────────────────
     // Uses the first configured chain's factory + provider for address
     // derivation (deterministic via CREATE2, chain-independent).
-    let first_chain = config.chains.keys().next()
+    let first_chain = config
+        .chains
+        .keys()
+        .next()
         .ok_or_else(|| anyhow::anyhow!("no chains configured"))?;
     let first_chain_cfg = config.chain_config(first_chain)?;
     let factory_address: ethers::types::Address = first_chain_cfg
@@ -205,21 +207,18 @@ async fn main() -> anyhow::Result<()> {
             tracing::warn!(chain = %chain, "no bundler URL configured — skipping bundler for this chain");
             continue;
         }
-        let ep: ethers::types::Address = chain_cfg
-            .entry_point_address
-            .parse()
-            .unwrap_or_else(|_| "0x433709009B8330FDa32311DF1C2AFA402eD8D009".parse().unwrap());
+        let ep: ethers::types::Address =
+            chain_cfg.entry_point_address.parse().unwrap_or_else(|_| {
+                "0x433709009B8330FDa32311DF1C2AFA402eD8D009"
+                    .parse()
+                    .unwrap()
+            });
         let fa: ethers::types::Address = chain_cfg
             .factory_address
             .parse()
             .unwrap_or_else(|_| ethers::types::Address::zero());
         let provider = engine.provider_for_chain(chain)?;
-        let bc = BundlerClient::new(
-            chain_cfg.bundler_rpc_url.clone(),
-            ep,
-            fa,
-            provider,
-        );
+        let bc = BundlerClient::new(chain_cfg.bundler_rpc_url.clone(), ep, fa, provider);
         info!(
             chain = %chain,
             bundler_url = %chain_cfg.bundler_rpc_url,
@@ -253,14 +252,19 @@ async fn main() -> anyhow::Result<()> {
     }
 
     if bundler_clients.is_empty() {
-        tracing::warn!("no bundler clients configured — execution will fail until a bundler is set up");
+        tracing::warn!(
+            "no bundler clients configured — execution will fail until a bundler is set up"
+        );
     }
 
     // ── ERC-4337 Paymaster Signer (auto-generated, DB-backed) ─────────
     // One signing key shared across all chains.  Per-chain paymaster
     // contract addresses determine which chains have sponsorship enabled.
     let mut paymaster_signers = std::collections::HashMap::new();
-    let any_paymaster_configured = config.chains.values().any(|c| !c.paymaster_address.is_empty());
+    let any_paymaster_configured = config
+        .chains
+        .values()
+        .any(|c| !c.paymaster_address.is_empty());
 
     if any_paymaster_configured {
         // Parse the wallet encryption key
@@ -289,22 +293,17 @@ async fn main() -> anyhow::Result<()> {
                 let address = wallet.address();
                 let mut key_hex = hex::encode(wallet.signer().to_bytes());
 
-                let encrypted = agent_execution_platform::agent_wallet::encrypt_key_hex(
-                    &enc_key, &key_hex,
-                )?;
+                let encrypted =
+                    agent_execution_platform::agent_wallet::encrypt_key_hex(&enc_key, &key_hex)?;
 
                 key_hex.zeroize();
                 drop(wallet);
 
                 let addr_str = format!("{address:?}");
 
-                let inserted = db::insert_platform_key(
-                    &db_pool,
-                    "paymaster_signer",
-                    &encrypted,
-                    &addr_str,
-                )
-                .await?;
+                let inserted =
+                    db::insert_platform_key(&db_pool, "paymaster_signer", &encrypted, &addr_str)
+                        .await?;
 
                 match inserted {
                     Some(row) => {
@@ -332,9 +331,8 @@ async fn main() -> anyhow::Result<()> {
         };
 
         // Decrypt the shared signing key
-        let mut key_hex = agent_execution_platform::agent_wallet::decrypt_key_hex(
-            &enc_key, &encrypted_b64,
-        )?;
+        let mut key_hex =
+            agent_execution_platform::agent_wallet::decrypt_key_hex(&enc_key, &encrypted_b64)?;
         enc_key.zeroize();
 
         // Create one PaymasterSigner per chain that has a paymaster address
@@ -346,15 +344,14 @@ async fn main() -> anyhow::Result<()> {
                 );
                 continue;
             }
-            let pm_address: ethers::types::Address = chain_cfg
-                .paymaster_address
-                .parse()
-                .context(format!("invalid {}_PAYMASTER_ADDRESS", chain.to_string().to_uppercase()))?;
+            let pm_address: ethers::types::Address =
+                chain_cfg.paymaster_address.parse().context(format!(
+                    "invalid {}_PAYMASTER_ADDRESS",
+                    chain.to_string().to_uppercase()
+                ))?;
 
             let signer = PaymasterSigner::new(
-                pm_address,
-                &key_hex,
-                300, // 5-minute validity window
+                pm_address, &key_hex, 300, // 5-minute validity window
             )?;
 
             info!(
@@ -379,7 +376,7 @@ async fn main() -> anyhow::Result<()> {
         db_pool: db_pool.clone(),
         wallet_registry: wallet_registry.clone(),
         bundler_clients: bundler_clients.clone(),
-        paymaster_signers,
+        paymaster_signers: paymaster_signers.clone(),
         webhook_client: agent_execution_platform::webhook::build_http_client(),
     };
     info!("worker context assembled");
@@ -396,7 +393,10 @@ async fn main() -> anyhow::Result<()> {
         let mut rc = redis_conn.clone();
         let recovered = queue::recover_stale_jobs(&mut rc, wid).await?;
         if recovered > 0 {
-            info!(worker_id = wid, recovered, "recovered stale jobs from previous run");
+            info!(
+                worker_id = wid,
+                recovered, "recovered stale jobs from previous run"
+            );
         }
     }
 
@@ -406,7 +406,10 @@ async fn main() -> anyhow::Result<()> {
         let ctx_clone = worker_ctx.clone();
         tokio::spawn(worker_supervisor(redis_clone, ctx_clone, wid));
     }
-    info!(workers = num_workers, "background workers spawned with supervisors");
+    info!(
+        workers = num_workers,
+        "background workers spawned with supervisors"
+    );
 
     // ── App State ───────────────────────────────────────────────────
     let state = AppState {
@@ -416,6 +419,7 @@ async fn main() -> anyhow::Result<()> {
         config: config.clone(),
         wallet_registry,
         bundler_clients: bundler_clients.clone(),
+        paymaster_signers,
     };
 
     // ── Per-API-Key Rate Limiter ────────────────────────────────────
@@ -484,9 +488,11 @@ async fn main() -> anyhow::Result<()> {
                 let limiter = rl.clone();
                 async move {
                     match limiter {
-                        Some(ref l) => rate_limit::rate_limit_middleware(
-                            State(l.clone()), req, next
-                        ).await.into_response(),
+                        Some(ref l) => {
+                            rate_limit::rate_limit_middleware(State(l.clone()), req, next)
+                                .await
+                                .into_response()
+                        }
                         None => next.run(req).await.into_response(),
                     }
                 }
@@ -501,6 +507,8 @@ async fn main() -> anyhow::Result<()> {
     let app = Router::new()
         // Health check (no auth, no payment middleware — for load balancers)
         .route("/health", get(routes::health_handler))
+        // Public landing-page feed activity (sanitized recent events)
+        .route("/feed/recent", get(routes::public_feed_handler))
         // Admin endpoints (bearer-token auth, no x402 or API key middleware)
         .nest("/admin", admin_router)
         // Protected API endpoints (x402 + API key auth + per-key rate limit)
@@ -518,12 +526,14 @@ async fn main() -> anyhow::Result<()> {
             // In production set CORS_ORIGIN=https://yourdomain.com
             // Default (empty / unset) = permissive (for local dev)
             let cors = match std::env::var("CORS_ORIGIN") {
-                Ok(origin) if !origin.is_empty() => {
-                    CorsLayer::new()
-                        .allow_origin(origin.parse::<axum::http::HeaderValue>().expect("invalid CORS_ORIGIN"))
-                        .allow_methods(tower_http::cors::Any)
-                        .allow_headers(tower_http::cors::Any)
-                }
+                Ok(origin) if !origin.is_empty() => CorsLayer::new()
+                    .allow_origin(
+                        origin
+                            .parse::<axum::http::HeaderValue>()
+                            .expect("invalid CORS_ORIGIN"),
+                    )
+                    .allow_methods(tower_http::cors::Any)
+                    .allow_headers(tower_http::cors::Any),
                 _ => CorsLayer::permissive(),
             };
             cors

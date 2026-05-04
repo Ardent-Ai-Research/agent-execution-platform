@@ -112,8 +112,6 @@ pub struct BundlerClient {
     provider: std::sync::Arc<Provider<Http>>,
 }
 
-
-
 impl BundlerClient {
     pub fn new(
         rpc_url: String,
@@ -315,10 +313,7 @@ impl BundlerClient {
     }
 
     /// Submit a signed UserOperation to the bundler and wait for inclusion.
-    pub async fn submit_and_wait(
-        &self,
-        user_op: &UserOperation,
-    ) -> Result<UserOpResult> {
+    pub async fn submit_and_wait(&self, user_op: &UserOperation) -> Result<UserOpResult> {
         // 1. Submit to bundler
         let user_op_hash = self.send_user_operation(user_op).await?;
         info!(user_op_hash = %user_op_hash, "UserOperation submitted to bundler");
@@ -413,10 +408,7 @@ impl BundlerClient {
     /// `eth_supportedEntryPoints` but still reject v0.9 estimation calls unless
     /// the feature is enabled for the API key/project.
     async fn validate_entry_point_version_enabled(&self) -> Result<()> {
-        let probe_params = serde_json::json!([
-            {},
-            format!("{:?}", self.entry_point)
-        ]);
+        let probe_params = serde_json::json!([{}, format!("{:?}", self.entry_point)]);
 
         let response: JsonRpcResponse<serde_json::Value> = self
             .rpc_call("eth_estimateUserOperationGas", probe_params)
@@ -466,10 +458,7 @@ use a v0.9-compatible bundler URL for this chain",
     /// The optional `state_override` parameter allows modifying contract state
     /// before estimation (e.g. setting token balances for simulation). Modern
     /// bundlers may support this as the third JSON-RPC parameter.
-    async fn estimate_gas(
-        &self,
-        user_op: &UserOperation,
-    ) -> Result<(U256, U256, U256)> {
+    async fn estimate_gas(&self, user_op: &UserOperation) -> Result<(U256, U256, U256)> {
         let payload = self
             .rpc_user_operation_payload(user_op)
             .context("failed to convert UserOperation to bundler RPC format")?;
@@ -500,17 +489,13 @@ use a v0.9-compatible bundler URL for this chain",
         let call_gas = U256::from_str_radix(estimate.call_gas_limit.trim_start_matches("0x"), 16)
             .context("invalid callGasLimit from bundler")?;
 
-        let verification_gas = U256::from_str_radix(
-            estimate.verification_gas_limit.trim_start_matches("0x"),
-            16,
-        )
-        .context("invalid verificationGasLimit from bundler")?;
+        let verification_gas =
+            U256::from_str_radix(estimate.verification_gas_limit.trim_start_matches("0x"), 16)
+                .context("invalid verificationGasLimit from bundler")?;
 
-        let pre_verification_gas = U256::from_str_radix(
-            estimate.pre_verification_gas.trim_start_matches("0x"),
-            16,
-        )
-        .context("invalid preVerificationGas from bundler")?;
+        let pre_verification_gas =
+            U256::from_str_radix(estimate.pre_verification_gas.trim_start_matches("0x"), 16)
+                .context("invalid preVerificationGas from bundler")?;
 
         Ok((call_gas, verification_gas, pre_verification_gas))
     }
@@ -536,11 +521,9 @@ use a v0.9-compatible bundler URL for this chain",
         let mut max_fee = U256::from_str_radix(result.max_fee_per_gas.trim_start_matches("0x"), 16)
             .context("invalid voltaire_feesPerGas maxFeePerGas")?;
 
-        let mut max_priority = U256::from_str_radix(
-            result.max_priority_fee_per_gas.trim_start_matches("0x"),
-            16,
-        )
-        .context("invalid voltaire_feesPerGas maxPriorityFeePerGas")?;
+        let mut max_priority =
+            U256::from_str_radix(result.max_priority_fee_per_gas.trim_start_matches("0x"), 16)
+                .context("invalid voltaire_feesPerGas maxPriorityFeePerGas")?;
 
         if max_fee.is_zero() {
             return Err(anyhow!("voltaire_feesPerGas returned zero maxFeePerGas"));
@@ -609,14 +592,12 @@ use a v0.9-compatible bundler URL for this chain",
                 .target_contract
                 .parse()
                 .context("invalid target_contract in batch call")?;
-            let calldata_bytes =
-                hex::decode(call.calldata.trim_start_matches("0x"))
-                    .context("invalid calldata hex in batch call")?;
+            let calldata_bytes = hex::decode(call.calldata.trim_start_matches("0x"))
+                .context("invalid calldata hex in batch call")?;
             let value = if call.value.trim().is_empty() || call.value.trim() == "0" {
                 U256::zero()
             } else {
-                U256::from_dec_str(call.value.trim())
-                    .context("invalid value in batch call")?
+                U256::from_dec_str(call.value.trim()).context("invalid value in batch call")?
             };
 
             call_tuples.push(Token::Tuple(vec![
@@ -777,10 +758,7 @@ use a v0.9-compatible bundler URL for this chain",
         })
     }
 
-    fn rpc_user_operation_payload(
-        &self,
-        op: &UserOperation,
-    ) -> Result<serde_json::Value> {
+    fn rpc_user_operation_payload(&self, op: &UserOperation) -> Result<serde_json::Value> {
         // Voltaire parses v0.9 UserOperation payloads with a strict schema
         // (16 fields total), so we send only the canonical field set.
         let base_rpc = self.to_rpc_user_operation(op)?;
@@ -819,9 +797,10 @@ use a v0.9-compatible bundler URL for this chain",
                             .and_then(|v| v.as_str())
                             .and_then(|s| u64::from_str_radix(s.trim_start_matches("0x"), 16).ok())
                     });
-                    let gas_used = receipt.actual_gas_used.as_ref().and_then(|s| {
-                        u64::from_str_radix(s.trim_start_matches("0x"), 16).ok()
-                    });
+                    let gas_used = receipt
+                        .actual_gas_used
+                        .as_ref()
+                        .and_then(|s| u64::from_str_radix(s.trim_start_matches("0x"), 16).ok());
 
                     if success {
                         info!(
@@ -832,17 +811,18 @@ use a v0.9-compatible bundler URL for this chain",
                             "UserOperation confirmed on-chain ✓"
                         );
                     } else {
-                        warn!(
-                            user_op_hash,
-                            "UserOperation failed on-chain"
-                        );
+                        warn!(user_op_hash, "UserOperation failed on-chain");
                     }
 
                     return Ok(UserOpResult {
                         user_op_hash: user_op_hash.to_string(),
                         tx_hash,
                         success,
-                        error: if success { None } else { Some("UserOp reverted on-chain".into()) },
+                        error: if success {
+                            None
+                        } else {
+                            Some("UserOp reverted on-chain".into())
+                        },
                         block_number,
                         gas_used,
                     });
@@ -886,7 +866,10 @@ use a v0.9-compatible bundler URL for this chain",
             return Err(anyhow!("bundler returned HTTP {status}: {body_text}"));
         }
 
-        let result: JsonRpcResponse<T> = resp.json().await.context("failed to parse bundler response")?;
+        let result: JsonRpcResponse<T> = resp
+            .json()
+            .await
+            .context("failed to parse bundler response")?;
         Ok(result)
     }
 }
@@ -1128,9 +1111,8 @@ mod tests {
     use tokio::sync::Mutex;
 
     fn test_client(rpc_url: String) -> BundlerClient {
-        let provider = Arc::new(
-            Provider::<Http>::try_from("http://127.0.0.1:8545").expect("provider url"),
-        );
+        let provider =
+            Arc::new(Provider::<Http>::try_from("http://127.0.0.1:8545").expect("provider url"));
         BundlerClient::new(
             rpc_url,
             "0x433709009b8330fda32311df1c2afa402ed8d009"
@@ -1146,11 +1128,17 @@ mod tests {
     fn sample_user_op(paymaster_and_data: String) -> UserOperation {
         let account_gas_limits = format!(
             "0x{}",
-            hex::encode(pack_two_uint128(U256::from(300_000u64), U256::from(200_000u64)))
+            hex::encode(pack_two_uint128(
+                U256::from(300_000u64),
+                U256::from(200_000u64)
+            ))
         );
         let gas_fees = format!(
             "0x{}",
-            hex::encode(pack_two_uint128(U256::from(2_000_000_000u64), U256::from(20_000_000_000u64)))
+            hex::encode(pack_two_uint128(
+                U256::from(2_000_000_000u64),
+                U256::from(20_000_000_000u64)
+            ))
         );
 
         UserOperation {
@@ -1202,8 +1190,14 @@ mod tests {
             fields.paymaster.as_deref(),
             Some("0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
         );
-        assert_eq!(fields.paymaster_verification_gas_limit.as_deref(), Some("0x186a0"));
-        assert_eq!(fields.paymaster_post_op_gas_limit.as_deref(), Some("0xc350"));
+        assert_eq!(
+            fields.paymaster_verification_gas_limit.as_deref(),
+            Some("0x186a0")
+        );
+        assert_eq!(
+            fields.paymaster_post_op_gas_limit.as_deref(),
+            Some("0xc350")
+        );
         assert!(fields.paymaster_data.is_some());
         assert!(fields.paymaster_signature.is_none());
     }
@@ -1243,7 +1237,10 @@ mod tests {
         let client = test_client(format!("http://{addr}"));
         let user_op = sample_user_op(make_paymaster_and_data());
 
-        let result = client.send_user_operation(&user_op).await.expect("send user op");
+        let result = client
+            .send_user_operation(&user_op)
+            .await
+            .expect("send user op");
         assert_eq!(result, "0x1234");
 
         let body = captured_body

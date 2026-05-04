@@ -138,8 +138,8 @@ impl AgentWalletRegistry {
         factory_address: Address,
         provider: Arc<Provider<Http>>,
     ) -> Result<Self> {
-        let key_bytes = hex::decode(encryption_key_hex)
-            .context("WALLET_ENCRYPTION_KEY must be valid hex")?;
+        let key_bytes =
+            hex::decode(encryption_key_hex).context("WALLET_ENCRYPTION_KEY must be valid hex")?;
         if key_bytes.len() != 32 {
             return Err(anyhow!(
                 "WALLET_ENCRYPTION_KEY must be exactly 32 bytes (64 hex chars), got {}",
@@ -160,11 +160,7 @@ impl AgentWalletRegistry {
     /// Get or create an agent wallet for the given (api_key_id, agent_id) pair.
     ///
     /// This is the primary entry point — called on every `/execute` request.
-    pub async fn get_or_create(
-        &self,
-        api_key_id: Uuid,
-        agent_id: &str,
-    ) -> Result<AgentWallet> {
+    pub async fn get_or_create(&self, api_key_id: Uuid, agent_id: &str) -> Result<AgentWallet> {
         let namespaced_id = format!("{api_key_id}::{agent_id}");
 
         // Try to load existing wallet first
@@ -192,9 +188,13 @@ impl AgentWalletRegistry {
         match row {
             None => Ok(None),
             Some(row) => {
-                let eoa_address: Address = row.eoa_address.parse()
+                let eoa_address: Address = row
+                    .eoa_address
+                    .parse()
                     .context("corrupt eoa_address in DB")?;
-                let smart_wallet_address: Address = row.smart_wallet_address.parse()
+                let smart_wallet_address: Address = row
+                    .smart_wallet_address
+                    .parse()
                     .context("corrupt smart_wallet_address in DB")?;
 
                 Ok(Some(AgentWallet {
@@ -393,8 +393,8 @@ impl AgentWalletRegistry {
             .decrypt(nonce, ciphertext)
             .map_err(|e| anyhow!("decryption failed — wrong key or corrupt data: {e}"))?;
 
-        let mut key_hex = String::from_utf8(plaintext.clone())
-            .context("decrypted key is not valid UTF-8")?;
+        let mut key_hex =
+            String::from_utf8(plaintext.clone()).context("decrypted key is not valid UTF-8")?;
 
         // Zeroize the raw plaintext bytes immediately
         plaintext.zeroize();
@@ -478,8 +478,8 @@ pub fn decrypt_key_hex(encryption_key: &[u8; 32], encrypted_b64: &str) -> Result
         .decrypt(nonce, ciphertext)
         .map_err(|e| anyhow!("decryption failed — wrong key or corrupt data: {e}"))?;
 
-    let key_hex = String::from_utf8(plaintext.clone())
-        .context("decrypted key is not valid UTF-8")?;
+    let key_hex =
+        String::from_utf8(plaintext.clone()).context("decrypted key is not valid UTF-8")?;
 
     plaintext.zeroize();
 

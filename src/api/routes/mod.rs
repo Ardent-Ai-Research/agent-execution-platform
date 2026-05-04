@@ -8,8 +8,8 @@ use axum::{
 };
 use redis::aio::ConnectionManager;
 use sqlx::PgPool;
-use uuid::Uuid;
 use tracing::{error, info};
+use uuid::Uuid;
 
 use std::collections::HashMap;
 
@@ -20,7 +20,71 @@ use crate::db;
 use crate::execution_engine::ExecutionEngine;
 use crate::payments::PaymentRequiredBody;
 use crate::relayer::erc4337::BundlerClient;
+use crate::relayer::paymaster::PaymasterSigner;
 use crate::types::*;
+
+#[derive(Debug, serde::Deserialize)]
+pub struct FeedQuery {
+    pub limit: Option<usize>,
+}
+
+#[derive(Debug, serde::Serialize)]
+pub struct FeedResponse {
+    pub items: Vec<FeedItem>,
+}
+
+#[derive(Debug, serde::Serialize)]
+pub struct FeedItem {
+    pub r#type: String,
+    pub type_label: String,
+    pub agent: String,
+    pub detail: String,
+    pub hash: String,
+    pub status: String,
+    pub confirm: String,
+}
+
+fn short_hash(value: &str) -> String {
+    if value.len() <= 14 {
+        return value.to_string();
+    }
+    let head = &value[..8];
+    let tail = &value[value.len().saturating_sub(4)..];
+    format!("{}...{}", head, tail)
+}
+
+fn chain_display(chain: &str) -> String {
+    match chain.to_lowercase().as_str() {
+        "ethereum" | "eth" => "Ethereum Sepolia".to_string(),
+        "sepolia" => "Ethereum Sepolia".to_string(),
+        other => {
+            let mut chars = other.chars();
+            match chars.next() {
+                Some(first) => format!("{}{}", first.to_uppercase(), chars.as_str()),
+                None => "Unknown".to_string(),
+            }
+        }
+    }
+}
+
+fn format_amount_usd(amount: f64) -> String {
+    if amount >= 100.0 {
+        format!("${:.0}", amount)
+    } else {
+        format!("${:.2}", amount)
+    }
+}
+
+fn usd_to_raw_amount_ceil(usd: f64, decimals: u8) -> Option<String> {
+    if !usd.is_finite() || usd < 0.0 {
+        return None;
+    }
+    let scaled = usd * 10f64.powi(decimals as i32);
+    if !scaled.is_finite() || scaled < 0.0 || scaled > u128::MAX as f64 {
+        return None;
+    }
+    Some((scaled.ceil() as u128).to_string())
+}
 
 /// Shared application state injected into every handler.
 #[derive(Clone)]
@@ -32,6 +96,8 @@ pub struct AppState {
     pub wallet_registry: AgentWalletRegistry,
     /// Per-chain bundler clients.  Keyed by [`Chain`].
     pub bundler_clients: HashMap<Chain, BundlerClient>,
+    /// Per-chain paymaster signers for sponsored ERC-4337 operations.
+    pub paymaster_signers: HashMap<Chain, PaymasterSigner>,
 }
 
 // ────────────────────── POST /execute ────────────────────────────────
@@ -53,10 +119,14 @@ pub async fn execute_handler(
         &mut redis,
         &state.wallet_registry,
         &state.bundler_clients,
+        &state.paymaster_signers,
         api_ctx.api_key_id,
+        api_ctx.payment_mode.clone(),
         &req,
         proof_ref,
-    ).await {
+    )
+    .await
+    {
         Ok(resp) => {
             // If payment is required, return 402
             if resp.status == ExecutionStatus::PaymentRequired {
@@ -71,8 +141,9 @@ pub async fn execute_handler(
                             .keys()
                             .map(|symbol| {
                                 let decimals = cfg.token_decimals.get(symbol).copied().unwrap_or(6);
-                                let raw = (quoted_usd * 10f64.powi(decimals as i32)) as u128;
-                                (symbol.clone(), raw.to_string())
+                                let raw = usd_to_raw_amount_ceil(quoted_usd, decimals)
+                                    .unwrap_or_else(|| "0".to_string());
+                                (symbol.clone(), raw)
                             })
                             .collect::<HashMap<_, _>>();
                         (accepted, required_amount_raw)
@@ -88,7 +159,11 @@ pub async fn execute_handler(
                     request_id: resp.request_id.to_string(),
                     smart_wallet_address: resp.smart_wallet_address.clone().unwrap_or_default(),
                 };
-                return (StatusCode::PAYMENT_REQUIRED, Json(serde_json::to_value(body).unwrap())).into_response();
+                return (
+                    StatusCode::PAYMENT_REQUIRED,
+                    Json(serde_json::to_value(body).unwrap()),
+                )
+                    .into_response();
             }
             (StatusCode::OK, Json(serde_json::to_value(resp).unwrap())).into_response()
         }
@@ -110,11 +185,7 @@ pub async fn execute_handler(
             } else {
                 StatusCode::INTERNAL_SERVER_ERROR
             };
-            (
-                status,
-                Json(serde_json::json!({ "error": err_str })),
-            )
-                .into_response()
+            (status, Json(serde_json::json!({ "error": err_str }))).into_response()
         }
     }
 }
@@ -134,8 +205,11 @@ pub async fn simulate_handler(
         &state.wallet_registry,
         &state.bundler_clients,
         api_ctx.api_key_id,
+        api_ctx.payment_mode.clone(),
         &req,
-    ).await {
+    )
+    .await
+    {
         Ok(resp) => (StatusCode::OK, Json(serde_json::to_value(resp).unwrap())).into_response(),
         Err(e) => {
             error!(error = %e, "simulate failed");
@@ -152,11 +226,7 @@ pub async fn simulate_handler(
             } else {
                 StatusCode::INTERNAL_SERVER_ERROR
             };
-            (
-                status,
-                Json(serde_json::json!({ "error": err_str })),
-            )
-                .into_response()
+            (status, Json(serde_json::json!({ "error": err_str }))).into_response()
         }
     }
 }
@@ -184,10 +254,8 @@ pub async fn status_handler(
         Ok(Some(row)) => {
             let resp = StatusResponse {
                 request_id: row.id,
-                status: serde_json::from_value(
-                    serde_json::Value::String(row.status.clone()),
-                )
-                .unwrap_or(ExecutionStatus::Pending),
+                status: serde_json::from_value(serde_json::Value::String(row.status.clone()))
+                    .unwrap_or(ExecutionStatus::Pending),
                 chain: row.chain,
                 tx_hash: row.tx_hash,
                 cost_usd: row.cost_usd,
@@ -214,9 +282,7 @@ pub async fn status_handler(
 
 // ────────────────────── GET /health ──────────────────────────────────
 
-pub async fn health_handler(
-    State(state): State<AppState>,
-) -> impl IntoResponse {
+pub async fn health_handler(State(state): State<AppState>) -> impl IntoResponse {
     // Deep health check: verify DB and Redis are reachable.
     let db_ok = sqlx::query("SELECT 1")
         .execute(&state.db_pool)
@@ -248,6 +314,110 @@ pub async fn health_handler(
             }
         })),
     )
+}
+
+// ────────────────────── GET /feed/recent ────────────────────────────
+
+pub async fn public_feed_handler(
+    State(state): State<AppState>,
+    Query(params): Query<FeedQuery>,
+) -> impl IntoResponse {
+    let limit = params.limit.unwrap_or(12).clamp(1, 50) as i64;
+
+    match db::get_recent_feed_rows(&state.db_pool, limit).await {
+        Ok(rows) => {
+            let items = rows
+                .into_iter()
+                .map(|row| {
+                    let normalized_status = row.status.to_lowercase();
+                    let (feed_type, type_label) = match normalized_status.as_str() {
+                        "payment_required" | "payment_verified" => ("pay", "PAY"),
+                        "pending" => ("reg", "REG"),
+                        "broadcasting" => ("relay", "RELAY"),
+                        _ => ("exec", "EXEC"),
+                    };
+
+                    let status_ok =
+                        matches!(normalized_status.as_str(), "confirmed" | "payment_verified");
+
+                    let confirm = match normalized_status.as_str() {
+                        "confirmed" | "payment_verified" => "Confirmed",
+                        "failed" | "reverted" => "Failed",
+                        "payment_required" => "Payment Required",
+                        _ => "Pending...",
+                    };
+
+                    let hash = row
+                        .tx_hash
+                        .as_deref()
+                        .map(short_hash)
+                        .unwrap_or_else(|| short_hash(&row.id.to_string()));
+
+                    let agent = format!("agent-{}", row.id.to_string()[..8].to_string());
+
+                    let display_chain =
+                        chain_display(row.payment_chain.as_deref().unwrap_or(&row.chain));
+
+                    let detail = match normalized_status.as_str() {
+                        "payment_verified" => {
+                            let amount = row
+                                .payment_amount_usd
+                                .map(format_amount_usd)
+                                .unwrap_or_else(|| "$0.00".to_string());
+                            let token = row
+                                .payment_token
+                                .clone()
+                                .unwrap_or_else(|| "token".to_string());
+                            format!("x402 verify · {} {} · {}", amount, token, display_chain)
+                        }
+                        "payment_required" => {
+                            format!("x402 quote required · {}", display_chain)
+                        }
+                        "broadcasting" => {
+                            format!("bundler relay · {}", display_chain)
+                        }
+                        "pending" | "queued" => {
+                            format!("request queued · {}", display_chain)
+                        }
+                        "failed" | "reverted" => {
+                            format!("execution failed · {}", display_chain)
+                        }
+                        _ => {
+                            format!("contract execution · {}", display_chain)
+                        }
+                    };
+
+                    FeedItem {
+                        r#type: feed_type.to_string(),
+                        type_label: type_label.to_string(),
+                        agent,
+                        detail,
+                        hash,
+                        status: if status_ok {
+                            "ok".to_string()
+                        } else {
+                            "pending".to_string()
+                        },
+                        confirm: confirm.to_string(),
+                    }
+                })
+                .collect::<Vec<_>>();
+
+            (
+                StatusCode::OK,
+                Json(serde_json::to_value(FeedResponse { items }).unwrap()),
+            )
+                .into_response()
+        }
+        Err(e) => {
+            error!(error = %e, "failed to load recent feed activity");
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({ "error": "failed to load recent activity" })),
+            )
+                .into_response()
+        }
+    }
 }
 
 // ────────────────────── GET /wallet ──────────────────────────────────
@@ -289,11 +459,7 @@ pub async fn wallet_handler(
     )
     .await
     {
-        Ok(resp) => (
-            StatusCode::OK,
-            Json(serde_json::to_value(resp).unwrap()),
-        )
-            .into_response(),
+        Ok(resp) => (StatusCode::OK, Json(serde_json::to_value(resp).unwrap())).into_response(),
         Err(e) => {
             error!(error = %e, "wallet lookup failed");
             let err_str = e.to_string();
@@ -305,11 +471,7 @@ pub async fn wallet_handler(
             } else {
                 StatusCode::INTERNAL_SERVER_ERROR
             };
-            (
-                status,
-                Json(serde_json::json!({ "error": err_str })),
-            )
-                .into_response()
+            (status, Json(serde_json::json!({ "error": err_str }))).into_response()
         }
     }
 }
@@ -321,6 +483,8 @@ pub async fn wallet_handler(
 pub struct CreateApiKeyRequest {
     /// Optional human-readable label for the API key.
     pub label: Option<String>,
+    /// Optional billing mode for the API key: manual, auto, sponsored.
+    pub payment_mode: Option<String>,
 }
 
 /// Create a new API key (admin-only).
@@ -334,7 +498,23 @@ pub async fn create_api_key_handler(
 ) -> impl IntoResponse {
     info!("POST /admin/api-keys");
 
-    match db::create_api_key(&state.db_pool, body.label.as_deref()).await {
+    let payment_mode = match body.payment_mode.as_deref() {
+        None => PaymentMode::Manual,
+        Some(value) => match PaymentMode::from_str_loose(value) {
+            Some(mode) => mode,
+            None => {
+                return (
+                    StatusCode::BAD_REQUEST,
+                    Json(serde_json::json!({
+                        "error": "invalid payment_mode; expected one of: manual, auto, sponsored"
+                    })),
+                )
+                    .into_response();
+            }
+        },
+    };
+
+    match db::create_api_key(&state.db_pool, body.label.as_deref(), Some(payment_mode)).await {
         Ok((row, raw_key)) => {
             info!(api_key_id = %row.id, "new API key created");
             (
@@ -343,6 +523,7 @@ pub async fn create_api_key_handler(
                     "api_key_id": row.id,
                     "api_key": raw_key,
                     "label": row.label,
+                    "payment_mode": row.payment_mode,
                     "created_at": row.created_at,
                     "message": "Store this API key securely — it will not be shown again."
                 })),

@@ -73,9 +73,8 @@ async fn setup_redis(config: &AppConfig) -> redis::aio::ConnectionManager {
 /// Returns `(base_url, api_key, join_handle)`.
 ///
 /// The middleware stack is identical to the production `main.rs`:
-///   CORS → ConcurrencyLimit → BodySizeLimit → API key auth → rate limit → x402 → handlers
-///
-/// **Important**: ALL routes (including `/health`) go through API key auth.
+///   CORS → ConcurrencyLimit → BodySizeLimit →
+///   [public routes] + [admin bearer routes] + [protected API key → rate limit → x402 routes]
 async fn spawn_app() -> (String, String, tokio::task::JoinHandle<()>) {
     let config = test_config();
     let db_pool = setup_db(&config).await;
@@ -84,7 +83,7 @@ async fn spawn_app() -> (String, String, tokio::task::JoinHandle<()>) {
     let engine = ExecutionEngine::new(config.clone()).expect("engine init");
 
     // Create a test API key
-    let (_, api_key) = db::create_api_key(&db_pool, Some("integration-test"))
+    let (_, api_key) = db::create_api_key(&db_pool, Some("integration-test"), None)
         .await
         .expect("create API key");
 
@@ -96,9 +95,13 @@ async fn spawn_app() -> (String, String, tokio::task::JoinHandle<()>) {
         .parse()
         .unwrap_or_else(|_| ethers::types::Address::zero());
     let provider = engine.provider_for_chain(first_chain).unwrap();
-    let wallet_registry =
-        AgentWalletRegistry::new(db_pool.clone(), &config.wallet_encryption_key, factory, provider)
-            .expect("wallet registry");
+    let wallet_registry = AgentWalletRegistry::new(
+        db_pool.clone(),
+        &config.wallet_encryption_key,
+        factory,
+        provider,
+    )
+    .expect("wallet registry");
 
     // Bundler clients
     let mut bundler_clients = HashMap::new();
@@ -128,6 +131,7 @@ async fn spawn_app() -> (String, String, tokio::task::JoinHandle<()>) {
         config: config.clone(),
         wallet_registry,
         bundler_clients,
+        paymaster_signers: HashMap::new(),
     };
 
     let rate_limiter = if config.per_key_rate_limit_rps > 0.0 {
@@ -158,9 +162,7 @@ async fn spawn_app() -> (String, String, tokio::task::JoinHandle<()>) {
         .layer(middleware::from_fn(routes::admin_auth_middleware))
         .with_state(state.clone());
 
-    let app = Router::new()
-        .route("/health", get(routes::health_handler))
-        .nest("/admin", admin_router)
+    let protected_api_router = Router::new()
         .route("/execute", post(routes::execute_handler))
         .route("/simulate", post(routes::simulate_handler))
         .route("/status/:id", get(routes::status_handler))
@@ -175,15 +177,13 @@ async fn spawn_app() -> (String, String, tokio::task::JoinHandle<()>) {
                 let limiter = rl.clone();
                 async move {
                     match limiter {
-                        Some(ref l) => {
-                            agent_execution_platform::rate_limit::rate_limit_middleware(
-                                State(l.clone()),
-                                req,
-                                next,
-                            )
-                            .await
-                            .into_response()
-                        }
+                        Some(ref l) => agent_execution_platform::rate_limit::rate_limit_middleware(
+                            State(l.clone()),
+                            req,
+                            next,
+                        )
+                        .await
+                        .into_response(),
                         None => next.run(req).await.into_response(),
                     }
                 }
@@ -192,7 +192,13 @@ async fn spawn_app() -> (String, String, tokio::task::JoinHandle<()>) {
         .layer(middleware::from_fn_with_state(
             api_key_db_pool,
             api_key_auth_middleware_test,
-        ))
+        ));
+
+    let app = Router::new()
+        .route("/health", get(routes::health_handler))
+        .route("/feed/recent", get(routes::public_feed_handler))
+        .nest("/admin", admin_router)
+        .merge(protected_api_router)
         .layer(RequestBodyLimitLayer::new(1024 * 1024))
         .layer(tower::limit::ConcurrencyLimitLayer::new(200))
         .layer(CorsLayer::permissive())
@@ -227,6 +233,7 @@ async fn api_key_auth_middleware_test(
         req.extensions_mut().insert(ApiKeyContext {
             api_key_id: Uuid::nil(),
             label: Some("dev-bypass".into()),
+            payment_mode: PaymentMode::Sponsored,
         });
         return next.run(req).await.into_response();
     }
@@ -245,9 +252,12 @@ async fn api_key_auth_middleware_test(
             .into_response(),
         Some(raw_key) => match db::get_api_key_by_raw(&db_pool, &raw_key).await {
             Ok(Some(api_key_row)) => {
+                let payment_mode = PaymentMode::from_str_loose(&api_key_row.payment_mode)
+                    .unwrap_or(PaymentMode::Manual);
                 req.extensions_mut().insert(ApiKeyContext {
                     api_key_id: api_key_row.id,
                     label: api_key_row.label,
+                    payment_mode,
                 });
                 next.run(req).await.into_response()
             }
@@ -279,15 +289,10 @@ fn http_client() -> Client {
 
 #[tokio::test]
 async fn test_health_endpoint_returns_ok() {
-    let (base, api_key, _h) = spawn_app().await;
+    let (base, _api_key, _h) = spawn_app().await;
     let c = http_client();
 
-    let resp = c
-        .get(format!("{base}/health"))
-        .header("X-API-Key", &api_key)
-        .send()
-        .await
-        .unwrap();
+    let resp = c.get(format!("{base}/health")).send().await.unwrap();
 
     assert_eq!(resp.status(), 200);
     let body: Value = resp.json().await.unwrap();
@@ -299,12 +304,12 @@ async fn test_health_endpoint_returns_ok() {
 }
 
 #[tokio::test]
-async fn test_health_without_api_key_returns_401() {
+async fn test_health_without_api_key_returns_200() {
     let (base, _key, _h) = spawn_app().await;
     let c = http_client();
 
     let resp = c.get(format!("{base}/health")).send().await.unwrap();
-    assert_eq!(resp.status(), 401);
+    assert_eq!(resp.status(), 200);
 }
 
 // ────────────────── API Key Authentication ───────────────────────────
@@ -341,9 +346,9 @@ async fn test_valid_api_key_passes_auth() {
     let (base, api_key, _h) = spawn_app().await;
     let c = http_client();
 
-    // Use /health as a lightweight check that auth passes
+    // Use a protected endpoint to verify API-key auth passes
     let resp = c
-        .get(format!("{base}/health"))
+        .get(format!("{base}/wallet?agent_id=auth-check&chain=ethereum"))
         .header("X-API-Key", &api_key)
         .send()
         .await
@@ -393,14 +398,12 @@ async fn test_admin_create_api_key_wrong_token_returns_401() {
 async fn test_admin_create_api_key_success() {
     std::env::set_var("ADMIN_BEARER_TOKEN", "test-admin-ok");
 
-    let (base, api_key, _h) = spawn_app().await;
+    let (base, _api_key, _h) = spawn_app().await;
     let c = http_client();
 
-    // Admin endpoint is behind the global API key middleware,
-    // so we need BOTH the X-API-Key and the Bearer token.
+    // Admin endpoint requires only bearer-token auth.
     let resp = c
         .post(format!("{base}/admin/api-keys"))
-        .header("X-API-Key", &api_key)
         .header("Authorization", "Bearer test-admin-ok")
         .json(&json!({ "label": "my-agent-key" }))
         .send()
@@ -424,7 +427,9 @@ async fn test_wallet_returns_smart_wallet_address() {
     let c = http_client();
 
     let resp = c
-        .get(format!("{base}/wallet?agent_id=wallet-test-agent&chain=ethereum"))
+        .get(format!(
+            "{base}/wallet?agent_id=wallet-test-agent&chain=ethereum"
+        ))
         .header("X-API-Key", &api_key)
         .send()
         .await
@@ -433,7 +438,10 @@ async fn test_wallet_returns_smart_wallet_address() {
     assert_eq!(resp.status(), 200);
     let body: Value = resp.json().await.unwrap();
     assert_eq!(body["agent_id"], "wallet-test-agent");
-    assert!(body["smart_wallet_address"].as_str().unwrap().starts_with("0x"));
+    assert!(body["smart_wallet_address"]
+        .as_str()
+        .unwrap()
+        .starts_with("0x"));
     assert!(body["deployed"].is_boolean());
 }
 
@@ -500,7 +508,9 @@ async fn test_wallet_namespace_isolation_across_api_keys() {
     let db_pool = setup_db(&config).await;
 
     let (base, key1, _h) = spawn_app().await;
-    let (_, key2) = db::create_api_key(&db_pool, Some("key-2")).await.unwrap();
+    let (_, key2) = db::create_api_key(&db_pool, Some("key-2"), None)
+        .await
+        .unwrap();
     let c = http_client();
 
     let r1: Value = c
@@ -524,8 +534,7 @@ async fn test_wallet_namespace_isolation_across_api_keys() {
         .unwrap();
 
     assert_ne!(
-        r1["smart_wallet_address"],
-        r2["smart_wallet_address"],
+        r1["smart_wallet_address"], r2["smart_wallet_address"],
         "different API keys + same agent_id must produce different wallets"
     );
 }
@@ -854,7 +863,11 @@ async fn test_execute_malformed_payment_proof_returns_402() {
 
     assert_eq!(resp.status(), 402);
     let body: Value = resp.json().await.unwrap();
-    assert!(body["reason"].as_str().unwrap().to_lowercase().contains("malformed"));
+    assert!(body["reason"]
+        .as_str()
+        .unwrap()
+        .to_lowercase()
+        .contains("malformed"));
 }
 
 #[tokio::test]

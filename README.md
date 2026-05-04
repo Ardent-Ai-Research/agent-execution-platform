@@ -159,7 +159,8 @@ agent-execution-platform/
 │   ├── 001_init.sql                      # Core schema: agents, execution_requests, transactions, payments
 │   ├── 002_agent_wallets_and_api_keys.sql # ERC-4337: api_keys, agent_wallets, schema additions
 │   ├── 003_webhook_url.sql               # Adds callback_url column for webhook notifications
-│   └── 004_platform_keys.sql             # Platform-managed keys (auto-generated paymaster signer)
+│   ├── 004_platform_keys.sql             # Platform-managed keys (auto-generated paymaster signer)
+│   └── 005_api_key_payment_mode.sql      # Adds per-API-key payment mode: manual/auto/sponsored
 └── src/
     ├── main.rs                           # Boot sequence, middleware stack, worker supervisor
     ├── lib.rs                            # Module declarations
@@ -233,7 +234,7 @@ HTTP Request → CORS → ConcurrencyLimit → BodyLimit → Trace
 api_key_middleware()                                  [main.rs]
  │  SHA-256 hash X-API-Key → lookup in api_keys table
  │  └── 401 if missing/invalid
- │  └── Inject ApiKeyContext { api_key_id, label }
+ │  └── Inject ApiKeyContext { api_key_id, label, payment_mode }
  │
  ▼
 x402_middleware()                                     [payments/mod.rs]
@@ -258,9 +259,14 @@ routes::execute_handler()                            [api/routes/mod.rs]
       ├── 3. db::insert_execution_request()          — status: Pending
       ├── 4. engine.simulate(smart_wallet as from)   — eth_call + eth_estimateGas
       ├── 5. engine.estimate_cost() (+ 100k AA gas)  — bundler gas price × native token/USD + markup
-      ├── 6. Payment check:
-      │      None → HTTP 402 { amount, tokens, address }
-      │      Some → cross-check amount, insert_payment (atomic replay protection)
+   ├── 6. Payment policy by API key `payment_mode`:
+    │      manual    → payable amount = gas + platform fee; requires `X-Payment-Proof` or HTTP 402
+   │      auto      → if no proof, platform executes an internal ERC-20 transfer
+   │                  from the agent smart wallet before queueing execution
+    │                  (token selected by first accepted token with sufficient balance)
+    │                  payable amount = gas only (platform fee exempt)
+    │      sponsored → payable amount = 0 (no external payment requirement)
+   │      all modes with proof → cross-check amount, insert_payment (atomic replay protection)
       ├── 7. queue::enqueue_job(LPUSH)               — includes smart_wallet + eoa_address
       └── 8. Return { status: Queued, request_id }
 ```
@@ -926,16 +932,22 @@ curl http://localhost:8080/health \
 
 ### `POST /admin/api-keys`
 
-Create a new API key. Requires **both** API key auth and bearer token auth.
+Create a new API key. Requires bearer token auth.
 
-**Authentication:** `X-API-Key` (outer middleware) + `Authorization: Bearer <ADMIN_BEARER_TOKEN>` (admin middleware)
+The caller chooses the key's `payment_mode` at creation time:
+- `manual` (default): client must include `X-Payment-Proof`
+- `auto`: platform submits an onchain ERC-20 transfer from the agent smart wallet before main execution
+  - token selection is deterministic: first accepted token (sorted by symbol) whose onchain balance can fully cover the required amount
+  - on first use, ERC-4337 smart wallet deployment can happen in the same UserOperation path (counterfactual `initCode` flow)
+- `sponsored`: skips external payment requirement
+
+**Authentication:** `Authorization: Bearer <ADMIN_BEARER_TOKEN>`
 
 ```bash
 curl -X POST http://localhost:8080/admin/api-keys \
   -H "Content-Type: application/json" \
-  -H "X-API-Key: ak_yourkey" \
   -H "Authorization: Bearer your-admin-token" \
-  -d '{ "label": "my-trading-bot" }'
+  -d '{ "label": "my-trading-bot", "payment_mode": "auto" }'
 ```
 
 **Response (201):**
@@ -944,6 +956,7 @@ curl -X POST http://localhost:8080/admin/api-keys \
   "api_key_id": "a1b2c3d4-...",
   "api_key": "ak_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
   "label": "my-trading-bot",
+  "payment_mode": "auto",
   "created_at": "2026-04-01T12:00:00Z",
   "message": "Store this API key securely — it will not be shown again."
 }

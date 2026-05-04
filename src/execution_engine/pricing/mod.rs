@@ -116,10 +116,9 @@ impl NativeTokenPriceCache {
         }
 
         if self.feed_url.starts_with("0x") {
-            let addr = self
-                .feed_url
-                .parse::<Address>()
-                .map_err(|e| anyhow!("invalid chainlink feed address '{}': {}", self.feed_url, e))?;
+            let addr = self.feed_url.parse::<Address>().map_err(|e| {
+                anyhow!("invalid chainlink feed address '{}': {}", self.feed_url, e)
+            })?;
             return Ok(Some(addr));
         }
 
@@ -158,15 +157,12 @@ impl NativeTokenPriceCache {
             })
             // Fallback: flat { "usd": N }
             .or_else(|| body.get("usd").and_then(|v| v.as_f64()))
-            .ok_or_else(|| {
-                anyhow!(
-                    "could not extract USD price from feed response: {}",
-                    body
-                )
-            })?;
+            .ok_or_else(|| anyhow!("could not extract USD price from feed response: {}", body))?;
 
         if price <= 0.0 {
-            return Err(anyhow!("native token price feed returned non-positive price: {price}"));
+            return Err(anyhow!(
+                "native token price feed returned non-positive price: {price}"
+            ));
         }
 
         info!(native_token_usd = price, feed = %self.feed_url, "native token price refreshed");
@@ -297,8 +293,8 @@ mod tests {
     use super::*;
     use axum::{extract::State, routing::get, Json, Router};
     use serde_json::json;
-    use std::sync::Arc;
     use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::sync::Arc;
 
     fn dummy_provider() -> Arc<Provider<Http>> {
         Arc::new(Provider::<Http>::try_from("http://127.0.0.1:8545").expect("provider"))
@@ -321,15 +317,9 @@ mod tests {
 
         let cache = NativeTokenPriceCache::new(format!("http://{addr}"), 60, dummy_provider());
 
-        let total = calculate_cost(
-            U256::from(20_000_000_000u64),
-            100_000,
-            10.0,
-            0.01,
-            &cache,
-        )
-        .await
-        .expect("calculate cost");
+        let total = calculate_cost(U256::from(20_000_000_000u64), 100_000, 10.0, 0.01, &cache)
+            .await
+            .expect("calculate cost");
 
         assert!((total - 6.61).abs() < 0.000_001);
         server.abort();

@@ -12,6 +12,7 @@ pub struct ApiKeyRow {
     pub id: Uuid,
     pub key_hash: String,
     pub label: Option<String>,
+    pub payment_mode: String,
     pub is_active: bool,
     pub created_at: DateTime<Utc>,
 }

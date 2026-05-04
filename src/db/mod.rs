@@ -9,7 +9,7 @@ use sqlx::postgres::PgPoolOptions;
 use sqlx::PgPool;
 use uuid::Uuid;
 
-use crate::types::ExecutionStatus;
+use crate::types::{ExecutionStatus, PaymentMode};
 use models::*;
 
 /// Create a connection pool with sensible defaults.
@@ -42,19 +42,25 @@ pub async fn get_api_key_by_raw(pool: &PgPool, raw_key: &str) -> Result<Option<A
 }
 
 /// Insert a new API key. Returns the raw key (only time it's visible).
-pub async fn create_api_key(pool: &PgPool, label: Option<&str>) -> Result<(ApiKeyRow, String)> {
+pub async fn create_api_key(
+    pool: &PgPool,
+    label: Option<&str>,
+    payment_mode: Option<PaymentMode>,
+) -> Result<(ApiKeyRow, String)> {
     let raw_key = format!("ak_{}", Uuid::new_v4().to_string().replace('-', ""));
     let hash = sha256_hex(&raw_key);
+    let mode = payment_mode.unwrap_or(PaymentMode::Manual).to_string();
     let row = sqlx::query_as::<_, ApiKeyRow>(
         r#"
-        INSERT INTO api_keys (id, key_hash, label, is_active, created_at)
-        VALUES ($1, $2, $3, TRUE, now())
+        INSERT INTO api_keys (id, key_hash, label, payment_mode, is_active, created_at)
+        VALUES ($1, $2, $3, $4, TRUE, now())
         RETURNING *
         "#,
     )
     .bind(Uuid::new_v4())
     .bind(&hash)
     .bind(label)
+    .bind(mode)
     .fetch_one(pool)
     .await?;
     Ok((row, raw_key))
@@ -104,13 +110,53 @@ pub async fn insert_execution_request(
 }
 
 pub async fn get_execution_request(pool: &PgPool, id: Uuid) -> Result<Option<ExecutionRequestRow>> {
-    let row = sqlx::query_as::<_, ExecutionRequestRow>(
-        "SELECT * FROM execution_requests WHERE id = $1",
-    )
-    .bind(id)
-    .fetch_optional(pool)
-    .await?;
+    let row =
+        sqlx::query_as::<_, ExecutionRequestRow>("SELECT * FROM execution_requests WHERE id = $1")
+            .bind(id)
+            .fetch_optional(pool)
+            .await?;
     Ok(row)
+}
+
+#[derive(Debug, Clone, sqlx::FromRow)]
+pub struct RecentFeedRow {
+    pub id: Uuid,
+    pub chain: String,
+    pub status: String,
+    pub tx_hash: Option<String>,
+    pub payment_amount_usd: Option<f64>,
+    pub payment_token: Option<String>,
+    pub payment_chain: Option<String>,
+}
+
+pub async fn get_recent_feed_rows(pool: &PgPool, limit: i64) -> Result<Vec<RecentFeedRow>> {
+    let bounded = limit.clamp(1, 50);
+    let rows = sqlx::query_as::<_, RecentFeedRow>(
+        r#"
+        SELECT
+            er.id,
+            er.chain,
+            er.status,
+            er.tx_hash,
+            p.amount_usd AS payment_amount_usd,
+            p.token AS payment_token,
+            p.payment_chain
+        FROM execution_requests er
+        LEFT JOIN LATERAL (
+            SELECT amount_usd, token, payment_chain
+            FROM payments p
+            WHERE p.request_id = er.id
+            ORDER BY p.created_at DESC
+            LIMIT 1
+        ) p ON TRUE
+        ORDER BY er.updated_at DESC
+        LIMIT $1
+        "#,
+    )
+    .bind(bounded)
+    .fetch_all(pool)
+    .await?;
+    Ok(rows)
 }
 
 /// Resolve a locked quote cost from a prior request, scoped to the same API key
@@ -254,12 +300,11 @@ pub async fn insert_payment(
 /// NOTE: This is a best-effort check. The real enforcement is the UNIQUE
 /// constraint in `insert_payment` above.
 pub async fn payment_tx_hash_exists(pool: &PgPool, tx_hash: &str) -> Result<bool> {
-    let row: (bool,) = sqlx::query_as(
-        "SELECT EXISTS(SELECT 1 FROM payments WHERE payment_tx_hash = $1)",
-    )
-    .bind(tx_hash)
-    .fetch_one(pool)
-    .await?;
+    let row: (bool,) =
+        sqlx::query_as("SELECT EXISTS(SELECT 1 FROM payments WHERE payment_tx_hash = $1)")
+            .bind(tx_hash)
+            .fetch_one(pool)
+            .await?;
     Ok(row.0)
 }
 
@@ -270,7 +315,10 @@ pub async fn payment_tx_hash_exists(pool: &PgPool, tx_hash: &str) -> Result<bool
 ///
 /// The join uses `smart_wallet_address` (unique per wallet) rather than
 /// `agent_id` (which can collide across different API keys).
-pub async fn get_api_key_hash_for_request(pool: &PgPool, request_id: Uuid) -> Result<Option<String>> {
+pub async fn get_api_key_hash_for_request(
+    pool: &PgPool,
+    request_id: Uuid,
+) -> Result<Option<String>> {
     let row: Option<(String,)> = sqlx::query_as(
         r#"
         SELECT ak.key_hash
@@ -290,16 +338,11 @@ pub async fn get_api_key_hash_for_request(pool: &PgPool, request_id: Uuid) -> Re
 // ──────────────────────── Platform Keys ──────────────────────────────
 
 /// Retrieve a platform-managed key by its purpose (e.g. "paymaster_signer").
-pub async fn get_platform_key(
-    pool: &PgPool,
-    purpose: &str,
-) -> Result<Option<PlatformKeyRow>> {
-    let row = sqlx::query_as::<_, PlatformKeyRow>(
-        "SELECT * FROM platform_keys WHERE purpose = $1",
-    )
-    .bind(purpose)
-    .fetch_optional(pool)
-    .await?;
+pub async fn get_platform_key(pool: &PgPool, purpose: &str) -> Result<Option<PlatformKeyRow>> {
+    let row = sqlx::query_as::<_, PlatformKeyRow>("SELECT * FROM platform_keys WHERE purpose = $1")
+        .bind(purpose)
+        .fetch_optional(pool)
+        .await?;
     Ok(row)
 }
 
@@ -361,11 +404,12 @@ mod tests {
     async fn test_db_api_key_create_and_lookup() {
         let pool = setup_pool().await;
 
-        let (row, raw_key) = create_api_key(&pool, Some("db-test"))
+        let (row, raw_key) = create_api_key(&pool, Some("db-test"), None)
             .await
             .expect("create api key");
         assert!(raw_key.starts_with("ak_"));
         assert!(row.is_active);
+        assert_eq!(row.payment_mode, "manual");
 
         let found = get_api_key_by_raw(&pool, &raw_key)
             .await
@@ -388,15 +432,10 @@ mod tests {
         let pool = setup_pool().await;
         let req = sample_request("lifecycle");
 
-        let row = insert_execution_request(
-            &pool,
-            &req,
-            &ExecutionStatus::Pending,
-            Some("0xaaaa"),
-            None,
-        )
-        .await
-        .expect("insert request");
+        let row =
+            insert_execution_request(&pool, &req, &ExecutionStatus::Pending, Some("0xaaaa"), None)
+                .await
+                .expect("insert request");
         assert_eq!(row.status, "pending");
 
         let fetched = get_execution_request(&pool, row.id)
@@ -429,17 +468,15 @@ mod tests {
     async fn test_db_payment_replay_protection() {
         let pool = setup_pool().await;
         let req = sample_request("replay");
-        let row = insert_execution_request(
-            &pool,
-            &req,
-            &ExecutionStatus::PaymentRequired,
-            None,
-            None,
-        )
-        .await
-        .expect("insert request");
+        let row =
+            insert_execution_request(&pool, &req, &ExecutionStatus::PaymentRequired, None, None)
+                .await
+                .expect("insert request");
 
-        let tx_hash = format!("0x{}", hex::encode(uuid::Uuid::new_v4().as_bytes().repeat(2)));
+        let tx_hash = format!(
+            "0x{}",
+            hex::encode(uuid::Uuid::new_v4().as_bytes().repeat(2))
+        );
         let proof = PaymentProof {
             payment_id: uuid::Uuid::new_v4(),
             quote_request_id: None,

@@ -182,8 +182,8 @@ pub async fn deliver(
 /// Compute `HMAC-SHA256(body, secret)` and return as a hex string.
 fn compute_signature(body: &str, secret: &str) -> String {
     type HmacSha256 = Hmac<Sha256>;
-    let mut mac = HmacSha256::new_from_slice(secret.as_bytes())
-        .expect("HMAC accepts any key length");
+    let mut mac =
+        HmacSha256::new_from_slice(secret.as_bytes()).expect("HMAC accepts any key length");
     mac.update(body.as_bytes());
     hex::encode(mac.finalize().into_bytes())
 }
@@ -197,8 +197,8 @@ mod tests {
         routing::post,
         Router,
     };
-    use std::sync::Arc;
     use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::sync::Arc;
     use tokio::sync::Mutex;
 
     fn sample_payload() -> WebhookPayload {
@@ -271,20 +271,17 @@ mod tests {
         let payload = sample_payload();
         let secret = "test-secret";
 
-        let delivered = deliver(
-            &client,
-            &format!("http://{addr}"),
-            &payload,
-            secret,
-        )
-        .await;
+        let delivered = deliver(&client, &format!("http://{addr}"), &payload, secret).await;
 
         assert!(delivered);
         assert_eq!(hit_count.load(Ordering::SeqCst), 1);
 
         let body = serde_json::to_string(&payload).expect("payload json");
         let expected_sig = compute_signature(&body, secret);
-        assert_eq!(captured_sig.lock().await.as_deref(), Some(expected_sig.as_str()));
+        assert_eq!(
+            captured_sig.lock().await.as_deref(),
+            Some(expected_sig.as_str())
+        );
 
         server.abort();
     }
@@ -317,13 +314,7 @@ mod tests {
         let client = build_http_client();
         let payload = sample_payload();
 
-        let delivered = deliver(
-            &client,
-            &format!("http://{addr}"),
-            &payload,
-            "retry-secret",
-        )
-        .await;
+        let delivered = deliver(&client, &format!("http://{addr}"), &payload, "retry-secret").await;
 
         assert!(delivered);
         assert_eq!(hit_count.load(Ordering::SeqCst), 3);

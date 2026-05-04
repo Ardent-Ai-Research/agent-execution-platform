@@ -63,6 +63,36 @@ pub enum ExecutionStatus {
     Reverted,
 }
 
+/// Billing policy for an API key.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum PaymentMode {
+    Manual,
+    Auto,
+    Sponsored,
+}
+
+impl std::fmt::Display for PaymentMode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            PaymentMode::Manual => write!(f, "manual"),
+            PaymentMode::Auto => write!(f, "auto"),
+            PaymentMode::Sponsored => write!(f, "sponsored"),
+        }
+    }
+}
+
+impl PaymentMode {
+    pub fn from_str_loose(s: &str) -> Option<Self> {
+        match s.to_lowercase().as_str() {
+            "manual" => Some(PaymentMode::Manual),
+            "auto" => Some(PaymentMode::Auto),
+            "sponsored" => Some(PaymentMode::Sponsored),
+            _ => None,
+        }
+    }
+}
+
 impl std::fmt::Display for ExecutionStatus {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let s = serde_json::to_value(self)
@@ -257,6 +287,7 @@ pub struct PaymentProof {
 pub struct ApiKeyContext {
     pub api_key_id: Uuid,
     pub label: Option<String>,
+    pub payment_mode: PaymentMode,
 }
 
 #[cfg(test)]
@@ -295,8 +326,14 @@ mod tests {
     #[test]
     fn test_execution_status_display() {
         assert_eq!(ExecutionStatus::Pending.to_string(), "pending");
-        assert_eq!(ExecutionStatus::PaymentRequired.to_string(), "payment_required");
-        assert_eq!(ExecutionStatus::PaymentVerified.to_string(), "payment_verified");
+        assert_eq!(
+            ExecutionStatus::PaymentRequired.to_string(),
+            "payment_required"
+        );
+        assert_eq!(
+            ExecutionStatus::PaymentVerified.to_string(),
+            "payment_verified"
+        );
         assert_eq!(ExecutionStatus::Queued.to_string(), "queued");
         assert_eq!(ExecutionStatus::Broadcasting.to_string(), "broadcasting");
         assert_eq!(ExecutionStatus::Confirmed.to_string(), "confirmed");
@@ -328,7 +365,8 @@ mod tests {
         };
 
         let json = serde_json::to_string(&job).expect("serialize execution job");
-        let round_trip: ExecutionJob = serde_json::from_str(&json).expect("deserialize execution job");
+        let round_trip: ExecutionJob =
+            serde_json::from_str(&json).expect("deserialize execution job");
         assert_eq!(round_trip.request_id, job.request_id);
         assert_eq!(round_trip.attempt_count, 2);
         assert_eq!(round_trip.batch_calls.expect("batch calls").len(), 1);

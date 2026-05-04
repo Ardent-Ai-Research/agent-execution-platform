@@ -39,6 +39,17 @@ use crate::types::{Chain, PaymentProof};
 const TRANSFER_EVENT_TOPIC: &str =
     "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef";
 
+fn usd_to_token_raw_amount_ceil(usd: f64, decimals: u8) -> Result<U256, String> {
+    if !usd.is_finite() || usd < 0.0 {
+        return Err(format!("invalid USD amount: {}", usd));
+    }
+    let scaled = usd * 10f64.powi(decimals as i32);
+    if !scaled.is_finite() || scaled < 0.0 || scaled > u128::MAX as f64 {
+        return Err(format!("invalid scaled token amount for usd {}", usd));
+    }
+    Ok(U256::from(scaled.ceil() as u128))
+}
+
 // ──────────────────────── 402 response body ──────────────────────────
 
 #[derive(Debug, Serialize)]
@@ -125,19 +136,15 @@ pub async fn verify_payment_on_chain(
     // ── 1b. Validate payment chain ──────────────────────────────────
     // Resolve the chain to a configured provider.
     let payment_chain_enum = Chain::from_str_loose(&proof_header.chain)
-        .ok_or_else(|| format!(
-            "payment chain '{}' is not recognized",
-            proof_header.chain
-        ))?;
+        .ok_or_else(|| format!("payment chain '{}' is not recognized", proof_header.chain))?;
 
-    let provider = state
-        .providers
-        .get(&payment_chain_enum)
-        .ok_or_else(|| format!(
+    let provider = state.providers.get(&payment_chain_enum).ok_or_else(|| {
+        format!(
             "payment chain '{}' is not configured for verification — configure {}_RPC_URL",
             proof_header.chain,
             proof_header.chain.to_uppercase()
-        ))?;
+        )
+    })?;
 
     // ── 2. Validate token is accepted on this chain ─────────────────
     let chain_cfg = state
@@ -148,10 +155,12 @@ pub async fn verify_payment_on_chain(
     let expected_token_contract = chain_cfg
         .accepted_tokens
         .get(&token_upper)
-        .ok_or_else(|| format!(
-            "token {} is not accepted for payment on {}",
-            token_upper, payment_chain_enum
-        ))?
+        .ok_or_else(|| {
+            format!(
+                "token {} is not accepted for payment on {}",
+                token_upper, payment_chain_enum
+            )
+        })?
         .clone();
 
     let token_decimals = chain_cfg
@@ -192,9 +201,7 @@ pub async fn verify_payment_on_chain(
         .get_transaction_receipt(tx_hash)
         .await
         .map_err(|e| format!("RPC error fetching receipt: {e}"))?
-        .ok_or_else(|| {
-            "transaction receipt not found — it may not be mined yet".to_string()
-        })?;
+        .ok_or_else(|| "transaction receipt not found — it may not be mined yet".to_string())?;
 
     // ── 5. Verify receipt status ────────────────────────────────────
     match receipt.status {
@@ -209,13 +216,9 @@ pub async fn verify_payment_on_chain(
         .await
         .map_err(|e| format!("RPC error fetching block number: {e}"))?;
 
-    let tx_block = receipt
-        .block_number
-        .ok_or("receipt missing block number")?;
+    let tx_block = receipt.block_number.ok_or("receipt missing block number")?;
 
-    let confirmations = current_block
-        .saturating_sub(tx_block)
-        .as_u64();
+    let confirmations = current_block.saturating_sub(tx_block).as_u64();
 
     if confirmations < state.config.min_payment_confirmations {
         return Err(format!(
@@ -301,8 +304,7 @@ pub async fn verify_payment_on_chain(
     // Convert claimed USD to token's smallest unit.
     // For stablecoins: 1 USD ≈ 1 token unit, so amount_usd * 10^decimals.
     if let Some(claimed_amount_usd) = proof_header.amount_usd {
-        let required_amount_raw =
-            U256::from((claimed_amount_usd * 10f64.powi(token_decimals as i32)) as u128);
+        let required_amount_raw = usd_to_token_raw_amount_ceil(claimed_amount_usd, token_decimals)?;
 
         if verified_amount < required_amount_raw {
             let verified_human =

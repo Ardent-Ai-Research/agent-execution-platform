@@ -49,11 +49,7 @@ pub struct WorkerContext {
 
 /// Spawn a worker loop.  This function runs indefinitely (designed to be
 /// `tokio::spawn`'d).
-pub async fn run_worker(
-    mut redis_conn: ConnectionManager,
-    ctx: WorkerContext,
-    worker_id: u32,
-) {
+pub async fn run_worker(mut redis_conn: ConnectionManager, ctx: WorkerContext, worker_id: u32) {
     info!(worker_id, "worker started, waiting for jobs");
 
     loop {
@@ -132,9 +128,7 @@ pub async fn run_worker(
         // ── Execute via ERC-4337 bundler ─────────────────────────────
         let ctx_clone = ctx.clone();
         let job_clone = job.clone();
-        let handle = tokio::spawn(async move {
-            execute_erc4337(&ctx_clone, &job_clone).await
-        });
+        let handle = tokio::spawn(async move { execute_erc4337(&ctx_clone, &job_clone).await });
 
         let result = match handle.await {
             Ok(r) => r,
@@ -216,8 +210,8 @@ pub async fn run_worker(
             }
         } else {
             let err_msg = result.error.as_deref().unwrap_or("unknown error");
-            let is_revert = err_msg.contains("reverted on-chain")
-                || err_msg.contains("UserOp reverted");
+            let is_revert =
+                err_msg.contains("reverted on-chain") || err_msg.contains("UserOp reverted");
 
             error!(
                 worker_id,
@@ -234,7 +228,11 @@ pub async fn run_worker(
                     &ctx.db_pool,
                     request_id,
                     status,
-                    if result.tx_hash.is_empty() { None } else { Some(&result.tx_hash) },
+                    if result.tx_hash.is_empty() {
+                        None
+                    } else {
+                        Some(&result.tx_hash)
+                    },
                     Some(err_msg),
                     None,
                     None,
@@ -253,7 +251,11 @@ pub async fn run_worker(
                     &ctx,
                     &job,
                     &ExecutionStatus::Reverted,
-                    if result.tx_hash.is_empty() { None } else { Some(&result.tx_hash) },
+                    if result.tx_hash.is_empty() {
+                        None
+                    } else {
+                        Some(&result.tx_hash)
+                    },
                     None,
                     Some(err_msg),
                 )
@@ -383,7 +385,10 @@ async fn execute_erc4337(ctx: &WorkerContext, job: &ExecutionJob) -> RelayerResu
                 }
             };
 
-            if let Err(e) = bundler_client.apply_estimation_fee_hints(&mut draft_op).await {
+            if let Err(e) = bundler_client
+                .apply_estimation_fee_hints(&mut draft_op)
+                .await
+            {
                 return RelayerResult {
                     tx_hash: String::new(),
                     success: false,
@@ -399,7 +404,9 @@ async fn execute_erc4337(ctx: &WorkerContext, job: &ExecutionJob) -> RelayerResu
                     return RelayerResult {
                         tx_hash: String::new(),
                         success: false,
-                        error: Some(format!("paymaster pre-signing failed for estimation: {e:#}")),
+                        error: Some(format!(
+                            "paymaster pre-signing failed for estimation: {e:#}"
+                        )),
                         block_number: None,
                         gas_used: None,
                     };
@@ -425,7 +432,10 @@ async fn execute_erc4337(ctx: &WorkerContext, job: &ExecutionJob) -> RelayerResu
         }
     };
 
-    if let Err(e) = bundler_client.apply_estimation_fee_hints(&mut user_op).await {
+    if let Err(e) = bundler_client
+        .apply_estimation_fee_hints(&mut user_op)
+        .await
+    {
         return RelayerResult {
             tx_hash: String::new(),
             success: false,
@@ -448,7 +458,10 @@ async fn execute_erc4337(ctx: &WorkerContext, job: &ExecutionJob) -> RelayerResu
         }
     };
 
-    let draft_signature = match ctx.wallet_registry.decrypt_and_sign(&agent_wallet, draft_op_hash) {
+    let draft_signature = match ctx
+        .wallet_registry
+        .decrypt_and_sign(&agent_wallet, draft_op_hash)
+    {
         Ok(sig) => sig,
         Err(e) => {
             return RelayerResult {
@@ -463,21 +476,21 @@ async fn execute_erc4337(ctx: &WorkerContext, job: &ExecutionJob) -> RelayerResu
 
     user_op = bundler_client.apply_signature(user_op, draft_signature);
 
-    let (call_gas, verification_gas, pre_verification_gas) = match bundler_client
-        .estimate_gas_for_user_op(&user_op)
-        .await
-    {
-        Ok(v) => v,
-        Err(e) => {
-            return RelayerResult {
-                tx_hash: String::new(),
-                success: false,
-                error: Some(format!("failed to build UserOperation: bundler gas estimation failed: {e:#}")),
-                block_number: None,
-                gas_used: None,
-            };
-        }
-    };
+    let (call_gas, verification_gas, pre_verification_gas) =
+        match bundler_client.estimate_gas_for_user_op(&user_op).await {
+            Ok(v) => v,
+            Err(e) => {
+                return RelayerResult {
+                    tx_hash: String::new(),
+                    success: false,
+                    error: Some(format!(
+                        "failed to build UserOperation: bundler gas estimation failed: {e:#}"
+                    )),
+                    block_number: None,
+                    gas_used: None,
+                };
+            }
+        };
 
     let (max_fee, priority_fee) = match bundler_client.get_gas_prices().await {
         Ok(v) => v,
@@ -573,6 +586,14 @@ async fn execute_erc4337(ctx: &WorkerContext, job: &ExecutionJob) -> RelayerResu
             gas_used: None,
         },
     }
+}
+
+/// Execute a single ERC-4337 job immediately using the same logic as workers.
+///
+/// Useful for service-layer flows that need a pre-step onchain action
+/// (for example, internal auto-payment) before enqueueing the primary job.
+pub async fn execute_erc4337_now(ctx: &WorkerContext, job: &ExecutionJob) -> RelayerResult {
+    execute_erc4337(ctx, job).await
 }
 
 /// Load an agent wallet by its EOA address from the database.
@@ -682,7 +703,10 @@ async fn re_enqueue_with_bump(
             job.request_id,
             &ExecutionStatus::Failed,
             None,
-            Some(&format!("exhausted {} attempts, moved to dead-letter queue", MAX_JOB_ATTEMPTS)),
+            Some(&format!(
+                "exhausted {} attempts, moved to dead-letter queue",
+                MAX_JOB_ATTEMPTS
+            )),
             None,
             None,
         )
@@ -702,7 +726,10 @@ async fn re_enqueue_with_bump(
             &ExecutionStatus::Failed,
             None,
             None,
-            Some(&format!("exhausted {} attempts, moved to dead-letter queue", MAX_JOB_ATTEMPTS)),
+            Some(&format!(
+                "exhausted {} attempts, moved to dead-letter queue",
+                MAX_JOB_ATTEMPTS
+            )),
         )
         .await;
 
@@ -891,7 +918,9 @@ mod tests {
 
         re_enqueue_with_bump(&mut redis_conn, &ctx, &dequeued, worker_id).await;
 
-        let dlq_len = queue::dlq_length(&mut redis_conn).await.expect("dlq length");
+        let dlq_len = queue::dlq_length(&mut redis_conn)
+            .await
+            .expect("dlq length");
         assert_eq!(dlq_len, 1);
 
         let updated = db::get_execution_request(&pool, row.id)
@@ -899,12 +928,10 @@ mod tests {
             .expect("get request")
             .expect("request row");
         assert_eq!(updated.status, "failed");
-        assert!(
-            updated
-                .error_message
-                .unwrap_or_default()
-                .contains("exhausted")
-        );
+        assert!(updated
+            .error_message
+            .unwrap_or_default()
+            .contains("exhausted"));
 
         clear_queue_keys(&mut redis_conn, worker_id).await;
     }
