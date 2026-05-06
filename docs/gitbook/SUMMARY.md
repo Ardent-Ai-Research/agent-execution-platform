@@ -1,6 +1,6 @@
 # Summary
 
-* [Home](README.md)
+* [About Ardent Research](README.md)
 * [Getting Started](getting-started.md)
 * [Testnet Guide](testnet-guide.md)
 * [Authentication and Keys](authentication-and-keys.md)
