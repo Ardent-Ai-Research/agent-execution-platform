@@ -33,7 +33,7 @@ Example:
 
 ```json
 {
-  "request_id": "550e8400-e29b-41d4-a716-446655440000",
+  "request_id": "your_request_id",
   "status": "pending",
   "smart_wallet_address": "0xAgentSmartWallet",
   "estimated_gas": 52000,

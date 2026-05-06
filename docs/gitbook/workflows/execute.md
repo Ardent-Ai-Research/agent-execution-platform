@@ -90,15 +90,16 @@ Example:
 {
   "error": "payment_required",
   "amount_usd": 0.25,
-  "accepted_tokens": ["USDC", "USDT"],
+  "accepted_tokens": ["USDC", "USDT", "aUSD"],
   "required_amount_raw": {
     "USDC": "250000",
-    "USDT": "250000"
+    "USDT": "250000",
+    "aUSD": "250000"
   },
-  "payment_address": "0xTreasuryAddress",
+  "payment_address": "0x742d35Cc6634C0532925a3b844Bc9e7595f2bD18",
   "chain": "ethereum",
-  "request_id": "550e8400-e29b-41d4-a716-446655440000",
-  "smart_wallet_address": "0xAgentSmartWallet"
+  "request_id": "your_request_id",
+  "smart_wallet_address": "0x1234567890abcdef1234567890abcdef12345678"
 }
 ```
 
@@ -108,7 +109,7 @@ Example:
 curl -X POST "$BASE_URL/execute" \
   -H "Content-Type: application/json" \
   -H "X-API-Key: $API_KEY" \
-  -H 'X-Payment-Proof: {"request_id":"550e8400-e29b-41d4-a716-446655440000","payer":"0xYourPayer","amount_usd":0.25,"token":"USDC","chain":"ethereum","tx_hash":"0xYourPaymentTxHash"}' \
+  -H 'X-Payment-Proof: {"request_id":"your_request_id","payer":"0xYourPayer","token":"USDC","chain":"ethereum","tx_hash":"0xYourPaymentTxHash"}' \
   -d '{
     "agent_id": "my-agent-001",
     "chain": "ethereum",
@@ -126,7 +127,7 @@ Example:
 
 ```json
 {
-  "request_id": "550e8400-e29b-41d4-a716-446655440000",
+  "request_id": "your_request_id",
   "status": "queued",
   "smart_wallet_address": "0xAgentSmartWallet",
   "estimated_gas": 52000,

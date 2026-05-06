@@ -26,7 +26,7 @@ For manual payment flow, after you settle payment on-chain, include `X-Payment-P
 Header format:
 
 ```bash
-X-Payment-Proof: {"payer":"0x...","amount_usd":0.25,"token":"USDC","chain":"ethereum","tx_hash":"0x..."}
+X-Payment-Proof: {"request_id":"your_request_id","payer":"0xYourPayer","token":"USDC","chain":"ethereum","tx_hash":"0xYourPaymentTxHash"}
 ```
 
 Optional field:

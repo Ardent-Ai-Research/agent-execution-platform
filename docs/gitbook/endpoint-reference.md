@@ -25,7 +25,7 @@ X-API-Key: <api_key>
 Optional execution payment header (for manual API key users):
 
 ```bash
-X-Payment-Proof: {"payer":"0x...","token":"USDC","chain":"ethereum","tx_hash":"0x..."}
+X-Payment-Proof: {"request_id":"your_request_id","payer":"0xYourPayer","token":"USDC","chain":"ethereum","tx_hash":"0xYourPaymentTxHash"}
 ```
 
 ## Standard content type

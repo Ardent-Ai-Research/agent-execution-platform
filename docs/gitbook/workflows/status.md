@@ -13,7 +13,7 @@ Use this endpoint to retrieve the latest state for an execution request.
 ## Command
 
 ```bash
-REQUEST_ID="550e8400-e29b-41d4-a716-446655440000"
+REQUEST_ID="your_request_id"
 
 curl "$BASE_URL/status/$REQUEST_ID" \
   -H "X-API-Key: $API_KEY"
@@ -27,7 +27,7 @@ Example:
 
 ```json
 {
-  "request_id": "550e8400-e29b-41d4-a716-446655440000",
+  "request_id": "your_request_id",
   "status": "broadcasting",
   "chain": "ethereum",
   "tx_hash": "0x1234...abcd",
