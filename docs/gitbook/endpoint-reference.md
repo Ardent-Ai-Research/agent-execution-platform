@@ -4,10 +4,30 @@ This page gives a compact endpoint map for quick lookup.
 
 This reference includes hosted user facing endpoints only.
 
+## Quick setup
+
+```bash
+BASE_URL="https://api.ardentresearch.xyz"
+API_KEY="your_api_key"
+REQUEST_ID="your_request_id"
+```
+
 ## Public endpoints
 
 1. `GET /health`
 2. `GET /feed/recent`
+
+### `GET /health`
+
+```bash
+curl -X GET "$BASE_URL/health"
+```
+
+### `GET /feed/recent`
+
+```bash
+curl -X GET "$BASE_URL/feed/recent?limit=12"
+```
 
 ## Protected endpoints
 
@@ -26,6 +46,66 @@ Optional execution payment header (for manual API key users):
 
 ```bash
 X-Payment-Proof: {"request_id":"your_request_id","payer":"0xYourPayer","token":"USDC","chain":"ethereum","tx_hash":"0xYourPaymentTxHash"}
+```
+
+### `GET /wallet`
+
+```bash
+curl -X GET "$BASE_URL/wallet?agent_id=my-agent-001&chain=ethereum" \
+  -H "X-API-Key: $API_KEY"
+```
+
+### `POST /simulate`
+
+```bash
+curl -X POST "$BASE_URL/simulate" \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: $API_KEY" \
+  -d '{
+    "agent_id": "my-agent-001",
+    "chain": "ethereum",
+    "target_contract": "0xTargetContract",
+    "calldata": "0xCalldata",
+    "value": "0"
+  }'
+```
+
+### `POST /execute`
+
+```bash
+curl -X POST "$BASE_URL/execute" \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: $API_KEY" \
+  -d '{
+    "agent_id": "my-agent-001",
+    "chain": "ethereum",
+    "target_contract": "0xTargetContract",
+    "calldata": "0xCalldata",
+    "value": "0"
+  }'
+```
+
+Manual payment mode re-submit (after `402 Payment Required`):
+
+```bash
+curl -X POST "$BASE_URL/execute" \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: $API_KEY" \
+  -H 'X-Payment-Proof: {"request_id":"your_request_id","payer":"0xYourPayer","token":"USDC","chain":"ethereum","tx_hash":"0xYourPaymentTxHash"}' \
+  -d '{
+    "agent_id": "my-agent-001",
+    "chain": "ethereum",
+    "target_contract": "0xTargetContract",
+    "calldata": "0xCalldata",
+    "value": "0"
+  }'
+```
+
+### `GET /status/:id`
+
+```bash
+curl -X GET "$BASE_URL/status/$REQUEST_ID" \
+  -H "X-API-Key: $API_KEY"
 ```
 
 ## Standard content type
