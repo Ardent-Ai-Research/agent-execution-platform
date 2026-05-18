@@ -15,6 +15,7 @@ Response:
 Action:
 
 1. Add `X-API-Key` header to protected endpoint requests.
+2. If using the CLI or MCP server, ensure `ARDENT_API_KEY` is exported in your shell environment before running.
 
 ### Invalid API key
 

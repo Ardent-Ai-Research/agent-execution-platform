@@ -1,47 +1,45 @@
-# Agent Integration Pack (`skills.md` + OpenAPI + MCP + CLI)
+# AI Agent Blockchain Execution Integration
 
-This folder provides a standard install-style integration for Ardent API, similar to commonly used agent skill integrations.
+Everything needed to connect developers, AI agents, and LLM platforms to the AI Agent Blockchain Execution API.
 
-## One-liner setup (no repo clone required)
-
-Read setup and agent playbook remotely:
-
-```bash
-curl -sL https://raw.githubusercontent.com/Ardent-Ai-Research/agent-execution-platform/master/docs/agent-integration/skills.md
-```
-
-Install CLI + runtime files:
+## Install
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/Ardent-Ai-Research/agent-execution-platform/master/docs/agent-integration/install.sh | bash
 ```
 
-Then set credentials:
+The installer:
+
+- Places the `ardent` CLI in `~/.local/bin`
+- Downloads MCP server + runtime files into `~/.ardent/`
+- Auto-patches MCP configs for **Claude Desktop, ChatGPT Desktop, Cursor, and Windsurf** if any are detected
+- Preserves any existing `ARDENT_API_KEY` already set in those configs
+
+## Set credentials
 
 ```bash
 export ARDENT_API_KEY="your_api_key"
-export ARDENT_BASE_URL="https://api.ardentresearch.xyz"
 ```
 
-## Most common commands
+> If `ardent` is not found after install, add `~/.local/bin` to your PATH:
+>
+> ```bash
+> export PATH="${HOME}/.local/bin:${PATH}"
+> ```
+
+## CLI commands
 
 ```bash
 ardent --version
 ardent health
+ardent feed                             # public activity feed
 ardent wallet --agent-id my-agent-001 --chain ethereum
 ardent simulate --agent-id my-agent-001 --chain ethereum --target-contract 0xTargetContract --calldata 0xCalldata --value 0
 ardent execute --agent-id my-agent-001 --chain ethereum --target-contract 0xTargetContract --calldata 0xCalldata --value 0
 ardent status --request-id your_request_id
 ```
 
-Update later:
-
-```bash
-ardent self-update
-ardent self-update --with-runtime
-```
-
-Manual payment mode re-submit:
+Manual payment re-submit (after a `402` response):
 
 ```bash
 ardent execute \
@@ -57,16 +55,25 @@ ardent execute \
   --proof-tx-hash 0xYourPaymentTxHash
 ```
 
-## Integration files
+Update CLI and runtime files:
 
-- `skills.md` — human setup guide + behavior and guardrails playbook for LLM agents
-- `install.sh` — one-line installer (CLI + runtime files)
-- `ardent_cli.py` — zero-dependency CLI wrapper for Ardent endpoints
-- `mcp_server.py` — minimal stdio MCP server for LLM tool runtimes
-- `mcp-tools.json` — MCP tool map and schemas
-- `openapi.yaml` — machine-readable API contract for action/tool generation
+```bash
+ardent self-update
+ardent self-update --with-runtime
+```
 
-## MCP methods supported
+## Files in this folder
+
+| File | Purpose | Used by |
+| --- | --- | --- |
+| `install.sh` | One-line installer | Everyone |
+| `ardent_cli.py` | Zero-dependency CLI | Developers, scripts, CI |
+| `mcp_server.py` | stdio MCP server | Claude, ChatGPT, Cursor, Windsurf |
+| `mcp-tools.json` | MCP tool definitions | `mcp_server.py` |
+| `openapi.yaml` | OpenAPI 3.1 spec | ChatGPT custom actions, code generators |
+| `skills.md` | Setup guide + agent playbook | Humans and LLM system prompts |
+
+## MCP — supported methods
 
 - `initialize`
 - `tools/list`
@@ -74,6 +81,4 @@ ardent execute \
 
 ## Notes
 
-- Installer places `ardent` in `~/.local/bin` and runtime files in `~/.ardent`.
-- Add `~/.local/bin` to your `PATH` if needed.
-- For production, add stricter validation, retries/backoff, auth rotation, and structured logging.
+- MCP tools available: `ardent_health`, `ardent_feed_recent`, `ardent_get_wallet`, `ardent_simulate`, `ardent_execute`, `ardent_status`

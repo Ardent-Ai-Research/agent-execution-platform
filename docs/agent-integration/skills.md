@@ -1,6 +1,6 @@
-# Ardent's Agent Blockchain Execution Skills
+# AI Agent Blockchain Execution Skills
 
-This file covers everything needed to get started with Ardent API — from initial install through to running autonomous agents. It serves as both a human setup guide and a runtime playbook for LLM agents (ChatGPT, Grok, Claude, etc.).
+This file covers everything needed to get started with AI Agent Blockchain Execution API — from initial install through to running autonomous agents. It serves as both a human setup guide and a runtime playbook for LLM agents (ChatGPT, Grok, Claude, etc.).
 
 ---
 
@@ -18,7 +18,6 @@ This installs an `ardent` command in `~/.local/bin` and downloads runtime files 
 
 ```bash
 export ARDENT_API_KEY="your_api_key"
-export ARDENT_BASE_URL="https://api.ardentresearch.xyz"
 ```
 
 ### 3) Quick commands
@@ -26,6 +25,7 @@ export ARDENT_BASE_URL="https://api.ardentresearch.xyz"
 ```bash
 ardent --version
 ardent health
+ardent feed                             # public activity feed
 ardent wallet --agent-id my-agent-001 --chain ethereum
 ardent simulate --agent-id my-agent-001 --chain ethereum --target-contract 0xTargetContract --calldata 0xCalldata --value 0
 ardent execute --agent-id my-agent-001 --chain ethereum --target-contract 0xTargetContract --calldata 0xCalldata --value 0
@@ -57,7 +57,9 @@ ardent self-update --with-runtime # also refreshes ~/.ardent files
 
 ### Optional: MCP server for AI tool runtimes
 
-If you are connecting Claude, Cursor, or another MCP-compatible AI:
+The installer automatically registers Ardent in Claude Desktop, ChatGPT Desktop, Cursor, and Windsurf if any are detected. Just restart the app after install.
+
+To register manually (or for any other MCP-compatible AI), point it at:
 
 ```bash
 python3 ~/.ardent/mcp_server.py
@@ -122,7 +124,7 @@ curl -X POST "$BASE_URL/simulate" \
   }'
 ```
 
-### Execute
+#### Execute
 
 ```bash
 curl -X POST "$BASE_URL/execute" \

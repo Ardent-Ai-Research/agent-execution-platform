@@ -45,7 +45,22 @@ Security behavior:
 
 ## 4. Recommended local shell setup
 
+For raw curl usage:
+
 ```bash
 BASE_URL="https://api.ardentresearch.xyz"
 API_KEY="ak_your_key"
 ```
+
+## 5. CLI and MCP server environment variables
+
+The `ardent` CLI and the MCP server both resolve credentials from environment variables, not shell variables.
+
+```bash
+export ARDENT_API_KEY="ak_your_key"         # required for protected commands
+export ARDENT_BASE_URL="https://api.ardentresearch.xyz"  # optional, shown for reference
+```
+
+`ARDENT_BASE_URL` defaults to `https://api.ardentresearch.xyz` when not set. Override it only when pointing at a self-hosted instance or a staging environment.
+
+If `ARDENT_API_KEY` is not exported before running the CLI or starting the MCP server, protected commands will return an authentication error from the API.

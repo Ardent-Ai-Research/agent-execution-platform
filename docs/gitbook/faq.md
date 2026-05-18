@@ -68,3 +68,39 @@ The only required field is your agent smart wallet address.
 Faucet link:
 
 `https://faucet.ardentresearch.xyz`
+
+## 12. Is there a CLI instead of raw curl
+
+Yes. Run the one-line installer:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Ardent-Ai-Research/agent-execution-platform/master/docs/agent-integration/install.sh | bash
+```
+
+This installs an `ardent` command with subcommands for every platform operation: `health`, `feed`, `wallet`, `simulate`, `execute`, `status`, and `self-update`.
+
+See [Agent Integration](agent-integration.md).
+
+## 13. Can I use Ardent tools inside Claude, ChatGPT, Cursor, or Windsurf
+
+Yes. The installer auto-patches MCP configs for all four apps if they are detected on your machine.
+
+After install, restart the desktop app and all Ardent tools (`ardent_health`, `ardent_feed_recent`, `ardent_get_wallet`, `ardent_simulate`, `ardent_execute`, `ardent_status`) will appear in the tool list.
+
+For manual or other MCP-compatible runtimes, point them at:
+
+```bash
+python3 ~/.ardent/mcp_server.py
+```
+
+## 14. What is the public activity feed endpoint
+
+`GET /feed/recent` returns recent execution activity and requires no authentication.
+
+```bash
+curl -X GET "https://api.ardentresearch.xyz/feed/recent?limit=12"
+# or
+ardent feed
+```
+
+Use it to confirm the API is reachable or to monitor platform activity.

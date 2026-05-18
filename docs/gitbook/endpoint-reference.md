@@ -4,6 +4,8 @@ This page gives a compact endpoint map for quick lookup.
 
 This reference includes hosted user facing endpoints only.
 
+For a CLI alternative to the curl examples below, see [Agent Integration](agent-integration.md).
+
 ## Quick setup
 
 ```bash

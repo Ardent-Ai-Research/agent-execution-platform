@@ -39,6 +39,14 @@ Example:
 }
 ```
 
+## CLI equivalent
+
+```bash
+ardent wallet --agent-id my-agent-001 --chain ethereum
+```
+
+See [Agent Integration](../agent-integration.md) for the one-line installer.
+
 ## Practical usage
 
 1. Call this once per new `(api_key, agent_id)` pair.

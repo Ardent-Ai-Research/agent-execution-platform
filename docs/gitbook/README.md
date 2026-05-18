@@ -91,6 +91,20 @@ Use the hosted API base URL:
 https://api.ardentresearch.xyz
 ```
 
+## Agent integration
+
+Ardent ships an integration pack that makes it fast to connect any developer, script, or AI tool to the platform.
+
+It includes:
+
+1. A zero-dependency CLI (`ardent`) with a one-line installer.
+2. An MCP server that exposes all platform tools to Claude Desktop, ChatGPT Desktop, Cursor, and Windsurf.
+3. An OpenAPI 3.1 spec for ChatGPT custom actions and code generators.
+
+The installer auto-patches desktop AI configs and preserves any existing API key.
+
+See [Agent Integration](agent-integration.md).
+
 ## Next step
 
 Start with [Getting Started](getting-started.md).

@@ -43,6 +43,19 @@ Example:
 }
 ```
 
+## CLI equivalent
+
+```bash
+ardent simulate \
+  --agent-id my-agent-001 \
+  --chain ethereum \
+  --target-contract 0xTargetContract \
+  --calldata 0xCalldata \
+  --value 0
+```
+
+See [Agent Integration](../agent-integration.md) for the one-line installer.
+
 ## Cost semantics by payment mode
 
 1. Manual includes platform fee.

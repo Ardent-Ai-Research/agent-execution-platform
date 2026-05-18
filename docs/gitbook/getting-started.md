@@ -49,6 +49,8 @@ Use this sequence for first validation.
 1. Execute transaction.
 1. Poll status until terminal state.
 
+You can run every step with raw curl or with the `ardent` CLI. See [Agent Integration](agent-integration.md) for the one-line installer and CLI reference.
+
 ## 5. Terminal states
 
 A request eventually reaches one of these terminal states.

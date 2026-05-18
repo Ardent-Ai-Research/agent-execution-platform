@@ -155,14 +155,23 @@ pub async fn run_worker(mut redis_conn: ConnectionManager, ctx: WorkerContext, w
                 "execution confirmed on-chain ✓"
             );
 
+            let persisted_cost_usd = match db::get_execution_request(&ctx.db_pool, request_id).await {
+                Ok(Some(row)) => row.cost_usd,
+                Ok(None) => None,
+                Err(e) => {
+                    warn!(request_id = %request_id, error = %e, "failed to read persisted cost_usd before webhook");
+                    None
+                }
+            };
+
             if let Err(e) = db::update_execution_status(
                 &ctx.db_pool,
                 request_id,
                 &ExecutionStatus::Confirmed,
                 Some(&result.tx_hash),
                 None,
-                result.block_number.map(|b| b as i64),
-                result.gas_used.map(|g| g as f64),
+                None,
+                None,
             )
             .await
             {
@@ -199,7 +208,7 @@ pub async fn run_worker(mut redis_conn: ConnectionManager, ctx: WorkerContext, w
                 &job,
                 &ExecutionStatus::Confirmed,
                 Some(&result.tx_hash),
-                result.gas_used.map(|g| g as f64),
+                persisted_cost_usd,
                 None,
             )
             .await;

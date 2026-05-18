@@ -137,6 +137,35 @@ Example:
 }
 ```
 
+## CLI equivalent
+
+```bash
+ardent execute \
+  --agent-id my-agent-001 \
+  --chain ethereum \
+  --target-contract 0xTargetContract \
+  --calldata 0xCalldata \
+  --value 0
+```
+
+For manual payment re-submit after `402`:
+
+```bash
+ardent execute \
+  --agent-id my-agent-001 \
+  --chain ethereum \
+  --target-contract 0xTargetContract \
+  --calldata 0xCalldata \
+  --value 0 \
+  --proof-request-id your_request_id \
+  --proof-payer 0xYourPayer \
+  --proof-token USDC \
+  --proof-chain ethereum \
+  --proof-tx-hash 0xYourPaymentTxHash
+```
+
+See [Agent Integration](../agent-integration.md) for the one-line installer.
+
 ## Notes by payment mode
 
 1. Manual mode often requires two calls if proof is absent on the first call.

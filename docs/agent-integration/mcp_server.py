@@ -193,7 +193,7 @@ def handle_request(server: ArdentMcpServer, message: dict[str, Any]) -> None:
             message_id,
             {
                 "protocolVersion": "2024-11-05",
-                "serverInfo": {"name": "ardent-mcp", "version": "0.1.0"},
+                "serverInfo": {"name": "ardent-mcp", "version": "0.2.0"},
                 "capabilities": {"tools": {}},
             },
         )

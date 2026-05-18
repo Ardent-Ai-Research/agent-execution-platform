@@ -37,6 +37,14 @@ Example:
 }
 ```
 
+## CLI equivalent
+
+```bash
+ardent status --request-id your_request_id
+```
+
+See [Agent Integration](../agent-integration.md) for the one-line installer.
+
 ## Status lifecycle
 
 Typical progression:
