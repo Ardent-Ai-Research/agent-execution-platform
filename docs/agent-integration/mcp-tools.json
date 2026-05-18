@@ -1,0 +1,168 @@
+{
+  "version": "0.1.0",
+  "service": "ardent-agent-execution",
+  "baseUrlEnv": "ARDENT_BASE_URL",
+  "defaultBaseUrl": "https://api.ardentresearch.xyz",
+  "auth": {
+    "header": "X-API-Key",
+    "tokenEnv": "ARDENT_API_KEY"
+  },
+  "tools": [
+    {
+      "name": "ardent_health",
+      "description": "Check API health status",
+      "method": "GET",
+      "path": "/health",
+      "authRequired": false,
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "ardent_feed_recent",
+      "description": "Read public recent activity feed",
+      "method": "GET",
+      "path": "/feed/recent",
+      "authRequired": false,
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 50,
+            "default": 12
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "ardent_get_wallet",
+      "description": "Resolve/provision an ERC-4337 wallet for an agent_id",
+      "method": "GET",
+      "path": "/wallet",
+      "authRequired": true,
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "agent_id": { "type": "string" },
+          "chain": {
+            "type": "string",
+            "enum": ["ethereum", "base", "bnb"],
+            "default": "ethereum"
+          }
+        },
+        "required": ["agent_id"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "ardent_simulate",
+      "description": "Simulate execution request before broadcast",
+      "method": "POST",
+      "path": "/simulate",
+      "authRequired": true,
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "agent_id": { "type": "string" },
+          "chain": {
+            "type": "string",
+            "enum": ["ethereum", "base", "bnb"]
+          },
+          "target_contract": { "type": "string" },
+          "calldata": { "type": "string" },
+          "value": { "type": "string", "default": "0" },
+          "strategy_id": { "type": ["string", "null"] },
+          "batch_calls": {
+            "type": ["array", "null"],
+            "items": {
+              "type": "object",
+              "properties": {
+                "target_contract": { "type": "string" },
+                "calldata": { "type": "string" },
+                "value": { "type": "string", "default": "0" }
+              },
+              "required": ["target_contract", "calldata"],
+              "additionalProperties": false
+            }
+          },
+          "callback_url": { "type": ["string", "null"], "format": "uri" }
+        },
+        "required": ["agent_id", "chain"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "ardent_execute",
+      "description": "Execute request. In manual mode may return payment_required (402)",
+      "method": "POST",
+      "path": "/execute",
+      "authRequired": true,
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "agent_id": { "type": "string" },
+          "chain": {
+            "type": "string",
+            "enum": ["ethereum", "base", "bnb"]
+          },
+          "target_contract": { "type": "string" },
+          "calldata": { "type": "string" },
+          "value": { "type": "string", "default": "0" },
+          "strategy_id": { "type": ["string", "null"] },
+          "batch_calls": {
+            "type": ["array", "null"],
+            "items": {
+              "type": "object",
+              "properties": {
+                "target_contract": { "type": "string" },
+                "calldata": { "type": "string" },
+                "value": { "type": "string", "default": "0" }
+              },
+              "required": ["target_contract", "calldata"],
+              "additionalProperties": false
+            }
+          },
+          "callback_url": { "type": ["string", "null"], "format": "uri" },
+          "payment_proof": {
+            "type": ["object", "null"],
+            "description": "Optional value to encode as JSON in X-Payment-Proof header",
+            "properties": {
+              "request_id": { "type": "string" },
+              "payer": { "type": "string" },
+              "token": { "type": "string" },
+              "chain": { "type": "string" },
+              "tx_hash": { "type": "string" }
+            },
+            "required": ["request_id", "payer", "token", "chain", "tx_hash"],
+            "additionalProperties": false
+          }
+        },
+        "required": ["agent_id", "chain"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "ardent_status",
+      "description": "Get execution request status by request_id",
+      "method": "GET",
+      "path": "/status/{id}",
+      "authRequired": true,
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "request_id UUID"
+          }
+        },
+        "required": ["id"],
+        "additionalProperties": false
+      }
+    }
+  ]
+}
