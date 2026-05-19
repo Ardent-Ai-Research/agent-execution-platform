@@ -43,6 +43,7 @@ Detailed behavior is in [Payment Modes](payment-modes.md).
 Use this sequence for first validation.
 
 1. Request API key access.
+1. Choose an `agent_id` — any stable string you pick, such as `my-agent-001` or `trading-bot`. No registration needed; the platform provisions a smart wallet automatically on first use.
 1. Get wallet address for your agent ID.
 1. Fund wallet if your strategy needs tokens.
 1. Simulate execution.

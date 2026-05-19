@@ -8,26 +8,32 @@ No separate wallet creation endpoint is required. `GET /wallet` resolves or prov
 
 Yes. Agent identity is namespaced under API key scope. Use stable `agent_id` values so each agent maps consistently to its smart wallet.
 
-## 3. What if I lose my API key
+## 3. How do I create an agent_id
+
+You do not need to register or create an `agent_id` in advance. It is a free-form string you choose — any stable slug, name, or UUID works (for example `trading-bot-01`, `my-deploy-agent`, or `550e8400-e29b-41d4-a716-446655440000`).
+
+The platform automatically provisions a dedicated ERC-4337 smart wallet the first time it sees a new `agent_id` under your API key. From that point on, every call that uses the same `agent_id` maps to the same wallet.
+
+The only rule: keep the value stable. Changing `agent_id` for the same logical agent creates a new wallet.
 
 Request key rotation through Ardent Research support or onboarding. Update your client configuration immediately after rotation.
 
-## 4. Is `chain` required on wallet endpoint
+## 5. Is `chain` required on wallet endpoint
 
 No. If omitted, default is `ethereum`.
 
-## 5. Should frontend code call protected endpoints directly
+## 6. Should frontend code call protected endpoints directly
 
 For production systems, server side calls are recommended because API keys are secrets.
 
-## 6. How do I monitor execution completion
+## 7. How do I monitor execution completion
 
 You can combine both methods.
 
 1. Poll `GET /status/:id`.
 2. Provide `callback_url` on execute for push updates.
 
-## 7. Why did manual execute return payment required even after payment
+## 8. Why did manual execute return payment required even after payment
 
 Most common causes are:
 
@@ -37,11 +43,11 @@ Most common causes are:
 4. Insufficient amount transferred.
 5. Confirmation threshold not yet met.
 
-## 8. Can I execute batch transactions
+## 9. Can I execute batch transactions
 
 Yes. Use `batch_calls` with each call containing `target_contract`, `value`, and `calldata`.
 
-## 9. How do I keep integration predictable in production
+## 10. How do I keep integration predictable in production
 
 Use this operating pattern:
 
@@ -51,7 +57,7 @@ Use this operating pattern:
 4. Track status until terminal state.
 5. Store webhook events and status snapshots for audit.
 
-## 10. Which x402 tokens are accepted on Sepolia testnet
+## 11. Which x402 tokens are accepted on Sepolia testnet
 
 Current hosted testnet accepted tokens:
 
@@ -59,7 +65,7 @@ Current hosted testnet accepted tokens:
 2. `USDT` at `0xd077A400968890Eacc75cdc901F0356c943e4fDb`
 3. `aUSD` at `0x112a19d6236016fc4dda49257c724E63a3CE5bEA`
 
-## 11. How do I get aUSD for testnet
+## 12. How do I get aUSD for testnet
 
 Request `aUSD` allocation through the dedicated faucet flow.
 
@@ -69,7 +75,7 @@ Faucet link:
 
 `https://faucet.ardentresearch.xyz`
 
-## 12. Is there a CLI instead of raw curl
+## 13. Is there a CLI instead of raw curl
 
 Yes. Run the one-line installer:
 
@@ -81,7 +87,7 @@ This installs an `ardent` command with subcommands for every platform operation:
 
 See [Agent Integration](agent-integration.md).
 
-## 13. Can I use Ardent tools inside Claude, ChatGPT, Cursor, or Windsurf
+## 14. Can I use Ardent tools inside Claude, ChatGPT, Cursor, or Windsurf
 
 Yes. The installer auto-patches MCP configs for all four apps if they are detected on your machine.
 
@@ -93,7 +99,7 @@ For manual or other MCP-compatible runtimes, point them at:
 python3 ~/.ardent/mcp_server.py
 ```
 
-## 14. What is the public activity feed endpoint
+## 15. What is the public activity feed endpoint
 
 `GET /feed/recent` returns recent execution activity and requires no authentication.
 

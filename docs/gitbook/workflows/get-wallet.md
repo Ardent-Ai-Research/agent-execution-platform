@@ -12,7 +12,7 @@ Use this endpoint to resolve or provision the smart wallet address for a specifi
 
 ## Query parameters
 
-1. `agent_id` required string.
+1. `agent_id` required string. A stable identifier you choose for this agent. Any alphanumeric string, slug, or UUID works — for example `trading-bot-01`, `my-agent-001`, or a UUID. The platform provisions a dedicated smart wallet the first time it sees a new `agent_id` under your API key. Use the same value consistently so the wallet mapping stays stable.
 2. `chain` optional string. Default is `ethereum`.
 
 ## Command
