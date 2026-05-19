@@ -6,7 +6,7 @@ This guide is written for teams integrating with the hosted Ardent API at `https
 
 ## Who we are
 
-Ardent AI Research is an R&D lab focused on AI infrastructure for a permissionless autonomous economy.
+Ardent Research is an R&D lab focused on AI infrastructure for a permissionless autonomous economy.
 
 Our vision is to make it easy for AI agents to securely execute real tasks such as payments, on-chain actions, and service calls without centralized gatekeepers.
 
@@ -43,9 +43,9 @@ Our goal is to make autonomous execution safe by default, programmable, and easy
 
 Teams should focus on product logic and agent behavior while Ardent handles execution correctness, payment verification, and lifecycle reliability.
 
-## Ardent AI Agent Execution Platform
+## AI agent blockchain execution platform
 
-The Ardent AI Agent Execution Platform is our hosted execution surface for production agent workflows.
+The AI agent blockchain execution platform is our hosted execution surface for production agent workflows.
 
 It enables your software agent to execute EVM transactions through an ERC-4337 smart wallet without running your own relayer or custom broadcasting stack.
 
@@ -93,7 +93,7 @@ https://api.ardentresearch.xyz
 
 ## Agent integration
 
-Ardent ships an integration pack that makes it fast to connect any developer, script, or AI tool to the platform.
+Ardent Research ships an integration pack that makes it fast to connect any developer, script, or AI tool to the platform.
 
 It includes:
 

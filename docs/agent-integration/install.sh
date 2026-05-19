@@ -76,7 +76,7 @@ else
 fi
 
 # ── ChatGPT Desktop ──────────────────────────────────────────────────────────
-CHATGPT_CONFIG_DIR="${HOME}/Library/Application Support/OpenAI/ChatGPT"
+CHATGPT_CONFIG_DIR="${HOME}/Library/Application Support/com.openai.chat"
 CHATGPT_CONFIG="${CHATGPT_CONFIG_DIR}/mcp_servers.json"
 
 if [[ -d "${CHATGPT_CONFIG_DIR}" ]]; then

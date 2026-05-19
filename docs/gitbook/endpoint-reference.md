@@ -11,7 +11,6 @@ For a CLI alternative to the curl examples below, see [Agent Integration](agent-
 ```bash
 BASE_URL="https://api.ardentresearch.xyz"
 API_KEY="your_api_key"
-REQUEST_ID="your_request_id"
 ```
 
 ## Public endpoints
@@ -106,7 +105,7 @@ curl -X POST "$BASE_URL/execute" \
 ### `GET /status/:id`
 
 ```bash
-curl -X GET "$BASE_URL/status/$REQUEST_ID" \
+curl -X GET "$BASE_URL/status/your_request_id" \
   -H "X-API-Key: $API_KEY"
 ```
 

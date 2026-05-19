@@ -59,6 +59,9 @@ ardent self-update --with-runtime # also refreshes ~/.ardent files
 
 The installer automatically registers Ardent in Claude Desktop, ChatGPT Desktop, Cursor, and Windsurf if any are detected. Just restart the app after install.
 
+> **After install, open the patched config file and replace the `ARDENT_API_KEY` placeholder with your real key before restarting the app.**
+> The installer prints the exact path of every file it patches.
+
 To register manually (or for any other MCP-compatible AI), point it at:
 
 ```bash

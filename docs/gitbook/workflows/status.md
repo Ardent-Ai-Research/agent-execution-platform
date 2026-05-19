@@ -13,9 +13,8 @@ Use this endpoint to retrieve the latest state for an execution request.
 ## Command
 
 ```bash
-REQUEST_ID="your_request_id"
 
-curl "$BASE_URL/status/$REQUEST_ID" \
+curl "$BASE_URL/status/your_request_id" \
   -H "X-API-Key: $API_KEY"
 ```
 

@@ -1,6 +1,6 @@
 # Agent Integration
 
-The Ardent integration pack ships everything needed to connect to the platform — whether you are a developer scripting from the terminal, a team using AI coding tools, or an agent framework that needs a typed API contract.
+The agent integration pack ships everything needed to connect to the AI agent blockchain execution platform — whether you are a developer scripting from the terminal, a team using AI coding tools, or an agent framework that needs a typed API contract.
 
 It includes a one-line installer, a zero-dependency CLI, an MCP server for AI desktop tools, and an OpenAPI 3.1 spec.
 
@@ -21,10 +21,6 @@ export ARDENT_API_KEY="your_api_key"
 > ```bash
 > export PATH="${HOME}/.local/bin:${PATH}"
 > ```
-
-`ARDENT_BASE_URL` is optional. It defaults to `https://api.ardentresearch.xyz`.
-
----
 
 ## Who each integration is for
 
@@ -105,14 +101,21 @@ ardent self-update --with-runtime       # also refreshes ~/.ardent files
 
 The MCP server (`~/.ardent/mcp_server.py`) speaks the Model Context Protocol over stdio. Once registered, the AI assistant can invoke Ardent tools in response to natural language without you writing any code or curl commands.
 
-The installer automatically patches the config file for any supported app it detects. Restart the app after install — no further setup is needed.
+The installer automatically patches the config file for any supported app it detects.
 
-| App | What gets patched |
+| App | Config file patched |
 | --- | --- |
 | Claude Desktop | `~/Library/Application Support/Claude/claude_desktop_config.json` |
-| ChatGPT Desktop | `~/Library/Application Support/OpenAI/ChatGPT/mcp_servers.json` |
+| ChatGPT Desktop | `~/Library/Application Support/com.openai.chat/mcp_servers.json` |
 | Cursor | `~/.cursor/mcp.json` |
 | Windsurf | `~/.codeium/windsurf/mcp_config.json` |
+
+> **You must insert your API key manually after install.**
+> The installer writes `your_api_key_here` as a placeholder in the `env` block of each patched config. Open the file the installer reports and replace that value with your real key, then fully quit and reopen the app (Cmd+Q — not just close the window).
+>
+> The patched entry looks like this: `"env": { "ARDENT_API_KEY": "your_api_key_here" }`
+>
+> Replace `your_api_key_here` with your actual `ARDENT_API_KEY`. If you re-run the installer after already setting a real key, it preserves the existing value.
 
 **When to use it:**
 
@@ -154,7 +157,7 @@ python3 ~/.ardent/mcp_server.py
 
 ### Product teams and framework builders — the OpenAPI spec
 
-**Best for:** teams building their own agents or products on top of Ardent, and anyone who needs a typed API contract to generate clients or configure tool-calling frameworks.
+**Best for:** teams building their own agents or products on top of the AI agent blockchain execution layer, and anyone who needs a typed API contract to generate clients or configure tool-calling frameworks.
 
 The spec (`~/.ardent/openapi.yaml`) is OpenAPI 3.1 and covers all user-facing endpoints.
 
