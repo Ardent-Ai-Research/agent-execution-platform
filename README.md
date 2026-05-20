@@ -65,7 +65,7 @@ AI Agent (no wallet needed)
 │  ┌────────────────────────────────────────────────────▼────────┐ │
 │  │                    Route Handlers                            │ │
 │  │  GET /health    POST /execute    POST /simulate             │ │
-│  │  GET /wallet    GET /status/:id                             │ │
+│  │  GET /wallet    GET /wallet/balance    GET /status/:id      │ │
 │  └─────────────────────────┬──────────────────────────────────┘ │
 └────────────────────────────┼────────────────────────────────────┘
                              │
@@ -873,6 +873,41 @@ curl "http://localhost:8080/wallet?agent_id=my-trading-bot&chain=ethereum" \
 
 ---
 
+### `GET /wallet/balance`
+
+Return native token (ETH/BNB) and ERC-20 balances for the agent's smart wallet. Use this to confirm the wallet is funded before calling `/execute`.
+
+```bash
+curl "http://localhost:8080/wallet/balance?agent_id=my-trading-bot&chain=ethereum" \
+  -H "X-API-Key: ak_yourkey"
+```
+
+**Response:**
+```json
+{
+  "agent_id": "my-trading-bot",
+  "smart_wallet_address": "0x1234...abcd",
+  "chain": "ethereum",
+  "native_balance_wei": "0",
+  "native_balance_formatted": "0",
+  "tokens": [
+    {
+      "symbol": "USDC",
+      "contract_address": "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238",
+      "raw": "5000000",
+      "formatted": "5",
+      "decimals": 6
+    }
+  ]
+}
+```
+
+- `native_balance_wei` — raw wei as a decimal string
+- `native_balance_formatted` — ETH/BNB value (18-decimal scaled)
+- `tokens` — one entry per accepted payment token configured on the chain; `raw` is the on-chain smallest-unit amount, `formatted` is human-readable
+
+---
+
 ### `GET /status/:request_id`
 
 Poll execution status.
@@ -1082,7 +1117,8 @@ The x402 payment covers **gas fees + platform margin only**. The agent's smart w
 **How agents fund their wallet:**
 1. Call `GET /wallet?agent_id=my-bot` to get the smart wallet address
 2. Transfer the needed tokens to that address (from the agent's treasury, a faucet, etc.)
-3. Call `POST /execute` — simulation will verify the wallet has sufficient balance
+3. Call `GET /wallet/balance?agent_id=my-bot` to confirm the balance is visible on-chain
+4. Call `POST /execute` — simulation will verify the wallet has sufficient balance
 
 **Safety net:** If the wallet lacks required tokens, `eth_call` simulation reverts *before* any x402 payment is charged. The agent gets a clear error message with their wallet address.
 
