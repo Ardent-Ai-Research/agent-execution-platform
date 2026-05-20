@@ -477,6 +477,7 @@ async fn main() -> anyhow::Result<()> {
         .route("/simulate", post(routes::simulate_handler))
         .route("/status/:id", get(routes::status_handler))
         .route("/wallet", get(routes::wallet_handler))
+        .route("/wallet/balance", get(routes::wallet_balance_handler))
         .layer(middleware::from_fn_with_state(
             payment_verifier,
             x402_middleware,

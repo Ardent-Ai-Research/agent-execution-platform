@@ -33,7 +33,8 @@ export ARDENT_API_KEY="your_api_key"
 ardent --version
 ardent health
 ardent feed                             # public activity feed
-ardent wallet --agent-id my-agent-001 --chain ethereum
+ardent wallet         --agent-id my-agent-001 --chain ethereum
+ardent wallet-balance --agent-id my-agent-001 --chain ethereum   # native + ERC-20 balances
 ardent simulate --agent-id my-agent-001 --chain ethereum --target-contract 0xTargetContract --calldata 0xCalldata --value 0
 ardent execute --agent-id my-agent-001 --chain ethereum --target-contract 0xTargetContract --calldata 0xCalldata --value 0
 ardent status --request-id your_request_id
@@ -81,4 +82,4 @@ ardent self-update --with-runtime
 
 ## Notes
 
-- MCP tools available: `ardent_health`, `ardent_feed_recent`, `ardent_get_wallet`, `ardent_simulate`, `ardent_execute`, `ardent_status`
+- MCP tools available: `ardent_health`, `ardent_feed_recent`, `ardent_get_wallet`, `ardent_wallet_balance`, `ardent_simulate`, `ardent_execute`, `ardent_status`

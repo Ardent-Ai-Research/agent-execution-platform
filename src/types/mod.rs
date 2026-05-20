@@ -203,6 +203,35 @@ pub struct StatusResponse {
     pub updated_at: DateTime<Utc>,
 }
 
+/// A single token balance entry in a wallet balance response.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TokenBalance {
+    /// Token symbol, e.g. `"USDC"`.
+    pub symbol: String,
+    /// Token contract address on the queried chain.
+    pub contract_address: String,
+    /// Raw on-chain balance (in the token's smallest unit, e.g. 6-decimal USDC).
+    pub raw: String,
+    /// Human-readable balance scaled by token decimals.
+    pub formatted: String,
+    /// Number of decimals used for formatting.
+    pub decimals: u8,
+}
+
+/// Response for `GET /wallet/balance`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WalletBalanceResponse {
+    pub agent_id: String,
+    pub smart_wallet_address: String,
+    pub chain: String,
+    /// Native token balance (ETH / BNB etc.) in wei as a decimal string.
+    pub native_balance_wei: String,
+    /// Native balance formatted in the chain's base unit (e.g. ETH).
+    pub native_balance_formatted: String,
+    /// Balances for each accepted payment token configured on this chain.
+    pub tokens: Vec<TokenBalance>,
+}
+
 // ──────────────────────────── Internal Models ─────────────────────────
 
 /// A fully validated execution job ready for the queue.

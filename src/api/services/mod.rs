@@ -680,6 +680,97 @@ async fn validate_and_record_payment(
     Ok(None)
 }
 
+/// Resolve the agent's smart wallet and return ERC-20 + native token balances.
+pub async fn handle_get_wallet_balance(
+    engine: &ExecutionEngine,
+    wallet_registry: &AgentWalletRegistry,
+    api_key_id: Uuid,
+    agent_id: &str,
+    chain_str: &str,
+) -> Result<WalletBalanceResponse> {
+    let chain = Chain::from_str_loose(chain_str)
+        .ok_or_else(|| anyhow::anyhow!("unsupported chain: {}", chain_str))?;
+
+    let chain_cfg = engine
+        .config
+        .chains
+        .get(&chain)
+        .ok_or_else(|| anyhow::anyhow!("chain {} is not configured", chain_str))?
+        .clone();
+
+    let provider = engine.provider_for_chain(&chain)?;
+
+    // Resolve (or provision) the agent's smart wallet
+    let agent_wallet = wallet_registry
+        .get_or_create(api_key_id, agent_id)
+        .await?;
+    let smart_wallet_address = agent_wallet.smart_wallet_address;
+    let smart_wallet_str = format!("{smart_wallet_address:?}");
+
+    // ── Native balance ────────────────────────────────────────────────
+    let native_wei: U256 = provider.get_balance(smart_wallet_address, None).await?;
+    let native_balance_wei = native_wei.to_string();
+    // Format as ETH/BNB (18 decimals). Convert via low 128 bits only; typical
+    // wallet balances are far below 2^128 wei so precision is not lost.
+    let native_formatted = {
+        let divisor = 1_000_000_000_000_000_000u128 as f64; // 1e18
+        let val = native_wei.low_u128() as f64;
+        format!("{:.6}", val / divisor)
+            .trim_end_matches('0')
+            .trim_end_matches('.')
+            .to_string()
+    };
+
+    // ── ERC-20 balances ───────────────────────────────────────────────
+    // Reuse the existing fetch_erc20_balance_of helper (reads last 32 bytes
+    // of the call response, handles short-return gracefully).
+    let mut tokens = Vec::new();
+    for (symbol, contract_addr_str) in &chain_cfg.accepted_tokens {
+        let decimals = chain_cfg
+            .token_decimals
+            .get(symbol)
+            .copied()
+            .unwrap_or(6);
+
+        let raw_balance = fetch_erc20_balance_of(
+            provider.as_ref(),
+            contract_addr_str,
+            smart_wallet_address,
+        )
+        .await
+        .unwrap_or(U256::zero()); // graceful zero on any RPC error
+
+        let formatted = {
+            let divisor = 10u128.pow(decimals as u32) as f64;
+            let val = raw_balance.low_u128() as f64;
+            format!("{:.prec$}", val / divisor, prec = decimals as usize)
+                .trim_end_matches('0')
+                .trim_end_matches('.')
+                .to_string()
+        };
+
+        tokens.push(TokenBalance {
+            symbol: symbol.clone(),
+            contract_address: contract_addr_str.clone(),
+            raw: raw_balance.to_string(),
+            formatted,
+            decimals,
+        });
+    }
+
+    // Sort tokens alphabetically for stable output
+    tokens.sort_by(|a, b| a.symbol.cmp(&b.symbol));
+
+    Ok(WalletBalanceResponse {
+        agent_id: agent_id.to_string(),
+        smart_wallet_address: smart_wallet_str,
+        chain: chain.to_string(),
+        native_balance_wei,
+        native_balance_formatted: native_formatted,
+        tokens,
+    })
+}
+
 /// Handle a simulation-only request (no payment, no queue).
 pub async fn handle_simulate(
     engine: &ExecutionEngine,

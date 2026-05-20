@@ -26,7 +26,8 @@ export ARDENT_API_KEY="your_api_key"
 ardent --version
 ardent health
 ardent feed                             # public activity feed
-ardent wallet --agent-id my-agent-001 --chain ethereum
+ardent wallet         --agent-id my-agent-001 --chain ethereum
+ardent wallet-balance --agent-id my-agent-001 --chain ethereum
 ardent simulate --agent-id my-agent-001 --chain ethereum --target-contract 0xTargetContract --calldata 0xCalldata --value 0
 ardent execute --agent-id my-agent-001 --chain ethereum --target-contract 0xTargetContract --calldata 0xCalldata --value 0
 ardent status --request-id your_request_id
@@ -91,11 +92,12 @@ REQUEST_ID="your_request_id"
 
 ### Core Execution Flow
 
-1. Resolve wallet first with `GET /wallet`.
-2. Simulate with `POST /simulate`.
-3. Execute with `POST /execute`.
-4. If `402 payment_required`, pay exact `required_amount_raw` to `payment_address`, then resubmit with `X-Payment-Proof`.
-5. Track completion with `GET /status/:id` (or callback webhook if configured).
+1. Resolve wallet with `GET /wallet`.
+2. Confirm funding with `GET /wallet/balance` — verify the wallet holds enough tokens before executing.
+3. Simulate with `POST /simulate`.
+4. Execute with `POST /execute`.
+5. If `402 payment_required`, pay exact `required_amount_raw` to `payment_address`, then resubmit with `X-Payment-Proof`.
+6. Track completion with `GET /status/:id` (or callback webhook if configured).
 
 ### Canonical curl Commands
 
@@ -109,6 +111,13 @@ curl -X GET "$BASE_URL/health"
 
 ```bash
 curl -X GET "$BASE_URL/wallet?agent_id=$AGENT_ID&chain=ethereum" \
+  -H "X-API-Key: $API_KEY"
+```
+
+#### Get Wallet Balance
+
+```bash
+curl -X GET "$BASE_URL/wallet/balance?agent_id=$AGENT_ID&chain=ethereum" \
   -H "X-API-Key: $API_KEY"
 ```
 
@@ -171,4 +180,5 @@ curl -X GET "$BASE_URL/status/$REQUEST_ID" \
 2. Never invent token amounts for manual payment; always read `required_amount_raw` from the `402` response.
 3. Never change `request_id`, `payment_address`, or `chain` between `402` and re-submit.
 4. Prefer `simulate` before `execute` when action safety is uncertain.
-5. Treat `GET /status/:id` as source of truth for terminal result (`confirmed`, `failed`, `reverted`).
+5. Use `GET /wallet/balance` to verify sufficient token balance before attempting execution — do not assume the wallet is funded.
+6. Treat `GET /status/:id` as source of truth for terminal result (`confirmed`, `failed`, `reverted`).

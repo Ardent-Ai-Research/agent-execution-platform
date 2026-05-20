@@ -60,6 +60,26 @@
       }
     },
     {
+      "name": "ardent_wallet_balance",
+      "description": "Get native token (ETH/BNB) and ERC-20 balances for an agent's smart wallet. Call this before execute to verify the wallet is funded.",
+      "method": "GET",
+      "path": "/wallet/balance",
+      "authRequired": true,
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "agent_id": { "type": "string" },
+          "chain": {
+            "type": "string",
+            "enum": ["ethereum", "base", "bnb"],
+            "default": "ethereum"
+          }
+        },
+        "required": ["agent_id"],
+        "additionalProperties": false
+      }
+    },
+    {
       "name": "ardent_simulate",
       "description": "Simulate execution request before broadcast",
       "method": "POST",

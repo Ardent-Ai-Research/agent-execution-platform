@@ -85,7 +85,8 @@ ardent execute \
 ardent --version
 ardent health
 ardent feed                             # public activity feed
-ardent wallet --agent-id <id> --chain <chain>
+ardent wallet         --agent-id <id> --chain <chain>
+ardent wallet-balance --agent-id <id> --chain <chain>   # native + ERC-20 token balances
 ardent simulate --agent-id <id> --chain <chain> --target-contract <addr> --calldata <hex> --value <wei>
 ardent execute  --agent-id <id> --chain <chain> --target-contract <addr> --calldata <hex> --value <wei>
 ardent status   --request-id <id>
@@ -126,6 +127,8 @@ The installer automatically patches the config file for any supported app it det
 
 **Example conversations once the MCP server is active:**
 
+> *"What are the current token balances for agent-001 on Base?"*
+
 > *"Simulate a transfer of 100 USDC from my agent wallet on Base and tell me the gas cost."*
 
 > *"Execute the approve and swap sequence for agent-001 on Ethereum. Use the calldata I just generated."*
@@ -149,6 +152,7 @@ python3 ~/.ardent/mcp_server.py
 | `ardent_health` | Check API reachability |
 | `ardent_feed_recent` | Fetch public execution activity |
 | `ardent_get_wallet` | Resolve or provision an agent smart wallet |
+| `ardent_wallet_balance` | Get native + ERC-20 token balances for an agent wallet |
 | `ardent_simulate` | Simulate a transaction and return estimated cost |
 | `ardent_execute` | Submit a transaction for execution |
 | `ardent_status` | Poll execution request status |

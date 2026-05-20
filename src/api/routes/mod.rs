@@ -476,6 +476,50 @@ pub async fn wallet_handler(
     }
 }
 
+// ────────────────────── GET /wallet/balance ─────────────────────────────
+
+/// Query parameters for `GET /wallet/balance`.
+#[derive(Debug, serde::Deserialize)]
+pub struct WalletBalanceQuery {
+    pub agent_id: String,
+    #[serde(default = "default_chain")]
+    pub chain: String,
+}
+
+/// Return native + ERC-20 token balances for the agent's smart wallet.
+pub async fn wallet_balance_handler(
+    State(state): State<AppState>,
+    Extension(api_ctx): Extension<ApiKeyContext>,
+    Query(params): Query<WalletBalanceQuery>,
+) -> impl IntoResponse {
+    info!(agent_id = %params.agent_id, chain = %params.chain, "GET /wallet/balance");
+
+    match services::handle_get_wallet_balance(
+        &state.engine,
+        &state.wallet_registry,
+        api_ctx.api_key_id,
+        &params.agent_id,
+        &params.chain,
+    )
+    .await
+    {
+        Ok(resp) => (StatusCode::OK, Json(serde_json::to_value(resp).unwrap())).into_response(),
+        Err(e) => {
+            error!(error = %e, "wallet balance lookup failed");
+            let err_str = e.to_string();
+            let is_client_error = err_str.contains("unsupported chain")
+                || err_str.contains("not configured")
+                || err_str.contains("agent_id");
+            let status = if is_client_error {
+                StatusCode::BAD_REQUEST
+            } else {
+                StatusCode::INTERNAL_SERVER_ERROR
+            };
+            (status, Json(serde_json::json!({ "error": err_str }))).into_response()
+        }
+    }
+}
+
 // ────────────────────── POST /admin/api-keys ─────────────────────────
 
 /// Request body for API key creation.

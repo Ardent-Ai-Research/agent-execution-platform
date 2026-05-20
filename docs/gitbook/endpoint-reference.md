@@ -33,9 +33,10 @@ curl -X GET "$BASE_URL/feed/recent?limit=12"
 ## Protected endpoints
 
 1. `GET /wallet`
-2. `POST /simulate`
-3. `POST /execute`
-4. `GET /status/:id`
+2. `GET /wallet/balance`
+3. `POST /simulate`
+4. `POST /execute`
+5. `GET /status/:id`
 
 Authentication:
 
@@ -53,6 +54,13 @@ X-Payment-Proof: {"request_id":"your_request_id","payer":"0xYourPayer","token":"
 
 ```bash
 curl -X GET "$BASE_URL/wallet?agent_id=my-agent-001&chain=ethereum" \
+  -H "X-API-Key: $API_KEY"
+```
+
+### `GET /wallet/balance`
+
+```bash
+curl -X GET "$BASE_URL/wallet/balance?agent_id=my-agent-001&chain=ethereum" \
   -H "X-API-Key: $API_KEY"
 ```
 

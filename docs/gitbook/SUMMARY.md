@@ -9,6 +9,7 @@
 * [Workflows](workflows/request-api-key.md)
   * [Request API Key](workflows/request-api-key.md)
   * [Get Wallet](workflows/get-wallet.md)
+  * [Get Wallet Balance](workflows/get-wallet-balance.md)
   * [Simulate Transaction](workflows/simulate.md)
   * [Execute Transaction](workflows/execute.md)
   * [Check Request Status](workflows/status.md)

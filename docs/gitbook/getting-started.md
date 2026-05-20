@@ -24,9 +24,10 @@ The hosted API has two endpoint groups for users.
    2. `GET /feed/recent`
 2. Protected API key endpoints.
    1. `GET /wallet`
-   2. `POST /simulate`
-   3. `POST /execute`
-   4. `GET /status/:id`
+   2. `GET /wallet/balance`
+   3. `POST /simulate`
+   4. `POST /execute`
+   5. `GET /status/:id`
 
 ## 3. Understand your payment mode
 

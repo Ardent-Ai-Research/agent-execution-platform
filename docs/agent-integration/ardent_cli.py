@@ -5,6 +5,7 @@ Commands:
 - health
 - feed
 - wallet
+- wallet-balance
 - simulate
 - execute
 - status
@@ -200,6 +201,15 @@ def run_wallet(args: argparse.Namespace) -> int:
     return 0 if 200 <= status < 300 else 1
 
 
+def run_wallet_balance(args: argparse.Namespace) -> int:
+    api_key = require_api_key(args)
+    qs = parse.urlencode({"agent_id": args.agent_id, "chain": args.chain})
+    url = f"{build_base_url(args)}/wallet/balance?{qs}"
+    status, payload = call_api("GET", url, api_key=api_key)
+    output({"status": status, "data": payload})
+    return 0 if 200 <= status < 300 else 1
+
+
 def run_simulate(args: argparse.Namespace) -> int:
     api_key = require_api_key(args)
     body = resolve_request_body(args)
@@ -305,6 +315,12 @@ def build_parser() -> argparse.ArgumentParser:
     p_wallet.add_argument("--agent-id", required=True, help="Agent identifier")
     p_wallet.add_argument("--chain", default="ethereum", choices=["ethereum", "base", "bnb"], help="Target chain")
     p_wallet.set_defaults(func=run_wallet)
+
+    p_wallet_balance = subparsers.add_parser("wallet-balance", help="GET /wallet/balance")
+    add_global_flags(p_wallet_balance)
+    p_wallet_balance.add_argument("--agent-id", required=True, help="Agent identifier")
+    p_wallet_balance.add_argument("--chain", default="ethereum", choices=["ethereum", "base", "bnb"], help="Target chain")
+    p_wallet_balance.set_defaults(func=run_wallet_balance)
 
     p_sim = subparsers.add_parser("simulate", help="POST /simulate")
     add_global_flags(p_sim)
