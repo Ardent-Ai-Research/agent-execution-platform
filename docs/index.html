@@ -2033,7 +2033,7 @@
               <div class="form-box-title">Access Request</div>
               <div class="form-box-status">Accepting applications</div>
             </div>
-            <form class="form-body" id="waitlist-form" novalidate>
+            <form class="form-body" id="waitlist-form" action="https://api.web3forms.com/submit" method="POST" novalidate>
               <div class="f-row">
                 <label class="f-label">Email Address</label>
                 <input
@@ -2077,6 +2077,7 @@
                 autocomplete="off"
                 style="display: none"
               />
+              <input type="hidden" name="access_key" value="77b6eb5f-35bf-4e8f-bd6caa7518de7" />
               <button class="f-submit" id="f-submit" type="submit">
                 <span>→ Request My API Key</span>
               </button>
@@ -2484,8 +2485,8 @@
       );
       revealEls.forEach((el) => ro.observe(el));
 
-      // FORM (Formspree AJAX)
-      const FORMSPREE_ENDPOINT = "https://formspree.io/f/xbdwgvqy";
+      // FORM (Web3Forms AJAX)
+      const WEB3FORMS_ENDPOINT = "https://api.web3forms.com/submit";
       const waitlistForm = document.getElementById("waitlist-form");
       const waitlistEmail = document.getElementById("f-email");
       const waitlistProject = document.getElementById("f-project");
@@ -2538,10 +2539,11 @@
 
           try {
             const formData = new FormData(waitlistForm);
+              formData.append("access_key", "77b6eb5f-35bf-4e8f-bd6caa7518de7");
             formData.append("source", "ardent-landing");
             formData.append("_subject", "New Ardent API key request");
 
-            const response = await fetch(FORMSPREE_ENDPOINT, {
+            const response = await fetch(WEB3FORMS_ENDPOINT, {
               method: "POST",
               body: formData,
               headers: {

@@ -299,7 +299,7 @@
           </p>
           <p class="note">Only one field is required.</p>
 
-          <form id="faucet-form" novalidate>
+          <form id="faucet-form" action="https://api.web3forms.com/submit" method="POST" novalidate>
             <div class="label">Agent Smart Wallet Address</div>
             <input
               id="wallet-address"
@@ -311,6 +311,7 @@
             />
 
             <input type="text" name="_gotcha" tabindex="-1" autocomplete="off" style="display:none" />
+            <input type="hidden" name="access_key" value="c89fbe44-f692-421f-bae7-a4e225336a9e" />
             <input type="hidden" name="source" value="ardent-ausd-faucet-page" />
             <input type="hidden" name="token" value="aUSD" />
             <input type="hidden" name="network" value="ethereum-sepolia" />
@@ -345,7 +346,7 @@
         localStorage.setItem(THEME_KEY, nextTheme);
       });
 
-      const ENDPOINT = "https://formspree.io/f/mlgznyag";
+      const WEB3FORMS_ENDPOINT = "https://api.web3forms.com/submit";
       const form = document.getElementById("faucet-form");
       const walletInput = document.getElementById("wallet-address");
       const submitBtn = document.getElementById("submit-btn");
@@ -376,7 +377,7 @@
 
         try {
           const formData = new FormData(form);
-          const response = await fetch(ENDPOINT, {
+          const response = await fetch(WEB3FORMS_ENDPOINT, {
             method: "POST",
             body: formData,
             headers: { Accept: "application/json" },
