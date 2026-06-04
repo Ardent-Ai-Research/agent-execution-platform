@@ -7,7 +7,7 @@
 //! Design principles:
 //! * **Multi-chain** — each chain has its own `NativeTokenPriceCache` instance
 //!   pointing at the correct native-token/USD feed (ETH for Ethereum & Base,
-//!   BNB for BSC, etc.).
+//!   ETH for Arbitrum, etc.).
 //! * **Bundler-first fees** — all UserOperations are submitted through
 //!   the ERC-4337 bundler, and gas pricing is sourced from Candide Voltaire's
 //!   `voltaire_feesPerGas` method.
@@ -40,8 +40,8 @@ struct CachedPrice {
 
 /// Thread-safe, TTL-based native-token/USD price cache.
 ///
-/// Each supported chain gets its own instance (ETH/USD for Ethereum & Base,
-/// BNB/USD for BSC, etc.).
+/// Each supported chain gets its own instance (ETH/USD for Ethereum, Base,
+/// and Arbitrum).
 pub struct NativeTokenPriceCache {
     inner: RwLock<Option<CachedPrice>>,
     feed_url: String,
@@ -244,7 +244,7 @@ impl NativeTokenPriceCache {
 /// fetch gas prices itself — the bundler is the single source of truth.
 ///
 /// Formula:
-///   gas_cost_native = gas_estimate × gas_price  (in native token, e.g. ETH or BNB)
+///   gas_cost_native = gas_estimate × gas_price  (in native token, e.g. ETH)
 ///   cost_usd        = gas_cost_native × live_native_token/USD + markup% + platform_fee
 pub async fn calculate_cost(
     gas_price: U256,

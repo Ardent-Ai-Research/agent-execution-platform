@@ -710,7 +710,8 @@ pub async fn handle_get_wallet_balance(
     // ── Native balance ────────────────────────────────────────────────
     let native_wei: U256 = provider.get_balance(smart_wallet_address, None).await?;
     let native_balance_wei = native_wei.to_string();
-    // Format as ETH/BNB (18 decimals). Convert via low 128 bits only; typical
+    // Format as native token amount with 18 decimals (ETH on Ethereum/Base/Arbitrum).
+    // Convert via low 128 bits only; typical
     // wallet balances are far below 2^128 wei so precision is not lost.
     let native_formatted = {
         let divisor = 1_000_000_000_000_000_000u128 as f64; // 1e18

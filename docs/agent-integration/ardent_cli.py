@@ -286,7 +286,7 @@ def add_global_flags(parser: argparse.ArgumentParser) -> None:
 
 def add_execution_payload_flags(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--agent-id", required=True, help="Agent identifier")
-    parser.add_argument("--chain", default="ethereum", choices=["ethereum", "base", "bnb"], help="Target chain")
+    parser.add_argument("--chain", default="ethereum", choices=["ethereum", "base", "arbitrum"], help="Target chain")
     parser.add_argument("--target-contract", help="Target contract address (single-call mode)")
     parser.add_argument("--calldata", help="Hex calldata (single-call mode)")
     parser.add_argument("--value", default="0", help="Value as string (default: 0)")
@@ -313,13 +313,13 @@ def build_parser() -> argparse.ArgumentParser:
     p_wallet = subparsers.add_parser("wallet", help="GET /wallet")
     add_global_flags(p_wallet)
     p_wallet.add_argument("--agent-id", required=True, help="Agent identifier")
-    p_wallet.add_argument("--chain", default="ethereum", choices=["ethereum", "base", "bnb"], help="Target chain")
+    p_wallet.add_argument("--chain", default="ethereum", choices=["ethereum", "base", "arbitrum"], help="Target chain")
     p_wallet.set_defaults(func=run_wallet)
 
     p_wallet_balance = subparsers.add_parser("wallet-balance", help="GET /wallet/balance")
     add_global_flags(p_wallet_balance)
     p_wallet_balance.add_argument("--agent-id", required=True, help="Agent identifier")
-    p_wallet_balance.add_argument("--chain", default="ethereum", choices=["ethereum", "base", "bnb"], help="Target chain")
+    p_wallet_balance.add_argument("--chain", default="ethereum", choices=["ethereum", "base", "arbitrum"], help="Target chain")
     p_wallet_balance.set_defaults(func=run_wallet_balance)
 
     p_sim = subparsers.add_parser("simulate", help="POST /simulate")

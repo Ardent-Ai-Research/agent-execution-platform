@@ -67,9 +67,9 @@ Use one of:
 
 1. `ethereum`
 2. `base`
-3. `bnb`
+3. `arbitrum`
 
-Aliases like `eth` and `bsc` are accepted by server side chain parsing, but using canonical names is recommended for clean client code.
+Aliases like `eth` and `arb` are accepted by server side chain parsing, but using canonical names is recommended for clean client code.
 
 ## 7. Testnet token details for Sepolia users
 

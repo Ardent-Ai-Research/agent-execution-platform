@@ -76,7 +76,7 @@ Example:
 | `agent_id` | string | The agent identifier passed in the query |
 | `smart_wallet_address` | string | The agent's ERC-4337 smart wallet address |
 | `chain` | string | The chain queried |
-| `native_balance_wei` | string | Native token balance in wei (ETH on Ethereum, BNB on BNB Chain) |
+| `native_balance_wei` | string | Native token balance in wei (ETH on Ethereum, Base, and Arbitrum) |
 | `native_balance_formatted` | string | Native balance formatted in the chain's base unit (e.g. `"0.005"` ETH) |
 | `tokens` | array | One entry per accepted payment token configured on the chain |
 | `tokens[].symbol` | string | Token symbol, e.g. `"USDC"` |

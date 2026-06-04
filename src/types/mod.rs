@@ -15,7 +15,7 @@ use uuid::Uuid;
 pub enum Chain {
     Ethereum,
     Base,
-    Bnb,
+    Arbitrum,
 }
 
 impl std::fmt::Display for Chain {
@@ -23,7 +23,7 @@ impl std::fmt::Display for Chain {
         match self {
             Chain::Ethereum => write!(f, "ethereum"),
             Chain::Base => write!(f, "base"),
-            Chain::Bnb => write!(f, "bnb"),
+            Chain::Arbitrum => write!(f, "arbitrum"),
         }
     }
 }
@@ -33,7 +33,7 @@ impl Chain {
         match s.to_lowercase().as_str() {
             "ethereum" | "eth" | "mainnet" => Some(Chain::Ethereum),
             "base" => Some(Chain::Base),
-            "bnb" | "bsc" | "binance" => Some(Chain::Bnb),
+            "arbitrum" | "arb" => Some(Chain::Arbitrum),
             _ => None,
         }
     }
@@ -43,7 +43,7 @@ impl Chain {
         match self {
             Chain::Ethereum => 1,
             Chain::Base => 8453,
-            Chain::Bnb => 56,
+            Chain::Arbitrum => 42161,
         }
     }
 }
@@ -224,7 +224,7 @@ pub struct WalletBalanceResponse {
     pub agent_id: String,
     pub smart_wallet_address: String,
     pub chain: String,
-    /// Native token balance (ETH / BNB etc.) in wei as a decimal string.
+    /// Native token balance (ETH / ARB etc.) in wei as a decimal string.
     pub native_balance_wei: String,
     /// Native balance formatted in the chain's base unit (e.g. ETH).
     pub native_balance_formatted: String,
@@ -330,9 +330,8 @@ mod tests {
         assert_eq!(Chain::from_str_loose("mainnet"), Some(Chain::Ethereum));
         assert_eq!(Chain::from_str_loose("ETHEREUM"), Some(Chain::Ethereum));
         assert_eq!(Chain::from_str_loose("base"), Some(Chain::Base));
-        assert_eq!(Chain::from_str_loose("bnb"), Some(Chain::Bnb));
-        assert_eq!(Chain::from_str_loose("bsc"), Some(Chain::Bnb));
-        assert_eq!(Chain::from_str_loose("binance"), Some(Chain::Bnb));
+        assert_eq!(Chain::from_str_loose("arbitrum"), Some(Chain::Arbitrum));
+        assert_eq!(Chain::from_str_loose("arb"), Some(Chain::Arbitrum));
         assert_eq!(Chain::from_str_loose("solana"), None);
         assert_eq!(Chain::from_str_loose("polygon"), None);
         assert_eq!(Chain::from_str_loose(""), None);
@@ -342,14 +341,14 @@ mod tests {
     fn test_chain_display() {
         assert_eq!(Chain::Ethereum.to_string(), "ethereum");
         assert_eq!(Chain::Base.to_string(), "base");
-        assert_eq!(Chain::Bnb.to_string(), "bnb");
+        assert_eq!(Chain::Arbitrum.to_string(), "arbitrum");
     }
 
     #[test]
     fn test_chain_ids() {
         assert_eq!(Chain::Ethereum.chain_id(), 1);
         assert_eq!(Chain::Base.chain_id(), 8453);
-        assert_eq!(Chain::Bnb.chain_id(), 56);
+        assert_eq!(Chain::Arbitrum.chain_id(), 42161);
     }
 
     #[test]

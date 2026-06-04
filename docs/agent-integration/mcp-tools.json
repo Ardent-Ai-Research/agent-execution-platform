@@ -51,7 +51,7 @@
           "agent_id": { "type": "string" },
           "chain": {
             "type": "string",
-            "enum": ["ethereum", "base", "bnb"],
+            "enum": ["ethereum", "base", "arbitrum"],
             "default": "ethereum"
           }
         },
@@ -61,7 +61,7 @@
     },
     {
       "name": "ardent_wallet_balance",
-      "description": "Get native token (ETH/BNB) and ERC-20 balances for an agent's smart wallet. Call this before execute to verify the wallet is funded.",
+      "description": "Get native token (ETH) and ERC-20 balances for an agent's smart wallet. Call this before execute to verify the wallet is funded.",
       "method": "GET",
       "path": "/wallet/balance",
       "authRequired": true,
@@ -71,7 +71,7 @@
           "agent_id": { "type": "string" },
           "chain": {
             "type": "string",
-            "enum": ["ethereum", "base", "bnb"],
+            "enum": ["ethereum", "base", "arbitrum"],
             "default": "ethereum"
           }
         },
@@ -91,7 +91,7 @@
           "agent_id": { "type": "string" },
           "chain": {
             "type": "string",
-            "enum": ["ethereum", "base", "bnb"]
+            "enum": ["ethereum", "base", "arbitrum"]
           },
           "target_contract": { "type": "string" },
           "calldata": { "type": "string" },
@@ -128,7 +128,7 @@
           "agent_id": { "type": "string" },
           "chain": {
             "type": "string",
-            "enum": ["ethereum", "base", "bnb"]
+            "enum": ["ethereum", "base", "arbitrum"]
           },
           "target_contract": { "type": "string" },
           "calldata": { "type": "string" },

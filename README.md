@@ -5,7 +5,7 @@
 A production-hardened Rust backend that enables **AI agents to execute on-chain transactions without owning wallets**. The platform auto-provisions **ERC-4337 smart wallets** per agent, simulates transactions, calculates costs, verifies payment via the **x402 protocol** with **real on-chain ERC-20 verification**, then submits transactions through a relayer network with paymaster-sponsored gas.
 
 **Highlights:**
-- **Multi-chain** — Ethereum, Base, and BNB Chain with per-chain bundler clients, paymaster signers, and native-token price feeds
+- **Multi-chain** — Ethereum, Base, and Arbitrum with per-chain bundler clients, paymaster signers, and native-token price feeds
 - **EntryPoint v0.9** — `PackedUserOperation` fully integrated with batch transaction support (`executeBatch`)
 - **Smart wallet provisioning** — on-chain `factory.getAddress()` for deterministic CREATE2 addresses
 - **Webhook push notifications** — HMAC-SHA256 signed payloads delivered to agent callback URLs
@@ -104,7 +104,7 @@ AI Agent (no wallet needed)
                   ▼                          ▼
 ┌──────────────────────────────┐  Agent's callback URL
 │      Blockchain Network      │  (HTTPS endpoint)
-│ (Ethereum, Base, BNB Chain)  │
+│ (Ethereum, Base, Arbitrum)   │
 └──────────────────────────────┘
 ```
 
@@ -464,10 +464,10 @@ ETHEREUM_PAYMASTER_ADDRESS=0xYourDeployedPaymasterAddress
 # BASE_FACTORY_ADDRESS=0x...
 # BASE_PAYMASTER_ADDRESS=0x...
 
-# BNB_RPC_URL=https://data-seed-prebsc-1-s1.bnbchain.org:8545
-# BNB_BUNDLER_RPC_URL=https://bnb-testnet.g.alchemy.com/v2/YOUR_KEY
-# BNB_FACTORY_ADDRESS=0x...
-# BNB_PAYMASTER_ADDRESS=0x...
+# ARBITRUM_RPC_URL=https://arb-sepolia.g.alchemy.com/v2/YOUR_KEY
+# ARBITRUM_BUNDLER_RPC_URL=https://arb-sepolia.g.alchemy.com/v2/YOUR_KEY
+# ARBITRUM_FACTORY_ADDRESS=0x...
+# ARBITRUM_PAYMASTER_ADDRESS=0x...
 
 # ── API Key Auth ─────────────────────────────────────────────────
 # false = enforce API key on every request (recommended)
@@ -875,7 +875,7 @@ curl "http://localhost:8080/wallet?agent_id=my-trading-bot&chain=ethereum" \
 
 ### `GET /wallet/balance`
 
-Return native token (ETH/BNB) and ERC-20 balances for the agent's smart wallet. Use this to confirm the wallet is funded before calling `/execute`.
+Return native token (ETH) and ERC-20 balances for the agent's smart wallet. Use this to confirm the wallet is funded before calling `/execute`.
 
 ```bash
 curl "http://localhost:8080/wallet/balance?agent_id=my-trading-bot&chain=ethereum" \
@@ -903,7 +903,7 @@ curl "http://localhost:8080/wallet/balance?agent_id=my-trading-bot&chain=ethereu
 ```
 
 - `native_balance_wei` — raw wei as a decimal string
-- `native_balance_formatted` — ETH/BNB value (18-decimal scaled)
+- `native_balance_formatted` — ETH value (18-decimal scaled)
 - `tokens` — one entry per accepted payment token configured on the chain; `raw` is the on-chain smallest-unit amount, `formatted` is human-readable
 
 ---
@@ -1011,7 +1011,7 @@ curl -X POST http://localhost:8080/admin/api-keys \
 | `PORT`                      | `8080`                             | No       | Server port                                |
 | `DATABASE_URL`              | `postgres://postgres:postgres@...` | No       | PostgreSQL connection string               |
 | `REDIS_URL`                 | `redis://127.0.0.1:6379`          | No       | Redis connection string                    |
-| **Per-chain (prefix: `ETHEREUM_`, `BASE_`, `BNB_`)** | | | |
+| **Per-chain (prefix: `ETHEREUM_`, `BASE_`, `ARBITRUM_`)** | | | |
 | `{CHAIN}_RPC_URL`           | —                                  | **Yes¹** | Chain JSON-RPC endpoint (enables chain)    |
 | `{CHAIN}_BUNDLER_RPC_URL`   | *(empty)*                          | No       | ERC-4337 bundler URL for chain             |
 | `{CHAIN}_ENTRY_POINT_ADDRESS` | `0x43370900...` (v0.9)           | No       | EntryPoint v0.9 contract on chain          |
@@ -1311,9 +1311,9 @@ forge script ...                         # deploy scripts
 
 ## Extending for Multiple Chains
 
-Multi-chain support is **built in**.  Ethereum, Base, and BNB Chain (BSC) are supported out of the box.
+Multi-chain support is **built in**.  Ethereum, Base, and Arbitrum are supported out of the box.
 
-To enable a chain, set its `{CHAIN}_RPC_URL` environment variable (e.g. `BASE_RPC_URL`, `BNB_RPC_URL`).  The platform auto-configures providers, price caches, bundler clients, and paymaster signers for every chain that has an RPC URL.
+To enable a chain, set its `{CHAIN}_RPC_URL` environment variable (e.g. `BASE_RPC_URL`, `ARBITRUM_RPC_URL`).  The platform auto-configures providers, price caches, bundler clients, and paymaster signers for every chain that has an RPC URL.
 
 To add a **new** chain beyond the built-in three:
 

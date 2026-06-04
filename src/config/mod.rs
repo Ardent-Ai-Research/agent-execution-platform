@@ -5,7 +5,7 @@
 //! token price feed.  Chain-specific env vars use the prefix pattern:
 //!
 //! ```text
-//! {CHAIN}_RPC_URL              e.g. ETHEREUM_RPC_URL, BASE_RPC_URL, BNB_RPC_URL
+//! {CHAIN}_RPC_URL              e.g. ETHEREUM_RPC_URL, BASE_RPC_URL, ARBITRUM_RPC_URL
 //! {CHAIN}_BUNDLER_RPC_URL      e.g. ETHEREUM_BUNDLER_RPC_URL
 //! {CHAIN}_PAYMASTER_ADDRESS
 //! {CHAIN}_FACTORY_ADDRESS
@@ -273,26 +273,31 @@ impl AppConfig {
             );
         }
 
-        // ── BNB Chain (BSC) ────────────────────────────────────────
-        if let Ok(rpc_url) = std::env::var("BNB_RPC_URL") {
+        // ── Arbitrum ───────────────────────────────────────────────
+        if let Ok(rpc_url) = std::env::var("ARBITRUM_RPC_URL") {
             chains.insert(
-                Chain::Bnb,
+                Chain::Arbitrum,
                 ChainConfig {
-                    chain: Chain::Bnb,
+                    chain: Chain::Arbitrum,
                     rpc_url,
-                    bundler_rpc_url: std::env::var("BNB_BUNDLER_RPC_URL").unwrap_or_default(),
-                    paymaster_address: std::env::var("BNB_PAYMASTER_ADDRESS").unwrap_or_default(),
-                    factory_address: std::env::var("BNB_FACTORY_ADDRESS").unwrap_or_default(),
-                    entry_point_address: std::env::var("BNB_ENTRY_POINT_ADDRESS")
+                    bundler_rpc_url: std::env::var("ARBITRUM_BUNDLER_RPC_URL")
+                        .unwrap_or_default(),
+                    paymaster_address: std::env::var("ARBITRUM_PAYMASTER_ADDRESS")
+                        .unwrap_or_default(),
+                    factory_address: std::env::var("ARBITRUM_FACTORY_ADDRESS")
+                        .unwrap_or_default(),
+                    entry_point_address: std::env::var("ARBITRUM_ENTRY_POINT_ADDRESS")
                         .unwrap_or_else(|_| CANONICAL_EP_V09.into()),
-                    price_feed_url: std::env::var("BNB_PRICE_FEED_URL").map_err(|_| {
-                        anyhow::anyhow!("BNB_PRICE_FEED_URL is required when BNB_RPC_URL is set")
+                    price_feed_url: std::env::var("ARBITRUM_PRICE_FEED_URL").map_err(|_| {
+                        anyhow::anyhow!(
+                            "ARBITRUM_PRICE_FEED_URL is required when ARBITRUM_RPC_URL is set"
+                        )
                     })?,
                     accepted_tokens: Self::parse_token_map(
-                        &std::env::var("BNB_ACCEPTED_TOKENS").unwrap_or_default(),
+                        &std::env::var("ARBITRUM_ACCEPTED_TOKENS").unwrap_or_default(),
                     ),
                     token_decimals: Self::parse_decimal_map(
-                        &std::env::var("BNB_TOKEN_DECIMALS").unwrap_or_default(),
+                        &std::env::var("ARBITRUM_TOKEN_DECIMALS").unwrap_or_default(),
                     ),
                 },
             );
@@ -300,7 +305,7 @@ impl AppConfig {
 
         if chains.is_empty() {
             anyhow::bail!(
-                "no chains configured — set at least ETHEREUM_RPC_URL, BASE_RPC_URL, or BNB_RPC_URL"
+                "no chains configured — set at least ETHEREUM_RPC_URL, BASE_RPC_URL, or ARBITRUM_RPC_URL"
             );
         }
 

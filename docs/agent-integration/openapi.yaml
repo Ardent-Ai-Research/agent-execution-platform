@@ -217,7 +217,7 @@ components:
           type: string
         chain:
           type: string
-          enum: [ethereum, base, bnb]
+          enum: [ethereum, base, arbitrum]
         target_contract:
           type: string
         calldata:
