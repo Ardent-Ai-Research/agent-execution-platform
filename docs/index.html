@@ -2490,6 +2490,7 @@
       const waitlistForm = document.getElementById("waitlist-form");
       const waitlistEmail = document.getElementById("f-email");
       const waitlistProject = document.getElementById("f-project");
+      const waitlistMsg = document.getElementById("f-msg");
       const waitlistSubmit = document.getElementById("f-submit");
       const waitlistError = document.getElementById("form-error");
 
@@ -2540,6 +2541,8 @@
           try {
             const formData = new FormData(waitlistForm);
             formData.append("name", project);
+            const message = waitlistMsg?.value.trim() || "Requesting access to Ardent API.";
+            formData.set("message", message);
             formData.append("source", "ardent-landing");
             formData.append("_subject", "New Ardent API key request");
 
@@ -2557,6 +2560,8 @@
                 const payload = await response.json();
                 if (payload?.errors?.length) {
                   errorMessage = payload.errors.map((e) => e.message).join(" ");
+                } else if (payload?.message) {
+                  errorMessage = payload.message;
                 }
               } catch (_) {}
               throw new Error(errorMessage);
