@@ -225,7 +225,7 @@ fn sepolia_assets() -> HashMap<&'static str, AaveAsset> {
         (
             "LINK",
             AaveAsset {
-                underlying: "0xf8fF3713d459D7C1018BD0A49D19b4C44290ebe5",
+                underlying: "0xf8Fb3713D459D7C1018BD0A49D19b4C44290EBE5",
                 decimals: 18,
             },
         ),
