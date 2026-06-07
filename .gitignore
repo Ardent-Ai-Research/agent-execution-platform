@@ -10,3 +10,5 @@ contracts/cache/
 
 # Foundry dependencies (managed via git submodules)
 contracts/lib/
+# Deployment script
+contracts/scripts/

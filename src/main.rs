@@ -478,6 +478,39 @@ async fn main() -> anyhow::Result<()> {
         .route("/status/:id", get(routes::status_handler))
         .route("/wallet", get(routes::wallet_handler))
         .route("/wallet/balance", get(routes::wallet_balance_handler))
+        .route(
+            "/protocols/aave-v3/supply",
+            post(routes::aave_supply_handler),
+        )
+        .route(
+            "/protocols/aave-v3/supply/simulate",
+            post(routes::aave_supply_simulate_handler),
+        )
+        .route(
+            "/protocols/aave-v3/withdraw",
+            post(routes::aave_withdraw_handler),
+        )
+        .route(
+            "/protocols/aave-v3/withdraw/simulate",
+            post(routes::aave_withdraw_simulate_handler),
+        )
+        .route("/protocols/aave-v3/repay", post(routes::aave_repay_handler))
+        .route(
+            "/protocols/aave-v3/repay/simulate",
+            post(routes::aave_repay_simulate_handler),
+        )
+        .route(
+            "/protocols/aave-v3/borrow",
+            post(routes::aave_borrow_handler),
+        )
+        .route(
+            "/protocols/aave-v3/borrow/simulate",
+            post(routes::aave_borrow_simulate_handler),
+        )
+        .route(
+            "/protocols/aave-v3/position",
+            get(routes::aave_position_handler),
+        )
         .layer(middleware::from_fn_with_state(
             payment_verifier,
             x402_middleware,

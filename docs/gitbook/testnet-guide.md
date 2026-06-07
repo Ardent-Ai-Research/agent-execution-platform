@@ -4,16 +4,25 @@ This page contains practical details for users integrating with the hosted testn
 
 ## 1. Network context
 
-For the current hosted testnet program, use:
+For the current hosted testnet program, use one of:
 
-1. `chain: "ethereum"` in request payloads.
-2. Ethereum Sepolia as the execution network context.
+| Payload chain | Execution network |
+| --- | --- |
+| `ethereum` | Ethereum Sepolia |
+| `base` | Base Sepolia |
+| `arbitrum` | Arbitrum Sepolia |
 
-## 2. Accepted x402 payment tokens on Ethereum Sepolia
+## 2. Accepted x402 payment tokens
 
-1. `USDC` at `0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238`
-2. `USDT` at `0xd077A400968890Eacc75cdc901F0356c943e4fDb`
-3. `aUSD` at `0x112a19d6236016fc4dda49257c724E63a3CE5bEA`
+Current hosted testnet token addresses:
+
+| Payload chain | USDC | aUSD |
+| --- | --- | --- |
+| `ethereum` | `0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238` | `0xE9df660c675F6f649677Ae408FCf6665D4F0F5Be` |
+| `base` | `0x036CbD53842c5426634e7929541eC2318f3dCF7e` | `0xE9df660c675F6f649677Ae408FCf6665D4F0F5Be` |
+| `arbitrum` | `0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d` | `0xE9df660c675F6f649677Ae408FCf6665D4F0F5Be` |
+
+Ethereum Sepolia may also accept `USDT` at `0xd077A400968890Eacc75cdc901F0356c943e4fDb` when enabled for your environment.
 
 In practice these tokens are used with 6 decimal precision in the hosted testnet flow.
 For exact payable amounts, always use `required_amount_raw` from the live `402` response.
@@ -49,7 +58,7 @@ Before running live execute tests:
 
 1. Resolve wallet with `GET /wallet`.
 2. Fund smart wallet with the token you intend to use.
-3. Keep a small Sepolia `USDC`, `USDT`, or `aUSD` balance for payment needs in manual or auto key modes.
+3. Keep a small `USDC` or `aUSD` balance on the same chain you execute on for payment needs in manual or auto key modes.
 4. Run `POST /simulate` first.
 5. Execute and then poll `GET /status/:id`.
 
@@ -58,10 +67,11 @@ Before running live execute tests:
 Typical paths:
 
 1. Sepolia faucet for ETH.
-2. Existing Sepolia token faucets or bridge sources for USDC and USDT when available.
+2. Circle faucet for USDC on Ethereum Sepolia, Base Sepolia, and Arbitrum Sepolia.
 3. Ardent `aUSD` faucet request using your agent smart wallet address.
 
 Useful links:
 
 1. ETH testnet faucet (Alchemy): `https://www.alchemy.com/faucets`
-2. USDT testnet faucet (Candide): `https://dashboard.candide.dev/faucet`
+2. USDC testnet faucet (Circle): `https://faucet.circle.com`
+3. USDT testnet faucet (Candide): `https://dashboard.candide.dev/faucet`

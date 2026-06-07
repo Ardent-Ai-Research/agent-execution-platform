@@ -1,15 +1,23 @@
 //! Application configuration loaded from environment variables.
 //!
 //! Supports **multi-chain** operation.  Each supported chain has its own
-//! RPC URL, bundler URL, paymaster address, factory address, and native-
-//! token price feed.  Chain-specific env vars use the prefix pattern:
+//! RPC URL, bundler URL, native-token price feed, and payment-token map.
+//! Shared ERC-4337 contracts can be configured once for all EVM chains:
+//!
+//! ```text
+//! EVM_ENTRY_POINT_ADDRESS     (defaults to canonical v0.9)
+//! EVM_FACTORY_ADDRESS         (SimpleAccountFactory deployed deterministically)
+//! EVM_PAYMASTER_ADDRESS       (VerifyingPaymaster deployed deterministically)
+//! ```
+//!
+//! Chain-specific env vars use the prefix pattern:
 //!
 //! ```text
 //! {CHAIN}_RPC_URL              e.g. ETHEREUM_RPC_URL, BASE_RPC_URL, ARBITRUM_RPC_URL
 //! {CHAIN}_BUNDLER_RPC_URL      e.g. ETHEREUM_BUNDLER_RPC_URL
-//! {CHAIN}_PAYMASTER_ADDRESS
-//! {CHAIN}_FACTORY_ADDRESS
-//! {CHAIN}_ENTRY_POINT_ADDRESS  (defaults to canonical v0.9 on all chains)
+//! {CHAIN}_PAYMASTER_ADDRESS    (optional override for EVM_PAYMASTER_ADDRESS)
+//! {CHAIN}_FACTORY_ADDRESS      (optional override for EVM_FACTORY_ADDRESS)
+//! {CHAIN}_ENTRY_POINT_ADDRESS  (optional override for EVM_ENTRY_POINT_ADDRESS)
 //! {CHAIN}_PRICE_FEED_URL       (native token / USD source)
 //! {CHAIN}_ACCEPTED_TOKENS      (TOKEN=0xAddr pairs for payment verification)
 //! {CHAIN}_TOKEN_DECIMALS       (TOKEN=N decimal mappings)
@@ -17,7 +25,7 @@
 //!
 //! Legacy single-chain env vars (`BUNDLER_RPC_URL`, `PAYMASTER_ADDRESS`,
 //! `ENTRY_POINT_ADDRESS`, `ACCOUNT_FACTORY_ADDRESS`, `ETH_PRICE_FEED_URL`)
-//! are still accepted as fallbacks for the Ethereum chain.
+//! are still accepted as fallbacks.
 
 use anyhow::Result;
 use std::collections::HashMap;
@@ -36,10 +44,10 @@ pub struct ChainConfig {
     pub rpc_url: String,
     /// JSON-RPC URL of the ERC-4337 bundler for this chain.
     pub bundler_rpc_url: String,
-    /// Address of the deployed VerifyingPaymaster contract on this chain.
+    /// Address of the deployed VerifyingPaymaster contract for this chain.
     /// Empty string means paymaster is not configured (agents self-fund).
     pub paymaster_address: String,
-    /// Address of the SimpleAccountFactory contract on this chain.
+    /// Address of the SimpleAccountFactory contract for this chain.
     pub factory_address: String,
     /// Address of the EntryPoint contract (default: canonical v0.9).
     pub entry_point_address: String,
@@ -199,6 +207,24 @@ impl AppConfig {
 
     // ──────────────────── Per-chain parsing ──────────────────────────
 
+    fn shared_contract_address(chain_specific: &str, shared: &str, legacy: Option<&str>) -> String {
+        std::env::var(chain_specific)
+            .or_else(|_| std::env::var(shared))
+            .or_else(|_| {
+                legacy
+                    .map(std::env::var)
+                    .unwrap_or_else(|| Err(std::env::VarError::NotPresent))
+            })
+            .unwrap_or_default()
+    }
+
+    fn shared_entry_point_address(chain_specific: &str, default_entry_point: &str) -> String {
+        std::env::var(chain_specific)
+            .or_else(|_| std::env::var("EVM_ENTRY_POINT_ADDRESS"))
+            .or_else(|_| std::env::var("ENTRY_POINT_ADDRESS"))
+            .unwrap_or_else(|_| default_entry_point.into())
+    }
+
     /// Parse chain configurations from environment variables.
     ///
     /// A chain is considered "configured" if its `{CHAIN}_RPC_URL` env var
@@ -221,15 +247,20 @@ impl AppConfig {
                     bundler_rpc_url: std::env::var("ETHEREUM_BUNDLER_RPC_URL")
                         .or_else(|_| std::env::var("BUNDLER_RPC_URL")) // legacy
                         .unwrap_or_else(|_| "http://127.0.0.1:3000/rpc".into()),
-                    paymaster_address: std::env::var("ETHEREUM_PAYMASTER_ADDRESS")
-                        .or_else(|_| std::env::var("PAYMASTER_ADDRESS")) // legacy
-                        .unwrap_or_default(),
-                    factory_address: std::env::var("ETHEREUM_FACTORY_ADDRESS")
-                        .or_else(|_| std::env::var("ACCOUNT_FACTORY_ADDRESS")) // legacy
-                        .unwrap_or_default(),
-                    entry_point_address: std::env::var("ETHEREUM_ENTRY_POINT_ADDRESS")
-                        .or_else(|_| std::env::var("ENTRY_POINT_ADDRESS")) // legacy
-                        .unwrap_or_else(|_| CANONICAL_EP_V09.into()),
+                    paymaster_address: Self::shared_contract_address(
+                        "ETHEREUM_PAYMASTER_ADDRESS",
+                        "EVM_PAYMASTER_ADDRESS",
+                        Some("PAYMASTER_ADDRESS"),
+                    ),
+                    factory_address: Self::shared_contract_address(
+                        "ETHEREUM_FACTORY_ADDRESS",
+                        "EVM_FACTORY_ADDRESS",
+                        Some("ACCOUNT_FACTORY_ADDRESS"),
+                    ),
+                    entry_point_address: Self::shared_entry_point_address(
+                        "ETHEREUM_ENTRY_POINT_ADDRESS",
+                        CANONICAL_EP_V09,
+                    ),
                     price_feed_url: std::env::var("ETHEREUM_PRICE_FEED_URL")
                         .or_else(|_| std::env::var("ETH_PRICE_FEED_URL")) // legacy
                         .map_err(|_| {
@@ -255,10 +286,20 @@ impl AppConfig {
                     chain: Chain::Base,
                     rpc_url,
                     bundler_rpc_url: std::env::var("BASE_BUNDLER_RPC_URL").unwrap_or_default(),
-                    paymaster_address: std::env::var("BASE_PAYMASTER_ADDRESS").unwrap_or_default(),
-                    factory_address: std::env::var("BASE_FACTORY_ADDRESS").unwrap_or_default(),
-                    entry_point_address: std::env::var("BASE_ENTRY_POINT_ADDRESS")
-                        .unwrap_or_else(|_| CANONICAL_EP_V09.into()),
+                    paymaster_address: Self::shared_contract_address(
+                        "BASE_PAYMASTER_ADDRESS",
+                        "EVM_PAYMASTER_ADDRESS",
+                        Some("PAYMASTER_ADDRESS"),
+                    ),
+                    factory_address: Self::shared_contract_address(
+                        "BASE_FACTORY_ADDRESS",
+                        "EVM_FACTORY_ADDRESS",
+                        Some("ACCOUNT_FACTORY_ADDRESS"),
+                    ),
+                    entry_point_address: Self::shared_entry_point_address(
+                        "BASE_ENTRY_POINT_ADDRESS",
+                        CANONICAL_EP_V09,
+                    ),
                     // Base uses ETH as native gas token, but URL must still be configured explicitly.
                     price_feed_url: std::env::var("BASE_PRICE_FEED_URL").map_err(|_| {
                         anyhow::anyhow!("BASE_PRICE_FEED_URL is required when BASE_RPC_URL is set")
@@ -280,14 +321,21 @@ impl AppConfig {
                 ChainConfig {
                     chain: Chain::Arbitrum,
                     rpc_url,
-                    bundler_rpc_url: std::env::var("ARBITRUM_BUNDLER_RPC_URL")
-                        .unwrap_or_default(),
-                    paymaster_address: std::env::var("ARBITRUM_PAYMASTER_ADDRESS")
-                        .unwrap_or_default(),
-                    factory_address: std::env::var("ARBITRUM_FACTORY_ADDRESS")
-                        .unwrap_or_default(),
-                    entry_point_address: std::env::var("ARBITRUM_ENTRY_POINT_ADDRESS")
-                        .unwrap_or_else(|_| CANONICAL_EP_V09.into()),
+                    bundler_rpc_url: std::env::var("ARBITRUM_BUNDLER_RPC_URL").unwrap_or_default(),
+                    paymaster_address: Self::shared_contract_address(
+                        "ARBITRUM_PAYMASTER_ADDRESS",
+                        "EVM_PAYMASTER_ADDRESS",
+                        Some("PAYMASTER_ADDRESS"),
+                    ),
+                    factory_address: Self::shared_contract_address(
+                        "ARBITRUM_FACTORY_ADDRESS",
+                        "EVM_FACTORY_ADDRESS",
+                        Some("ACCOUNT_FACTORY_ADDRESS"),
+                    ),
+                    entry_point_address: Self::shared_entry_point_address(
+                        "ARBITRUM_ENTRY_POINT_ADDRESS",
+                        CANONICAL_EP_V09,
+                    ),
                     price_feed_url: std::env::var("ARBITRUM_PRICE_FEED_URL").map_err(|_| {
                         anyhow::anyhow!(
                             "ARBITRUM_PRICE_FEED_URL is required when ARBITRUM_RPC_URL is set"
@@ -376,6 +424,12 @@ impl AppConfig {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::{Mutex, OnceLock};
+
+    fn env_lock() -> &'static Mutex<()> {
+        static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+        LOCK.get_or_init(|| Mutex::new(()))
+    }
 
     #[test]
     fn test_config_loads_correctly() {
@@ -394,5 +448,39 @@ mod tests {
         for symbol in ethereum.accepted_tokens.keys() {
             assert_eq!(symbol, &symbol.to_uppercase());
         }
+    }
+
+    #[test]
+    fn shared_contract_address_prefers_chain_then_shared_then_legacy() {
+        let _guard = env_lock().lock().expect("env test lock");
+        let chain_var = "TEST_CHAIN_FACTORY_ADDRESS";
+        let shared_var = "TEST_EVM_FACTORY_ADDRESS";
+        let legacy_var = "TEST_ACCOUNT_FACTORY_ADDRESS";
+
+        std::env::remove_var(chain_var);
+        std::env::remove_var(shared_var);
+        std::env::remove_var(legacy_var);
+
+        std::env::set_var(legacy_var, "0xlegacy");
+        assert_eq!(
+            AppConfig::shared_contract_address(chain_var, shared_var, Some(legacy_var)),
+            "0xlegacy"
+        );
+
+        std::env::set_var(shared_var, "0xshared");
+        assert_eq!(
+            AppConfig::shared_contract_address(chain_var, shared_var, Some(legacy_var)),
+            "0xshared"
+        );
+
+        std::env::set_var(chain_var, "0xchain");
+        assert_eq!(
+            AppConfig::shared_contract_address(chain_var, shared_var, Some(legacy_var)),
+            "0xchain"
+        );
+
+        std::env::remove_var(chain_var);
+        std::env::remove_var(shared_var);
+        std::env::remove_var(legacy_var);
     }
 }

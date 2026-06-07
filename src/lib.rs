@@ -9,6 +9,7 @@ pub mod config;
 pub mod db;
 pub mod execution_engine;
 pub mod payments;
+pub mod protocols;
 pub mod queue;
 pub mod rate_limit;
 pub mod relayer;

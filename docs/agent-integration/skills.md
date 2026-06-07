@@ -99,6 +99,95 @@ REQUEST_ID="your_request_id"
 5. If `402 payment_required`, pay exact `required_amount_raw` to `payment_address`, then resubmit with `X-Payment-Proof`.
 6. Track completion with `GET /status/:id` (or callback webhook if configured).
 
+### Typed Aave V3 Sepolia Flow
+
+Use typed protocol tools for Aave V3 Sepolia supply actions instead of manually
+encoding calldata. The API compiles the request into an atomic
+`approve -> Pool.supply` ERC-4337 batch and runs full UserOperation simulation.
+
+```bash
+curl -X POST "$BASE_URL/protocols/aave-v3/supply/simulate" \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: $API_KEY" \
+  -d '{
+    "agent_id": "my-agent-001",
+    "chain": "ethereum",
+    "asset": "USDC",
+    "amount": "1.25"
+  }'
+```
+
+```bash
+curl -X POST "$BASE_URL/protocols/aave-v3/supply" \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: $API_KEY" \
+  -d '{
+    "agent_id": "my-agent-001",
+    "chain": "ethereum",
+    "asset": "USDC",
+    "amount": "1.25"
+  }'
+```
+
+Use the same typed flow for withdrawing and repaying:
+
+```bash
+curl -X POST "$BASE_URL/protocols/aave-v3/withdraw" \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: $API_KEY" \
+  -d '{
+    "agent_id": "my-agent-001",
+    "chain": "ethereum",
+    "asset": "USDC",
+    "amount": "max"
+  }'
+```
+
+```bash
+curl -X POST "$BASE_URL/protocols/aave-v3/repay" \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: $API_KEY" \
+  -d '{
+    "agent_id": "my-agent-001",
+    "chain": "ethereum",
+    "asset": "USDC",
+    "amount": "max",
+    "interest_rate_mode": 2
+  }'
+```
+
+Read Aave account data before borrowing or making risk-sensitive decisions:
+
+```bash
+curl -X GET "$BASE_URL/protocols/aave-v3/position?agent_id=$AGENT_ID&chain=ethereum" \
+  -H "X-API-Key: $API_KEY"
+```
+
+Borrow uses a projected health-factor guard before simulation/execution. The
+default minimum projected health factor is `1.05`; callers can set a stricter
+floor with `min_health_factor`, which must be at least `1.0`.
+
+```bash
+curl -X POST "$BASE_URL/protocols/aave-v3/borrow/simulate" \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: $API_KEY" \
+  -d '{
+    "agent_id": "my-agent-001",
+    "chain": "ethereum",
+    "asset": "USDC",
+    "amount": "max",
+    "interest_rate_mode": 2,
+    "min_health_factor": "1.10"
+  }'
+```
+
+Supported assets: `AAVE`, `DAI`, `EURS`, `GHO`, `LINK`, `USDC`, `USDT`,
+`WBTC`, `WETH`. Use `amount_raw` instead of `amount` for exact base units.
+Withdraw, repay, and borrow support `amount: "max"`. Repay max resolves to the
+smaller of selected-rate debt and wallet token balance. Borrow max resolves to
+the largest amount allowed by available borrows and the projected health-factor
+floor.
+
 ### Canonical curl Commands
 
 #### Health

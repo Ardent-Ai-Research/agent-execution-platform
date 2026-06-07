@@ -145,7 +145,13 @@ class ArdentMcpServer:
         body = dict(args)
         headers: dict[str, str] = {}
 
-        if tool_name == "ardent_execute":
+        if tool_name in {
+            "ardent_execute",
+            "ardent_aave_supply_execute",
+            "ardent_aave_withdraw_execute",
+            "ardent_aave_repay_execute",
+            "ardent_aave_borrow_execute",
+        }:
             payment_proof = body.pop("payment_proof", None)
             if payment_proof is not None:
                 headers["X-Payment-Proof"] = json.dumps(payment_proof, separators=(",", ":"))

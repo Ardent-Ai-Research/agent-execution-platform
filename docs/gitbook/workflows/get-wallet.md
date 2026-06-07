@@ -52,3 +52,5 @@ See [Agent Integration](../agent-integration.md) for the one-line installer.
 1. Call this once per new `(api_key, agent_id)` pair.
 2. Fund the returned wallet if strategy needs token transfers.
 3. Use same `agent_id` consistently so the wallet mapping remains stable.
+
+With the hosted deterministic deployment, the same `(api_key, agent_id)` can resolve to the same counterfactual smart wallet address across Ethereum Sepolia, Base Sepolia, and Arbitrum Sepolia. Always pass the intended `chain` anyway, because balances, deployment state, gas, and protocol liquidity are chain-specific.

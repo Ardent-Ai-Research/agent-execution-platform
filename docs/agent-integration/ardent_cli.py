@@ -229,6 +229,124 @@ def run_execute(args: argparse.Namespace) -> int:
     return 0 if 200 <= status < 300 else 1
 
 
+def resolve_aave_action_body(args: argparse.Namespace) -> dict[str, Any]:
+    if args.body_file:
+        body = parse_json_file(args.body_file)
+        if not isinstance(body, dict):
+            raise ValueError("body file must contain a JSON object")
+        return body
+
+    body: dict[str, Any] = {
+        "agent_id": args.agent_id,
+        "chain": args.chain,
+        "asset": args.asset,
+    }
+    if args.amount is not None:
+        body["amount"] = args.amount
+    if args.amount_raw is not None:
+        body["amount_raw"] = args.amount_raw
+    if getattr(args, "referral_code", None) is not None:
+        body["referral_code"] = args.referral_code
+    if getattr(args, "interest_rate_mode", None) is not None:
+        body["interest_rate_mode"] = args.interest_rate_mode
+    if getattr(args, "min_health_factor", None):
+        body["min_health_factor"] = args.min_health_factor
+    if getattr(args, "to", None):
+        body["to"] = args.to
+    if getattr(args, "on_behalf_of", None):
+        body["on_behalf_of"] = args.on_behalf_of
+    if args.strategy_id:
+        body["strategy_id"] = args.strategy_id
+    if args.callback_url:
+        body["callback_url"] = args.callback_url
+    return body
+
+
+def run_aave_supply_simulate(args: argparse.Namespace) -> int:
+    api_key = require_api_key(args)
+    body = resolve_aave_action_body(args)
+    url = f"{build_base_url(args)}/protocols/aave-v3/supply/simulate"
+    status, payload = call_api("POST", url, body=body, api_key=api_key)
+    output({"status": status, "data": payload})
+    return 0 if 200 <= status < 300 else 1
+
+
+def run_aave_supply(args: argparse.Namespace) -> int:
+    api_key = require_api_key(args)
+    body = resolve_aave_action_body(args)
+    payment_proof = resolve_payment_proof(args)
+    url = f"{build_base_url(args)}/protocols/aave-v3/supply"
+    status, payload = call_api("POST", url, body=body, api_key=api_key, payment_proof=payment_proof)
+    output({"status": status, "data": payload})
+    return 0 if 200 <= status < 300 else 1
+
+
+def run_aave_withdraw_simulate(args: argparse.Namespace) -> int:
+    api_key = require_api_key(args)
+    body = resolve_aave_action_body(args)
+    url = f"{build_base_url(args)}/protocols/aave-v3/withdraw/simulate"
+    status, payload = call_api("POST", url, body=body, api_key=api_key)
+    output({"status": status, "data": payload})
+    return 0 if 200 <= status < 300 else 1
+
+
+def run_aave_withdraw(args: argparse.Namespace) -> int:
+    api_key = require_api_key(args)
+    body = resolve_aave_action_body(args)
+    payment_proof = resolve_payment_proof(args)
+    url = f"{build_base_url(args)}/protocols/aave-v3/withdraw"
+    status, payload = call_api("POST", url, body=body, api_key=api_key, payment_proof=payment_proof)
+    output({"status": status, "data": payload})
+    return 0 if 200 <= status < 300 else 1
+
+
+def run_aave_repay_simulate(args: argparse.Namespace) -> int:
+    api_key = require_api_key(args)
+    body = resolve_aave_action_body(args)
+    url = f"{build_base_url(args)}/protocols/aave-v3/repay/simulate"
+    status, payload = call_api("POST", url, body=body, api_key=api_key)
+    output({"status": status, "data": payload})
+    return 0 if 200 <= status < 300 else 1
+
+
+def run_aave_repay(args: argparse.Namespace) -> int:
+    api_key = require_api_key(args)
+    body = resolve_aave_action_body(args)
+    payment_proof = resolve_payment_proof(args)
+    url = f"{build_base_url(args)}/protocols/aave-v3/repay"
+    status, payload = call_api("POST", url, body=body, api_key=api_key, payment_proof=payment_proof)
+    output({"status": status, "data": payload})
+    return 0 if 200 <= status < 300 else 1
+
+
+def run_aave_borrow_simulate(args: argparse.Namespace) -> int:
+    api_key = require_api_key(args)
+    body = resolve_aave_action_body(args)
+    url = f"{build_base_url(args)}/protocols/aave-v3/borrow/simulate"
+    status, payload = call_api("POST", url, body=body, api_key=api_key)
+    output({"status": status, "data": payload})
+    return 0 if 200 <= status < 300 else 1
+
+
+def run_aave_borrow(args: argparse.Namespace) -> int:
+    api_key = require_api_key(args)
+    body = resolve_aave_action_body(args)
+    payment_proof = resolve_payment_proof(args)
+    url = f"{build_base_url(args)}/protocols/aave-v3/borrow"
+    status, payload = call_api("POST", url, body=body, api_key=api_key, payment_proof=payment_proof)
+    output({"status": status, "data": payload})
+    return 0 if 200 <= status < 300 else 1
+
+
+def run_aave_position(args: argparse.Namespace) -> int:
+    api_key = require_api_key(args)
+    qs = parse.urlencode({"agent_id": args.agent_id, "chain": args.chain})
+    url = f"{build_base_url(args)}/protocols/aave-v3/position?{qs}"
+    status, payload = call_api("GET", url, api_key=api_key)
+    output({"status": status, "data": payload})
+    return 0 if 200 <= status < 300 else 1
+
+
 def run_status(args: argparse.Namespace) -> int:
     api_key = require_api_key(args)
     request_id = args.request_id
@@ -296,6 +414,42 @@ def add_execution_payload_flags(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--body-file", help="Path to full request JSON object (overrides payload flags)")
 
 
+def add_aave_supply_flags(parser: argparse.ArgumentParser) -> None:
+    add_aave_amount_action_flags(parser)
+    parser.add_argument("--referral-code", type=int, help="Optional Aave referral code")
+
+
+def add_aave_amount_action_flags(parser: argparse.ArgumentParser, *, allow_max: bool = False) -> None:
+    parser.add_argument("--agent-id", required=True, help="Agent identifier")
+    parser.add_argument("--chain", default="ethereum", choices=["ethereum"], help="Aave V3 Sepolia chain label")
+    parser.add_argument(
+        "--asset",
+        required=True,
+        choices=["AAVE", "DAI", "EURS", "GHO", "LINK", "USDC", "USDT", "WBTC", "WETH"],
+        help="Aave V3 Sepolia reserve asset",
+    )
+    amount_help = "Human-readable token amount, e.g. 1.25"
+    raw_help = "Raw token base-unit amount"
+    if allow_max:
+        amount_help += "; also supports max"
+        raw_help += "; also supports max"
+    parser.add_argument("--amount", help=amount_help)
+    parser.add_argument("--amount-raw", help=raw_help)
+    parser.add_argument("--strategy-id", help="Optional strategy ID")
+    parser.add_argument("--callback-url", help="Optional callback webhook URL")
+    parser.add_argument("--body-file", help="Path to full request JSON object (overrides payload flags)")
+
+
+def add_payment_proof_flags(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--payment-proof-json", help="Inline JSON object for X-Payment-Proof")
+    parser.add_argument("--payment-proof-file", help="Path to JSON object for X-Payment-Proof")
+    parser.add_argument("--proof-request-id", help="Payment proof request_id")
+    parser.add_argument("--proof-payer", help="Payment proof payer")
+    parser.add_argument("--proof-token", help="Payment proof token, e.g. USDC")
+    parser.add_argument("--proof-chain", help="Payment proof chain")
+    parser.add_argument("--proof-tx-hash", help="Payment proof transaction hash")
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Ardent API CLI")
     parser.add_argument("--version", action="version", version=f"ardent {VERSION}")
@@ -330,14 +484,72 @@ def build_parser() -> argparse.ArgumentParser:
     p_exec = subparsers.add_parser("execute", help="POST /execute")
     add_global_flags(p_exec)
     add_execution_payload_flags(p_exec)
-    p_exec.add_argument("--payment-proof-json", help="Inline JSON object for X-Payment-Proof")
-    p_exec.add_argument("--payment-proof-file", help="Path to JSON object for X-Payment-Proof")
-    p_exec.add_argument("--proof-request-id", help="Payment proof request_id")
-    p_exec.add_argument("--proof-payer", help="Payment proof payer")
-    p_exec.add_argument("--proof-token", help="Payment proof token, e.g. USDC")
-    p_exec.add_argument("--proof-chain", help="Payment proof chain")
-    p_exec.add_argument("--proof-tx-hash", help="Payment proof transaction hash")
+    add_payment_proof_flags(p_exec)
     p_exec.set_defaults(func=run_execute)
+
+    p_aave_sim = subparsers.add_parser("aave-supply-simulate", help="POST /protocols/aave-v3/supply/simulate")
+    add_global_flags(p_aave_sim)
+    add_aave_supply_flags(p_aave_sim)
+    p_aave_sim.set_defaults(func=run_aave_supply_simulate)
+
+    p_aave_exec = subparsers.add_parser("aave-supply", help="POST /protocols/aave-v3/supply")
+    add_global_flags(p_aave_exec)
+    add_aave_supply_flags(p_aave_exec)
+    add_payment_proof_flags(p_aave_exec)
+    p_aave_exec.set_defaults(func=run_aave_supply)
+
+    p_aave_withdraw_sim = subparsers.add_parser("aave-withdraw-simulate", help="POST /protocols/aave-v3/withdraw/simulate")
+    add_global_flags(p_aave_withdraw_sim)
+    add_aave_amount_action_flags(p_aave_withdraw_sim, allow_max=True)
+    p_aave_withdraw_sim.add_argument("--to", help="Optional recipient address; defaults to agent wallet")
+    p_aave_withdraw_sim.set_defaults(func=run_aave_withdraw_simulate)
+
+    p_aave_withdraw = subparsers.add_parser("aave-withdraw", help="POST /protocols/aave-v3/withdraw")
+    add_global_flags(p_aave_withdraw)
+    add_aave_amount_action_flags(p_aave_withdraw, allow_max=True)
+    p_aave_withdraw.add_argument("--to", help="Optional recipient address; defaults to agent wallet")
+    add_payment_proof_flags(p_aave_withdraw)
+    p_aave_withdraw.set_defaults(func=run_aave_withdraw)
+
+    p_aave_repay_sim = subparsers.add_parser("aave-repay-simulate", help="POST /protocols/aave-v3/repay/simulate")
+    add_global_flags(p_aave_repay_sim)
+    add_aave_amount_action_flags(p_aave_repay_sim, allow_max=True)
+    p_aave_repay_sim.add_argument("--interest-rate-mode", type=int, choices=[1, 2], default=2, help="1 stable, 2 variable")
+    p_aave_repay_sim.add_argument("--on-behalf-of", help="Optional debt owner; defaults to agent wallet")
+    p_aave_repay_sim.set_defaults(func=run_aave_repay_simulate)
+
+    p_aave_repay = subparsers.add_parser("aave-repay", help="POST /protocols/aave-v3/repay")
+    add_global_flags(p_aave_repay)
+    add_aave_amount_action_flags(p_aave_repay, allow_max=True)
+    p_aave_repay.add_argument("--interest-rate-mode", type=int, choices=[1, 2], default=2, help="1 stable, 2 variable")
+    p_aave_repay.add_argument("--on-behalf-of", help="Optional debt owner; defaults to agent wallet")
+    add_payment_proof_flags(p_aave_repay)
+    p_aave_repay.set_defaults(func=run_aave_repay)
+
+    p_aave_borrow_sim = subparsers.add_parser("aave-borrow-simulate", help="POST /protocols/aave-v3/borrow/simulate")
+    add_global_flags(p_aave_borrow_sim)
+    add_aave_amount_action_flags(p_aave_borrow_sim, allow_max=True)
+    p_aave_borrow_sim.add_argument("--interest-rate-mode", type=int, choices=[1, 2], default=2, help="1 stable, 2 variable")
+    p_aave_borrow_sim.add_argument("--referral-code", type=int, help="Optional Aave referral code")
+    p_aave_borrow_sim.add_argument("--on-behalf-of", help="Optional debt owner; defaults to agent wallet")
+    p_aave_borrow_sim.add_argument("--min-health-factor", help="Minimum projected health factor after borrow; default 1.05")
+    p_aave_borrow_sim.set_defaults(func=run_aave_borrow_simulate)
+
+    p_aave_borrow = subparsers.add_parser("aave-borrow", help="POST /protocols/aave-v3/borrow")
+    add_global_flags(p_aave_borrow)
+    add_aave_amount_action_flags(p_aave_borrow, allow_max=True)
+    p_aave_borrow.add_argument("--interest-rate-mode", type=int, choices=[1, 2], default=2, help="1 stable, 2 variable")
+    p_aave_borrow.add_argument("--referral-code", type=int, help="Optional Aave referral code")
+    p_aave_borrow.add_argument("--on-behalf-of", help="Optional debt owner; defaults to agent wallet")
+    p_aave_borrow.add_argument("--min-health-factor", help="Minimum projected health factor after borrow; default 1.05")
+    add_payment_proof_flags(p_aave_borrow)
+    p_aave_borrow.set_defaults(func=run_aave_borrow)
+
+    p_aave_position = subparsers.add_parser("aave-position", help="GET /protocols/aave-v3/position")
+    add_global_flags(p_aave_position)
+    p_aave_position.add_argument("--agent-id", required=True, help="Agent identifier")
+    p_aave_position.add_argument("--chain", default="ethereum", choices=["ethereum"], help="Aave V3 Sepolia chain label")
+    p_aave_position.set_defaults(func=run_aave_position)
 
     p_status = subparsers.add_parser("status", help="GET /status/{id}")
     add_global_flags(p_status)

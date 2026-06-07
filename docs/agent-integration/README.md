@@ -29,6 +29,8 @@ export ARDENT_API_KEY="your_api_key"
 
 ## CLI commands
 
+### General
+
 ```bash
 ardent --version
 ardent health
@@ -38,6 +40,20 @@ ardent wallet-balance --agent-id my-agent-001 --chain ethereum   # native + ERC-
 ardent simulate --agent-id my-agent-001 --chain ethereum --target-contract 0xTargetContract --calldata 0xCalldata --value 0
 ardent execute --agent-id my-agent-001 --chain ethereum --target-contract 0xTargetContract --calldata 0xCalldata --value 0
 ardent status --request-id your_request_id
+```
+
+### Aave V3 Sepolia
+
+```bash
+ardent aave-supply-simulate --agent-id my-agent-001 --asset USDC --amount 1.25
+ardent aave-supply --agent-id my-agent-001 --asset USDC --amount 1.25
+ardent aave-withdraw-simulate --agent-id my-agent-001 --asset USDC --amount max
+ardent aave-withdraw --agent-id my-agent-001 --asset USDC --amount max
+ardent aave-repay-simulate --agent-id my-agent-001 --asset USDC --amount max
+ardent aave-repay --agent-id my-agent-001 --asset USDC --amount max
+ardent aave-borrow-simulate --agent-id my-agent-001 --asset USDC --amount max --min-health-factor 1.10
+ardent aave-borrow --agent-id my-agent-001 --asset USDC --amount max --min-health-factor 1.10
+ardent aave-position --agent-id my-agent-001
 ```
 
 Manual payment re-submit (after a `402` response):
@@ -82,4 +98,4 @@ ardent self-update --with-runtime
 
 ## Notes
 
-- MCP tools available: `ardent_health`, `ardent_feed_recent`, `ardent_get_wallet`, `ardent_wallet_balance`, `ardent_simulate`, `ardent_execute`, `ardent_status`
+- MCP tools available: `ardent_health`, `ardent_feed_recent`, `ardent_get_wallet`, `ardent_wallet_balance`, `ardent_simulate`, `ardent_execute`, Aave tools (`ardent_aave_supply_simulate`, `ardent_aave_supply_execute`, `ardent_aave_withdraw_simulate`, `ardent_aave_withdraw_execute`, `ardent_aave_repay_simulate`, `ardent_aave_repay_execute`, `ardent_aave_borrow_simulate`, `ardent_aave_borrow_execute`, `ardent_aave_position`), and `ardent_status`

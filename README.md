@@ -181,7 +181,7 @@ agent-execution-platform/
     │
     ├── execution_engine/
     │   ├── mod.rs                        # Engine: validate, simulate, price (holds provider + cache)
-    │   ├── simulation/mod.rs             # eth_call + eth_estimateGas (no silent fallback)
+    │   ├── simulation/mod.rs             # RPC dry-run helper for low-level call validation
     │   └── pricing/mod.rs               # Bundler gas price → USD cost (live native-token/USD cache via JSON/Chainlink)
     │
     ├── payments/mod.rs                   # x402 middleware: parse proof header, fetch receipt,
@@ -257,8 +257,8 @@ routes::execute_handler()                            [api/routes/mod.rs]
       ├── 1. engine.validate(req)                    — chain, agent_id, contract, calldata
       ├── 2. wallet_registry.get_or_create()         — provision or fetch smart wallet
       ├── 3. db::insert_execution_request()          — status: Pending
-      ├── 4. engine.simulate(smart_wallet as from)   — eth_call + eth_estimateGas
-      ├── 5. engine.estimate_cost() (+ 100k AA gas)  — bundler gas price × native token/USD + markup
+      ├── 4. simulate UserOperation / batch bundle   — bundler estimate + full wallet operation checks
+      ├── 5. engine.estimate_cost()                  — bundler gas price × native token/USD + markup
    ├── 6. Payment policy by API key `payment_mode`:
     │      manual    → payable amount = gas + platform fee; requires `X-Payment-Proof` or HTTP 402
    │      auto      → if no proof, platform executes an internal ERC-20 transfer
@@ -315,7 +315,7 @@ routes::status_handler()
 | Job Queue          | Redis 7 (redis 0.25)         | BLMOVE/LMOVE (Redis 6.2+ required)      |
 | Blockchain         | ethers-rs 2                  | ERC-4337 v0.9 PackedUserOperations       |
 | ERC-4337           | EntryPoint v0.9              | Packed gas fields, batch execute support |
-| Price Feed         | CoinGecko API (reqwest 0.12) | TTL-cached, configurable feed URL        |
+| Price Feed         | Chainlink AggregatorV3 / JSON feed | TTL-cached, configurable native/USD source |
 | Encryption         | AES-256-GCM (aes-gcm 0.10)  | Agent signing key encryption at rest     |
 | Hashing            | SHA-256 (sha2 0.10)          | API key hashing                          |
 | Webhook signing    | HMAC-SHA256 (hmac 0.12)      | Webhook payload authentication           |
@@ -347,7 +347,7 @@ routes::status_handler()
 | **Bundler-native gas pricing**   | Candide Voltaire `voltaire_feesPerGas` is used for fee estimation (no node fallback) |
 | **Webhook HMAC signing**         | `X-Webhook-Signature: sha256=<hex>` HMAC-SHA256 over payload, keyed with API key hash |
 | **Webhook delivery safety**      | No redirect following, request/connect timeouts, exponential backoff (3 attempts) |
-| **Live price feed**              | CoinGecko native-token/USD with per-chain TTL cache (no hardcoded prices) |
+| **Live price feed**              | Chainlink-style on-chain native/USD feeds, with JSON endpoint fallback and per-chain TTL cache |
 | **Deep health check**            | Pings DB + Redis — returns 503 if either is degraded                |
 | **Overflow protection**          | u128 arithmetic for gas cost calculation                            |
 | **Namespaced agent isolation**   | `{api_key_id}::{agent_id}` prevents cross-customer wallet access    |
@@ -452,22 +452,20 @@ REDIS_URL=redis://127.0.0.1:6379
 # At least one chain must be configured.
 ETHEREUM_RPC_URL=https://eth-sepolia.g.alchemy.com/v2/YOUR_ALCHEMY_KEY
 
-# ── ERC-4337 Account Abstraction (per-chain) ────────────────────
+# ── ERC-4337 Account Abstraction (shared EVM contracts) ──────────
+EVM_ENTRY_POINT_ADDRESS=0x433709009B8330FDa32311DF1C2AFA402eD8D009
+EVM_FACTORY_ADDRESS=0xYourDeterministicFactoryAddress
+EVM_PAYMASTER_ADDRESS=0xYourDeterministicPaymasterAddress
+
+# Bundlers remain per chain.
 ETHEREUM_BUNDLER_RPC_URL=https://eth-sepolia.g.alchemy.com/v2/YOUR_ALCHEMY_KEY
-ETHEREUM_ENTRY_POINT_ADDRESS=0x433709009B8330FDa32311DF1C2AFA402eD8D009
-ETHEREUM_FACTORY_ADDRESS=0xYourDeployedFactoryAddress
-ETHEREUM_PAYMASTER_ADDRESS=0xYourDeployedPaymasterAddress
 
 # Uncomment to enable additional chains:
 # BASE_RPC_URL=https://base-sepolia.g.alchemy.com/v2/YOUR_KEY
 # BASE_BUNDLER_RPC_URL=https://base-sepolia.g.alchemy.com/v2/YOUR_KEY
-# BASE_FACTORY_ADDRESS=0x...
-# BASE_PAYMASTER_ADDRESS=0x...
 
 # ARBITRUM_RPC_URL=https://arb-sepolia.g.alchemy.com/v2/YOUR_KEY
 # ARBITRUM_BUNDLER_RPC_URL=https://arb-sepolia.g.alchemy.com/v2/YOUR_KEY
-# ARBITRUM_FACTORY_ADDRESS=0x...
-# ARBITRUM_PAYMASTER_ADDRESS=0x...
 
 # ── API Key Auth ─────────────────────────────────────────────────
 # false = enforce API key on every request (recommended)
@@ -475,6 +473,9 @@ ETHEREUM_PAYMASTER_ADDRESS=0xYourDeployedPaymasterAddress
 API_KEY_AUTH_DISABLED=false
 
 # ── Pricing ──────────────────────────────────────────────────────
+ETHEREUM_PRICE_FEED_URL=chainlink://0x694AA1769357215DE4FAC081bf1f309aDC325306
+# BASE_PRICE_FEED_URL=chainlink://0x...
+# ARBITRUM_PRICE_FEED_URL=chainlink://0x...
 GAS_PRICE_MARKUP_PCT=10.0
 PLATFORM_FEE_USD=0.01
 # PRICE_CACHE_TTL_SECS=60
@@ -482,9 +483,13 @@ PLATFORM_FEE_USD=0.01
 # ── Payment Verification ────────────────────────────────────────
 MIN_PAYMENT_CONFIRMATIONS=3
 
-# Per-chain accepted payment tokens (Sepolia testnet addresses shown)
-ETHEREUM_ACCEPTED_TOKENS=USDC=0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238,USDT=0x33446002f23232873138b6d08003f009e5309323
-ETHEREUM_TOKEN_DECIMALS=USDC=6,USDT=6
+# Per-chain accepted payment tokens for gas (examples)
+ETHEREUM_ACCEPTED_TOKENS=USDC=0x1..,USDT=0xd..,aUSD=0xE...
+ETHEREUM_TOKEN_DECIMALS=USDC=6,USDT=6,aUSD=6
+# BASE_ACCEPTED_TOKENS=USDC=0x03..,aUSD=0xE9..
+# BASE_TOKEN_DECIMALS=USDC=6,aUSD=6
+# ARBITRUM_ACCEPTED_TOKENS=USDC=0x75..,aUSD=0xE9d..
+# ARBITRUM_TOKEN_DECIMALS=USDC=6,aUSD=6
 
 # ── Workers & Limits ────────────────────────────────────────────
 NUM_WORKERS=2
@@ -523,8 +528,10 @@ forge create contracts/src/VerifyingPaymaster.sol:VerifyingPaymaster \
 Copy the deployed addresses into your `.env`:
 
 ```bash
-ETHEREUM_FACTORY_ADDRESS=0x<factory address from output>
-ETHEREUM_PAYMASTER_ADDRESS=0x<paymaster address from output>
+EVM_ENTRY_POINT_ADDRESS=0x<entry point address from output>
+EVM_FACTORY_ADDRESS=0x<factory address from output>
+EVM_PAYMASTER_ADDRESS=0x<paymaster address from output>
+AUSD_ADDRESS=0x<aUSD address from output>
 ```
 
 ### Step 7 — Start the Platform
@@ -778,7 +785,7 @@ Submit a transaction for on-chain execution. Requires x402 payment.
 {
   "error": "payment_required",
   "amount_usd": 0.25,
-  "accepted_tokens": ["USDC", "USDT"],
+  "accepted_tokens": ["USDC", "USDT", "aUSD"],
   "payment_address": "0x742d35Cc6634C0532925a3b844Bc9e7595f2bD18",
   "smart_wallet_address": "0x1234...abcd",
   "chain": "ethereum",
@@ -1014,17 +1021,20 @@ curl -X POST http://localhost:8080/admin/api-keys \
 | **Per-chain (prefix: `ETHEREUM_`, `BASE_`, `ARBITRUM_`)** | | | |
 | `{CHAIN}_RPC_URL`           | —                                  | **Yes¹** | Chain JSON-RPC endpoint (enables chain)    |
 | `{CHAIN}_BUNDLER_RPC_URL`   | *(empty)*                          | No       | ERC-4337 bundler URL for chain             |
-| `{CHAIN}_ENTRY_POINT_ADDRESS` | `0x43370900...` (v0.9)           | No       | EntryPoint v0.9 contract on chain          |
-| `{CHAIN}_FACTORY_ADDRESS`   | *(empty)*                          | No       | SimpleAccountFactory on chain              |
-| `{CHAIN}_PAYMASTER_ADDRESS` | *(empty)*                          | No       | VerifyingPaymaster on chain                |
-| `{CHAIN}_PRICE_FEED_URL`    | CoinGecko (auto per token)         | No       | Native-token/USD price feed URL            |
+| `EVM_ENTRY_POINT_ADDRESS`   | `0x43370900...` (v0.9)             | No       | Shared EntryPoint for all EVM chains       |
+| `EVM_FACTORY_ADDRESS`       | *(empty)*                          | No       | Shared deterministic SimpleAccountFactory  |
+| `EVM_PAYMASTER_ADDRESS`     | *(empty)*                          | No       | Shared deterministic VerifyingPaymaster    |
+| `{CHAIN}_ENTRY_POINT_ADDRESS` | `EVM_ENTRY_POINT_ADDRESS`        | No       | Optional chain-specific override           |
+| `{CHAIN}_FACTORY_ADDRESS`   | `EVM_FACTORY_ADDRESS`              | No       | Optional chain-specific override           |
+| `{CHAIN}_PAYMASTER_ADDRESS` | `EVM_PAYMASTER_ADDRESS`            | No       | Optional chain-specific override           |
+| `{CHAIN}_PRICE_FEED_URL`    | —                                  | **Yes¹** | Native/USD feed: `chainlink://0x...`, raw feed address, or JSON USD endpoint |
 | `{CHAIN}_ACCEPTED_TOKENS`   | *(empty)*                          | No       | `TOKEN=0xAddr,...` payment tokens on chain  |
 | `{CHAIN}_TOKEN_DECIMALS`    | *(empty)*                          | No       | `TOKEN=N,...` decimals per token on chain   |
-| **Legacy (Ethereum-only fallbacks)** | | | |
+| **Legacy fallbacks** | | | |
 | `BUNDLER_RPC_URL`           | —                                  | No       | Fallback for `ETHEREUM_BUNDLER_RPC_URL`    |
-| `ENTRY_POINT_ADDRESS`       | —                                  | No       | Fallback for `ETHEREUM_ENTRY_POINT_ADDRESS`|
-| `ACCOUNT_FACTORY_ADDRESS`   | —                                  | No       | Fallback for `ETHEREUM_FACTORY_ADDRESS`    |
-| `PAYMASTER_ADDRESS`         | —                                  | No       | Fallback for `ETHEREUM_PAYMASTER_ADDRESS`  |
+| `ENTRY_POINT_ADDRESS`       | —                                  | No       | Fallback for `EVM_ENTRY_POINT_ADDRESS`     |
+| `ACCOUNT_FACTORY_ADDRESS`   | —                                  | No       | Fallback for `EVM_FACTORY_ADDRESS`         |
+| `PAYMASTER_ADDRESS`         | —                                  | No       | Fallback for `EVM_PAYMASTER_ADDRESS`       |
 | `ETH_PRICE_FEED_URL`        | —                                  | No       | Fallback for `ETHEREUM_PRICE_FEED_URL`     |
 | **Global settings** | | | |
 | `API_KEY_AUTH_DISABLED`     | `false`                            | No       | Set `true` to bypass API key auth (dev)    |
@@ -1050,8 +1060,8 @@ Agent                          Platform                         Blockchain
   │                               │                                │
   │  POST /execute (no payment)   │                                │
   │──────────────────────────────▶│                                │
-  │                               │── simulate (eth_call)  ───────▶│
-  │                               │◀── gas estimate ──────────────│
+  │                               │── simulate UserOp/bundle ─────▶│
+  │                               │◀── gas estimate/result ───────│
   │                               │── price (bundler gas + native token/USD) │
   │  HTTP 402 { amount, tokens }  │                                │
   │◀──────────────────────────────│                                │
@@ -1120,7 +1130,7 @@ The x402 payment covers **gas fees + platform margin only**. The agent's smart w
 3. Call `GET /wallet/balance?agent_id=my-bot` to confirm the balance is visible on-chain
 4. Call `POST /execute` — simulation will verify the wallet has sufficient balance
 
-**Safety net:** If the wallet lacks required tokens, `eth_call` simulation reverts *before* any x402 payment is charged. The agent gets a clear error message with their wallet address.
+**Safety net:** If the wallet lacks required tokens, pre-flight simulation fails *before* any x402 payment is charged. The agent gets a clear error message with their wallet address.
 
 ---
 
@@ -1319,17 +1329,8 @@ To add a **new** chain beyond the built-in three:
 
 1. Add a variant to `Chain` in `src/types/mod.rs` (with `chain_id()` and `from_str_loose()`)
 2. Add a chain-parsing block in `AppConfig::parse_chains()` in `src/config/mod.rs`
-3. Deploy `SimpleAccountFactory` + `VerifyingPaymaster` on the new chain
-4. Set the chain's env vars: `{CHAIN}_RPC_URL`, `{CHAIN}_BUNDLER_RPC_URL`, `{CHAIN}_FACTORY_ADDRESS`, etc.
-
----
-
-## Known Limitations & TODO
-
-- [ ] **End-to-end on-chain test**: A full execution from `POST /execute` → UserOp submitted → on-chain confirmation requires a funded paymaster on a testnet. Currently tested manually, not automated. Tip: create custom stablecoin (i.e. USDT/USDC) for x402 payment verification.
-- [ ] **Batch gas estimation**: Batch calls use the same gas estimation path as single calls — may need tuning for large batches.
-- [ ] **Worker loop orchestration tests**: Retry/DLQ helpers are covered, but a full `run_worker` iteration harness with controllable fakes is still pending.
-- [ ] **Positive payment verification unit tests**: Add direct mocked coverage of on-chain receipt/log happy paths in `src/payments/mod.rs`.
+3. Deploy `SimpleAccountFactory` + `VerifyingPaymaster` on the new chain if it cannot use the shared deterministic EVM addresses
+4. Set the chain's env vars: `{CHAIN}_RPC_URL`, `{CHAIN}_BUNDLER_RPC_URL`, price feed, and token maps. Use `{CHAIN}_FACTORY_ADDRESS` / `{CHAIN}_PAYMASTER_ADDRESS` only for chain-specific overrides.
 
 ---
 

@@ -167,6 +167,284 @@
       }
     },
     {
+      "name": "ardent_aave_supply_simulate",
+      "description": "Simulate supplying an asset into Aave V3 on Sepolia. The server compiles approve -> Pool.supply as an ERC-4337 batch.",
+      "method": "POST",
+      "path": "/protocols/aave-v3/supply/simulate",
+      "authRequired": true,
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "agent_id": { "type": "string" },
+          "chain": {
+            "type": "string",
+            "enum": ["ethereum"],
+            "default": "ethereum"
+          },
+          "asset": {
+            "type": "string",
+            "enum": ["AAVE", "DAI", "EURS", "GHO", "LINK", "USDC", "USDT", "WBTC", "WETH"]
+          },
+          "amount": {
+            "type": ["string", "null"],
+            "description": "Human-readable token amount, e.g. 1.25"
+          },
+          "amount_raw": {
+            "type": ["string", "null"],
+            "description": "Raw token base-unit amount. Provide either amount or amount_raw."
+          },
+          "referral_code": { "type": ["integer", "null"], "minimum": 0, "maximum": 65535 },
+          "strategy_id": { "type": ["string", "null"] },
+          "callback_url": { "type": ["string", "null"], "format": "uri" }
+        },
+        "required": ["agent_id", "asset"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "ardent_aave_supply_execute",
+      "description": "Execute supplying an asset into Aave V3 on Sepolia. In manual mode may return payment_required (402).",
+      "method": "POST",
+      "path": "/protocols/aave-v3/supply",
+      "authRequired": true,
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "agent_id": { "type": "string" },
+          "chain": {
+            "type": "string",
+            "enum": ["ethereum"],
+            "default": "ethereum"
+          },
+          "asset": {
+            "type": "string",
+            "enum": ["AAVE", "DAI", "EURS", "GHO", "LINK", "USDC", "USDT", "WBTC", "WETH"]
+          },
+          "amount": {
+            "type": ["string", "null"],
+            "description": "Human-readable token amount, e.g. 1.25"
+          },
+          "amount_raw": {
+            "type": ["string", "null"],
+            "description": "Raw token base-unit amount. Provide either amount or amount_raw."
+          },
+          "referral_code": { "type": ["integer", "null"], "minimum": 0, "maximum": 65535 },
+          "strategy_id": { "type": ["string", "null"] },
+          "callback_url": { "type": ["string", "null"], "format": "uri" },
+          "payment_proof": {
+            "type": ["object", "null"],
+            "description": "Optional value to encode as JSON in X-Payment-Proof header",
+            "properties": {
+              "request_id": { "type": "string" },
+              "payer": { "type": "string" },
+              "token": { "type": "string" },
+              "chain": { "type": "string" },
+              "tx_hash": { "type": "string" }
+            },
+            "required": ["request_id", "payer", "token", "chain", "tx_hash"],
+            "additionalProperties": false
+          }
+        },
+        "required": ["agent_id", "asset"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "ardent_aave_withdraw_simulate",
+      "description": "Simulate withdrawing an asset from Aave V3 on Sepolia. Amount may be a number string or max.",
+      "method": "POST",
+      "path": "/protocols/aave-v3/withdraw/simulate",
+      "authRequired": true,
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "agent_id": { "type": "string" },
+          "chain": { "type": "string", "enum": ["ethereum"], "default": "ethereum" },
+          "asset": { "type": "string", "enum": ["AAVE", "DAI", "EURS", "GHO", "LINK", "USDC", "USDT", "WBTC", "WETH"] },
+          "amount": { "type": ["string", "null"], "description": "Human-readable amount, or max" },
+          "amount_raw": { "type": ["string", "null"], "description": "Raw base-unit amount, or max" },
+          "to": { "type": ["string", "null"], "description": "Optional recipient address; defaults to agent wallet" },
+          "strategy_id": { "type": ["string", "null"] },
+          "callback_url": { "type": ["string", "null"], "format": "uri" }
+        },
+        "required": ["agent_id", "asset"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "ardent_aave_withdraw_execute",
+      "description": "Execute withdrawing an asset from Aave V3 on Sepolia. In manual mode may return payment_required (402).",
+      "method": "POST",
+      "path": "/protocols/aave-v3/withdraw",
+      "authRequired": true,
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "agent_id": { "type": "string" },
+          "chain": { "type": "string", "enum": ["ethereum"], "default": "ethereum" },
+          "asset": { "type": "string", "enum": ["AAVE", "DAI", "EURS", "GHO", "LINK", "USDC", "USDT", "WBTC", "WETH"] },
+          "amount": { "type": ["string", "null"], "description": "Human-readable amount, or max" },
+          "amount_raw": { "type": ["string", "null"], "description": "Raw base-unit amount, or max" },
+          "to": { "type": ["string", "null"], "description": "Optional recipient address; defaults to agent wallet" },
+          "strategy_id": { "type": ["string", "null"] },
+          "callback_url": { "type": ["string", "null"], "format": "uri" },
+          "payment_proof": {
+            "type": ["object", "null"],
+            "description": "Optional value to encode as JSON in X-Payment-Proof header",
+            "properties": {
+              "request_id": { "type": "string" },
+              "payer": { "type": "string" },
+              "token": { "type": "string" },
+              "chain": { "type": "string" },
+              "tx_hash": { "type": "string" }
+            },
+            "required": ["request_id", "payer", "token", "chain", "tx_hash"],
+            "additionalProperties": false
+          }
+        },
+        "required": ["agent_id", "asset"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "ardent_aave_repay_simulate",
+      "description": "Simulate repaying Aave V3 debt on Sepolia. The server compiles approve -> Pool.repay as an ERC-4337 batch.",
+      "method": "POST",
+      "path": "/protocols/aave-v3/repay/simulate",
+      "authRequired": true,
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "agent_id": { "type": "string" },
+          "chain": { "type": "string", "enum": ["ethereum"], "default": "ethereum" },
+          "asset": { "type": "string", "enum": ["AAVE", "DAI", "EURS", "GHO", "LINK", "USDC", "USDT", "WBTC", "WETH"] },
+          "amount": { "type": ["string", "null"], "description": "Human-readable amount, or max" },
+          "amount_raw": { "type": ["string", "null"], "description": "Raw base-unit amount, or max" },
+          "interest_rate_mode": { "type": ["integer", "null"], "enum": [1, 2], "default": 2 },
+          "on_behalf_of": { "type": ["string", "null"], "description": "Optional debt owner; defaults to agent wallet" },
+          "strategy_id": { "type": ["string", "null"] },
+          "callback_url": { "type": ["string", "null"], "format": "uri" }
+        },
+        "required": ["agent_id", "asset"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "ardent_aave_repay_execute",
+      "description": "Execute repaying Aave V3 debt on Sepolia. In manual mode may return payment_required (402).",
+      "method": "POST",
+      "path": "/protocols/aave-v3/repay",
+      "authRequired": true,
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "agent_id": { "type": "string" },
+          "chain": { "type": "string", "enum": ["ethereum"], "default": "ethereum" },
+          "asset": { "type": "string", "enum": ["AAVE", "DAI", "EURS", "GHO", "LINK", "USDC", "USDT", "WBTC", "WETH"] },
+          "amount": { "type": ["string", "null"], "description": "Human-readable amount, or max" },
+          "amount_raw": { "type": ["string", "null"], "description": "Raw base-unit amount, or max" },
+          "interest_rate_mode": { "type": ["integer", "null"], "enum": [1, 2], "default": 2 },
+          "on_behalf_of": { "type": ["string", "null"], "description": "Optional debt owner; defaults to agent wallet" },
+          "strategy_id": { "type": ["string", "null"] },
+          "callback_url": { "type": ["string", "null"], "format": "uri" },
+          "payment_proof": {
+            "type": ["object", "null"],
+            "description": "Optional value to encode as JSON in X-Payment-Proof header",
+            "properties": {
+              "request_id": { "type": "string" },
+              "payer": { "type": "string" },
+              "token": { "type": "string" },
+              "chain": { "type": "string" },
+              "tx_hash": { "type": "string" }
+            },
+            "required": ["request_id", "payer", "token", "chain", "tx_hash"],
+            "additionalProperties": false
+          }
+        },
+        "required": ["agent_id", "asset"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "ardent_aave_borrow_simulate",
+      "description": "Simulate borrowing from Aave V3 on Sepolia. The server checks projected health factor before simulating the Pool.borrow call.",
+      "method": "POST",
+      "path": "/protocols/aave-v3/borrow/simulate",
+      "authRequired": true,
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "agent_id": { "type": "string" },
+          "chain": { "type": "string", "enum": ["ethereum"], "default": "ethereum" },
+          "asset": { "type": "string", "enum": ["AAVE", "DAI", "EURS", "GHO", "LINK", "USDC", "USDT", "WBTC", "WETH"] },
+          "amount": { "type": ["string", "null"], "description": "Human-readable amount, or max" },
+          "amount_raw": { "type": ["string", "null"], "description": "Raw base-unit amount, or max" },
+          "interest_rate_mode": { "type": ["integer", "null"], "enum": [1, 2], "default": 2 },
+          "referral_code": { "type": ["integer", "null"], "minimum": 0, "maximum": 65535 },
+          "on_behalf_of": { "type": ["string", "null"], "description": "Optional debt owner; defaults to agent wallet" },
+          "min_health_factor": { "type": ["string", "null"], "description": "Minimum projected health factor after borrow; default 1.05; must be at least 1.0" },
+          "strategy_id": { "type": ["string", "null"] },
+          "callback_url": { "type": ["string", "null"], "format": "uri" }
+        },
+        "required": ["agent_id", "asset"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "ardent_aave_borrow_execute",
+      "description": "Execute borrowing from Aave V3 on Sepolia after projected health-factor guard. In manual mode may return payment_required (402).",
+      "method": "POST",
+      "path": "/protocols/aave-v3/borrow",
+      "authRequired": true,
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "agent_id": { "type": "string" },
+          "chain": { "type": "string", "enum": ["ethereum"], "default": "ethereum" },
+          "asset": { "type": "string", "enum": ["AAVE", "DAI", "EURS", "GHO", "LINK", "USDC", "USDT", "WBTC", "WETH"] },
+          "amount": { "type": ["string", "null"], "description": "Human-readable amount, or max" },
+          "amount_raw": { "type": ["string", "null"], "description": "Raw base-unit amount, or max" },
+          "interest_rate_mode": { "type": ["integer", "null"], "enum": [1, 2], "default": 2 },
+          "referral_code": { "type": ["integer", "null"], "minimum": 0, "maximum": 65535 },
+          "on_behalf_of": { "type": ["string", "null"], "description": "Optional debt owner; defaults to agent wallet" },
+          "min_health_factor": { "type": ["string", "null"], "description": "Minimum projected health factor after borrow; default 1.05; must be at least 1.0" },
+          "strategy_id": { "type": ["string", "null"] },
+          "callback_url": { "type": ["string", "null"], "format": "uri" },
+          "payment_proof": {
+            "type": ["object", "null"],
+            "description": "Optional value to encode as JSON in X-Payment-Proof header",
+            "properties": {
+              "request_id": { "type": "string" },
+              "payer": { "type": "string" },
+              "token": { "type": "string" },
+              "chain": { "type": "string" },
+              "tx_hash": { "type": "string" }
+            },
+            "required": ["request_id", "payer", "token", "chain", "tx_hash"],
+            "additionalProperties": false
+          }
+        },
+        "required": ["agent_id", "asset"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "ardent_aave_position",
+      "description": "Read Aave V3 Sepolia account data for an agent wallet, including collateral, debt, available borrows, LTV, liquidation threshold, and health factor.",
+      "method": "GET",
+      "path": "/protocols/aave-v3/position",
+      "authRequired": true,
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "agent_id": { "type": "string" },
+          "chain": { "type": "string", "enum": ["ethereum"], "default": "ethereum" }
+        },
+        "required": ["agent_id"],
+        "additionalProperties": false
+      }
+    },
+    {
       "name": "ardent_status",
       "description": "Get execution request status by request_id",
       "method": "GET",

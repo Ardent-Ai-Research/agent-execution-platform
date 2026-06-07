@@ -19,6 +19,10 @@ use crate::config::AppConfig;
 use crate::db;
 use crate::execution_engine::ExecutionEngine;
 use crate::payments::PaymentRequiredBody;
+use crate::protocols::aave_v3::{
+    service as aave_v3_service, AaveBorrowRequest, AavePositionQuery, AaveRepayRequest,
+    AaveSupplyRequest, AaveWithdrawRequest,
+};
 use crate::relayer::erc4337::BundlerClient;
 use crate::relayer::paymaster::PaymasterSigner;
 use crate::types::*;
@@ -204,6 +208,7 @@ pub async fn simulate_handler(
         &state.db_pool,
         &state.wallet_registry,
         &state.bundler_clients,
+        &state.paymaster_signers,
         api_ctx.api_key_id,
         api_ctx.payment_mode.clone(),
         &req,
@@ -229,6 +234,307 @@ pub async fn simulate_handler(
             (status, Json(serde_json::json!({ "error": err_str }))).into_response()
         }
     }
+}
+
+pub async fn aave_supply_handler(
+    State(state): State<AppState>,
+    Extension(api_ctx): Extension<ApiKeyContext>,
+    payment_proof: Option<Extension<PaymentProof>>,
+    Json(req): Json<AaveSupplyRequest>,
+) -> impl IntoResponse {
+    info!(agent_id = %req.agent_id, chain = %req.chain, asset = %req.asset, "POST /protocols/aave-v3/supply");
+
+    let proof_ref = payment_proof.as_ref().map(|p| &p.0);
+    let mut redis = state.redis_conn.clone();
+
+    match aave_v3_service::handle_supply(
+        &state.engine,
+        &state.db_pool,
+        &mut redis,
+        &state.wallet_registry,
+        &state.bundler_clients,
+        &state.paymaster_signers,
+        api_ctx.api_key_id,
+        api_ctx.payment_mode.clone(),
+        &req,
+        proof_ref,
+    )
+    .await
+    {
+        Ok(resp) => execution_response_to_http(&state, &req.chain, resp),
+        Err(e) => protocol_error_to_http(e),
+    }
+}
+
+pub async fn aave_supply_simulate_handler(
+    State(state): State<AppState>,
+    Extension(api_ctx): Extension<ApiKeyContext>,
+    Json(req): Json<AaveSupplyRequest>,
+) -> impl IntoResponse {
+    info!(agent_id = %req.agent_id, chain = %req.chain, asset = %req.asset, "POST /protocols/aave-v3/supply/simulate");
+
+    match aave_v3_service::handle_supply_simulate(
+        &state.engine,
+        &state.db_pool,
+        &state.wallet_registry,
+        &state.bundler_clients,
+        &state.paymaster_signers,
+        api_ctx.api_key_id,
+        api_ctx.payment_mode.clone(),
+        &req,
+    )
+    .await
+    {
+        Ok(resp) => (StatusCode::OK, Json(serde_json::to_value(resp).unwrap())).into_response(),
+        Err(e) => protocol_error_to_http(e),
+    }
+}
+
+pub async fn aave_withdraw_handler(
+    State(state): State<AppState>,
+    Extension(api_ctx): Extension<ApiKeyContext>,
+    payment_proof: Option<Extension<PaymentProof>>,
+    Json(req): Json<AaveWithdrawRequest>,
+) -> impl IntoResponse {
+    info!(agent_id = %req.agent_id, chain = %req.chain, asset = %req.asset, "POST /protocols/aave-v3/withdraw");
+
+    let proof_ref = payment_proof.as_ref().map(|p| &p.0);
+    let mut redis = state.redis_conn.clone();
+
+    match aave_v3_service::handle_withdraw(
+        &state.engine,
+        &state.db_pool,
+        &mut redis,
+        &state.wallet_registry,
+        &state.bundler_clients,
+        &state.paymaster_signers,
+        api_ctx.api_key_id,
+        api_ctx.payment_mode.clone(),
+        &req,
+        proof_ref,
+    )
+    .await
+    {
+        Ok(resp) => execution_response_to_http(&state, &req.chain, resp),
+        Err(e) => protocol_error_to_http(e),
+    }
+}
+
+pub async fn aave_withdraw_simulate_handler(
+    State(state): State<AppState>,
+    Extension(api_ctx): Extension<ApiKeyContext>,
+    Json(req): Json<AaveWithdrawRequest>,
+) -> impl IntoResponse {
+    info!(agent_id = %req.agent_id, chain = %req.chain, asset = %req.asset, "POST /protocols/aave-v3/withdraw/simulate");
+
+    match aave_v3_service::handle_withdraw_simulate(
+        &state.engine,
+        &state.db_pool,
+        &state.wallet_registry,
+        &state.bundler_clients,
+        &state.paymaster_signers,
+        api_ctx.api_key_id,
+        api_ctx.payment_mode.clone(),
+        &req,
+    )
+    .await
+    {
+        Ok(resp) => (StatusCode::OK, Json(serde_json::to_value(resp).unwrap())).into_response(),
+        Err(e) => protocol_error_to_http(e),
+    }
+}
+
+pub async fn aave_repay_handler(
+    State(state): State<AppState>,
+    Extension(api_ctx): Extension<ApiKeyContext>,
+    payment_proof: Option<Extension<PaymentProof>>,
+    Json(req): Json<AaveRepayRequest>,
+) -> impl IntoResponse {
+    info!(agent_id = %req.agent_id, chain = %req.chain, asset = %req.asset, "POST /protocols/aave-v3/repay");
+
+    let proof_ref = payment_proof.as_ref().map(|p| &p.0);
+    let mut redis = state.redis_conn.clone();
+
+    match aave_v3_service::handle_repay(
+        &state.engine,
+        &state.db_pool,
+        &mut redis,
+        &state.wallet_registry,
+        &state.bundler_clients,
+        &state.paymaster_signers,
+        api_ctx.api_key_id,
+        api_ctx.payment_mode.clone(),
+        &req,
+        proof_ref,
+    )
+    .await
+    {
+        Ok(resp) => execution_response_to_http(&state, &req.chain, resp),
+        Err(e) => protocol_error_to_http(e),
+    }
+}
+
+pub async fn aave_repay_simulate_handler(
+    State(state): State<AppState>,
+    Extension(api_ctx): Extension<ApiKeyContext>,
+    Json(req): Json<AaveRepayRequest>,
+) -> impl IntoResponse {
+    info!(agent_id = %req.agent_id, chain = %req.chain, asset = %req.asset, "POST /protocols/aave-v3/repay/simulate");
+
+    match aave_v3_service::handle_repay_simulate(
+        &state.engine,
+        &state.db_pool,
+        &state.wallet_registry,
+        &state.bundler_clients,
+        &state.paymaster_signers,
+        api_ctx.api_key_id,
+        api_ctx.payment_mode.clone(),
+        &req,
+    )
+    .await
+    {
+        Ok(resp) => (StatusCode::OK, Json(serde_json::to_value(resp).unwrap())).into_response(),
+        Err(e) => protocol_error_to_http(e),
+    }
+}
+
+pub async fn aave_borrow_handler(
+    State(state): State<AppState>,
+    Extension(api_ctx): Extension<ApiKeyContext>,
+    payment_proof: Option<Extension<PaymentProof>>,
+    Json(req): Json<AaveBorrowRequest>,
+) -> impl IntoResponse {
+    info!(agent_id = %req.agent_id, chain = %req.chain, asset = %req.asset, "POST /protocols/aave-v3/borrow");
+
+    let proof_ref = payment_proof.as_ref().map(|p| &p.0);
+    let mut redis = state.redis_conn.clone();
+
+    match aave_v3_service::handle_borrow(
+        &state.engine,
+        &state.db_pool,
+        &mut redis,
+        &state.wallet_registry,
+        &state.bundler_clients,
+        &state.paymaster_signers,
+        api_ctx.api_key_id,
+        api_ctx.payment_mode.clone(),
+        &req,
+        proof_ref,
+    )
+    .await
+    {
+        Ok(resp) => execution_response_to_http(&state, &req.chain, resp),
+        Err(e) => protocol_error_to_http(e),
+    }
+}
+
+pub async fn aave_borrow_simulate_handler(
+    State(state): State<AppState>,
+    Extension(api_ctx): Extension<ApiKeyContext>,
+    Json(req): Json<AaveBorrowRequest>,
+) -> impl IntoResponse {
+    info!(agent_id = %req.agent_id, chain = %req.chain, asset = %req.asset, "POST /protocols/aave-v3/borrow/simulate");
+
+    match aave_v3_service::handle_borrow_simulate(
+        &state.engine,
+        &state.db_pool,
+        &state.wallet_registry,
+        &state.bundler_clients,
+        &state.paymaster_signers,
+        api_ctx.api_key_id,
+        api_ctx.payment_mode.clone(),
+        &req,
+    )
+    .await
+    {
+        Ok(resp) => (StatusCode::OK, Json(serde_json::to_value(resp).unwrap())).into_response(),
+        Err(e) => protocol_error_to_http(e),
+    }
+}
+
+pub async fn aave_position_handler(
+    State(state): State<AppState>,
+    Extension(api_ctx): Extension<ApiKeyContext>,
+    Query(query): Query<AavePositionQuery>,
+) -> impl IntoResponse {
+    info!(agent_id = %query.agent_id, chain = %query.chain, "GET /protocols/aave-v3/position");
+
+    match aave_v3_service::handle_position(
+        &state.engine,
+        &state.wallet_registry,
+        api_ctx.api_key_id,
+        &query,
+    )
+    .await
+    {
+        Ok(resp) => (StatusCode::OK, Json(serde_json::to_value(resp).unwrap())).into_response(),
+        Err(e) => protocol_error_to_http(e),
+    }
+}
+
+fn execution_response_to_http(
+    state: &AppState,
+    chain: &str,
+    resp: ExecutionResponse,
+) -> axum::response::Response {
+    if resp.status == ExecutionStatus::PaymentRequired {
+        let quoted_usd = resp.estimated_cost_usd.unwrap_or(0.0);
+        let (accepted, required_amount_raw) = Chain::from_str_loose(chain)
+            .and_then(|c| state.config.chains.get(&c))
+            .map(|cfg| {
+                let accepted = cfg.accepted_tokens.keys().cloned().collect::<Vec<_>>();
+                let required_amount_raw = cfg
+                    .accepted_tokens
+                    .keys()
+                    .map(|symbol| {
+                        let decimals = cfg.token_decimals.get(symbol).copied().unwrap_or(6);
+                        let raw = usd_to_raw_amount_ceil(quoted_usd, decimals)
+                            .unwrap_or_else(|| "0".to_string());
+                        (symbol.clone(), raw)
+                    })
+                    .collect::<HashMap<_, _>>();
+                (accepted, required_amount_raw)
+            })
+            .unwrap_or_else(|| (Vec::new(), HashMap::new()));
+        let body = PaymentRequiredBody {
+            error: "payment_required".into(),
+            amount_usd: quoted_usd,
+            accepted_tokens: accepted,
+            required_amount_raw,
+            payment_address: state.config.payment_address.clone(),
+            chain: chain.to_string(),
+            request_id: resp.request_id.to_string(),
+            smart_wallet_address: resp.smart_wallet_address.clone().unwrap_or_default(),
+        };
+        return (
+            StatusCode::PAYMENT_REQUIRED,
+            Json(serde_json::to_value(body).unwrap()),
+        )
+            .into_response();
+    }
+
+    (StatusCode::OK, Json(serde_json::to_value(resp).unwrap())).into_response()
+}
+
+fn protocol_error_to_http(e: anyhow::Error) -> axum::response::Response {
+    error!(error = %e, "protocol action failed");
+    let err_str = e.to_string();
+    let is_client_error = err_str.contains("unsupported")
+        || err_str.contains("required")
+        || err_str.contains("amount")
+        || err_str.contains("asset")
+        || err_str.contains("provide either")
+        || err_str.contains("chain")
+        || err_str.contains("rejected")
+        || err_str.contains("exceeds")
+        || err_str.contains("collateral")
+        || err_str.contains("must be");
+    let status = if is_client_error {
+        StatusCode::BAD_REQUEST
+    } else {
+        StatusCode::INTERNAL_SERVER_ERROR
+    };
+    (status, Json(serde_json::json!({ "error": err_str }))).into_response()
 }
 
 // ────────────────────── GET /status/:id ──────────────────────────────

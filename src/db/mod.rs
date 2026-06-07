@@ -72,6 +72,18 @@ fn sha256_hex(input: &str) -> String {
     hex::encode(hasher.finalize())
 }
 
+fn execution_payload_hash(req: &crate::types::ExecutionRequest) -> Result<String> {
+    let payload = serde_json::json!({
+        "agent_id": req.agent_id,
+        "chain": req.chain,
+        "target_contract": req.target_contract,
+        "calldata": req.calldata,
+        "value": req.value,
+        "batch_calls": req.batch_calls,
+    });
+    Ok(sha256_hex(&serde_json::to_string(&payload)?))
+}
+
 // ──────────────────────── Execution Requests ─────────────────────────
 
 pub async fn insert_execution_request(
@@ -82,12 +94,14 @@ pub async fn insert_execution_request(
     callback_url: Option<&str>,
 ) -> Result<ExecutionRequestRow> {
     let now = Utc::now();
+    let payload_hash = execution_payload_hash(req)?;
     let row = sqlx::query_as::<_, ExecutionRequestRow>(
         r#"
         INSERT INTO execution_requests
             (id, agent_wallet, chain, target_contract, calldata, value, strategy_id,
-             status, created_at, updated_at, agent_id, smart_wallet_address, callback_url)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+             status, created_at, updated_at, agent_id, smart_wallet_address, callback_url,
+             payload_hash)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
         RETURNING *
         "#,
     )
@@ -104,6 +118,7 @@ pub async fn insert_execution_request(
     .bind(&req.agent_id)
     .bind(smart_wallet_address)
     .bind(callback_url)
+    .bind(payload_hash)
     .fetch_one(pool)
     .await?;
     Ok(row)
@@ -167,6 +182,8 @@ pub async fn get_locked_quote_cost(
     api_key_id: Uuid,
     req: &crate::types::ExecutionRequest,
 ) -> Result<Option<f64>> {
+    let payload_hash = execution_payload_hash(req)?;
+    let allow_legacy_single_call_match = req.batch_calls.is_none();
     let row: Option<(f64,)> = sqlx::query_as(
         r#"
         SELECT er.cost_usd
@@ -179,6 +196,10 @@ pub async fn get_locked_quote_cost(
           AND er.calldata = $5
           AND er.value = $6
           AND COALESCE(er.agent_id, er.agent_wallet) = $7
+          AND (
+              er.payload_hash = $8
+              OR (er.payload_hash IS NULL AND $9 = TRUE)
+          )
           AND er.cost_usd IS NOT NULL
         LIMIT 1
         "#,
@@ -190,6 +211,8 @@ pub async fn get_locked_quote_cost(
     .bind(&req.calldata)
     .bind(&req.value)
     .bind(&req.agent_id)
+    .bind(payload_hash)
+    .bind(allow_legacy_single_call_match)
     .fetch_optional(pool)
     .await?;
 
@@ -398,6 +421,30 @@ mod tests {
             batch_calls: None,
             callback_url: None,
         }
+    }
+
+    #[test]
+    fn test_execution_payload_hash_includes_batch_calls() {
+        let mut first = sample_request("payload-hash");
+        first.target_contract = String::new();
+        first.calldata = String::new();
+        first.batch_calls = Some(vec![crate::types::BatchCall {
+            target_contract: "0x1111111111111111111111111111111111111111".into(),
+            calldata: "0x095ea7b3".into(),
+            value: "0".into(),
+        }]);
+
+        let mut second = first.clone();
+        second.batch_calls = Some(vec![crate::types::BatchCall {
+            target_contract: "0x2222222222222222222222222222222222222222".into(),
+            calldata: "0x617ba037".into(),
+            value: "0".into(),
+        }]);
+
+        assert_ne!(
+            execution_payload_hash(&first).expect("first hash"),
+            execution_payload_hash(&second).expect("second hash")
+        );
     }
 
     #[tokio::test]

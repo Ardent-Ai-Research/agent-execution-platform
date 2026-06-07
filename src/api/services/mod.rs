@@ -24,6 +24,128 @@ use crate::relayer::paymaster::PaymasterSigner;
 use crate::types::*;
 use crate::worker::{self, WorkerContext};
 
+async fn simulate_request(
+    engine: &ExecutionEngine,
+    bundler_client: &BundlerClient,
+    paymaster_signer: Option<&PaymasterSigner>,
+    wallet_registry: &AgentWalletRegistry,
+    req: &ExecutionRequest,
+    chain: &Chain,
+    agent_wallet: &crate::agent_wallet::AgentWallet,
+    smart_wallet_str: &str,
+) -> Result<SimulationResult> {
+    if req.batch_calls.is_some() {
+        simulate_batch_user_op(
+            bundler_client,
+            paymaster_signer,
+            wallet_registry,
+            req,
+            chain,
+            agent_wallet,
+            smart_wallet_str,
+        )
+        .await
+    } else {
+        engine
+            .simulate(req, chain, agent_wallet.smart_wallet_address)
+            .await
+    }
+}
+
+/// Simulate a batch as the exact ERC-4337 `executeBatch` UserOperation shape.
+///
+/// The older batch simulation path ran each leg independently with `eth_call`,
+/// which cannot observe state changes from earlier calls in the same batch
+/// (for example `approve -> supply`).  Bundler estimation validates the full
+/// smart-wallet callData atomically, so it catches cross-call dependencies
+/// much closer to the eventual execution path.
+async fn simulate_batch_user_op(
+    bundler_client: &BundlerClient,
+    paymaster_signer: Option<&PaymasterSigner>,
+    wallet_registry: &AgentWalletRegistry,
+    req: &ExecutionRequest,
+    chain: &Chain,
+    agent_wallet: &crate::agent_wallet::AgentWallet,
+    smart_wallet_str: &str,
+) -> Result<SimulationResult> {
+    let job = ExecutionJob {
+        request_id: Uuid::new_v4(),
+        agent_id: req.agent_id.clone(),
+        smart_wallet_address: smart_wallet_str.to_string(),
+        eoa_address: format!("{:?}", agent_wallet.eoa_address),
+        chain: chain.clone(),
+        target_contract: req.target_contract.clone(),
+        calldata: req.calldata.clone(),
+        value: req.value.clone(),
+        gas_limit: 0,
+        created_at: Utc::now(),
+        attempt_count: 0,
+        batch_calls: req.batch_calls.clone(),
+        callback_url: None,
+        api_key_hash: None,
+    };
+
+    let smart_wallet = agent_wallet.smart_wallet_address;
+    let chain_id = bundler_client.provider().get_chainid().await?.as_u64();
+
+    let estimation_paymaster = match paymaster_signer {
+        Some(signer) => {
+            let mut draft_op = bundler_client
+                .build_user_op_draft(&job, smart_wallet, Vec::new())
+                .await?;
+            bundler_client
+                .apply_estimation_fee_hints(&mut draft_op)
+                .await?;
+            signer.sign_paymaster_data(&draft_op, chain_id).await?
+        }
+        None => Vec::new(),
+    };
+
+    let mut user_op = bundler_client
+        .build_user_op_draft(&job, smart_wallet, estimation_paymaster)
+        .await?;
+    bundler_client
+        .apply_estimation_fee_hints(&mut user_op)
+        .await?;
+
+    let draft_op_hash = bundler_client.user_op_hash(&user_op).await?;
+    let draft_signature = wallet_registry.decrypt_and_sign(agent_wallet, draft_op_hash)?;
+    user_op = bundler_client.apply_signature(user_op, draft_signature);
+
+    match bundler_client.estimate_gas_for_user_op(&user_op).await {
+        Ok((call_gas, verification_gas, pre_verification_gas)) => {
+            let user_op_total_gas = call_gas
+                .saturating_add(verification_gas)
+                .saturating_add(pre_verification_gas);
+
+            info!(
+                call_gas = %call_gas,
+                verification_gas = %verification_gas,
+                pre_verification_gas = %pre_verification_gas,
+                user_op_total_gas = %user_op_total_gas,
+                "batch UserOperation simulation succeeded"
+            );
+
+            Ok(SimulationResult {
+                // Keep gas_estimate compatible with the current pricing path,
+                // which adds ERC-4337 overhead separately.
+                gas_estimate: call_gas.as_u64(),
+                success: true,
+                return_data: Some(format!(
+                    "user_op_call_gas={call_gas};verification_gas={verification_gas};pre_verification_gas={pre_verification_gas};total_user_op_gas={user_op_total_gas}"
+                )),
+                error: None,
+            })
+        }
+        Err(e) => Ok(SimulationResult {
+            success: false,
+            gas_estimate: 0,
+            return_data: None,
+            error: Some(format!("UserOperation simulation failed: {e:#}")),
+        }),
+    }
+}
+
 fn usd_to_token_raw_amount(usd: f64, decimals: u8) -> Result<U256> {
     if !usd.is_finite() || usd < 0.0 {
         anyhow::bail!("invalid USD amount: {}", usd);
@@ -85,9 +207,17 @@ pub async fn handle_execute(
     let request_id = db_row.id;
 
     // 4. Simulate (using smart wallet as `from`)
-    let sim = engine
-        .simulate(req, &chain, agent_wallet.smart_wallet_address)
-        .await?;
+    let sim = simulate_request(
+        engine,
+        bundler_client,
+        paymaster_signers.get(&chain),
+        wallet_registry,
+        req,
+        &chain,
+        &agent_wallet,
+        &smart_wallet_str,
+    )
+    .await?;
     if !sim.success {
         db::update_execution_status(
             pool,
@@ -123,7 +253,10 @@ pub async fn handle_execute(
         None
     };
 
-    if payment_mode == PaymentMode::Manual && quote_request_id.is_some() && locked_quote_cost.is_none() {
+    if payment_mode == PaymentMode::Manual
+        && quote_request_id.is_some()
+        && locked_quote_cost.is_none()
+    {
         db::update_execution_status(
             pool,
             request_id,
@@ -701,9 +834,7 @@ pub async fn handle_get_wallet_balance(
     let provider = engine.provider_for_chain(&chain)?;
 
     // Resolve (or provision) the agent's smart wallet
-    let agent_wallet = wallet_registry
-        .get_or_create(api_key_id, agent_id)
-        .await?;
+    let agent_wallet = wallet_registry.get_or_create(api_key_id, agent_id).await?;
     let smart_wallet_address = agent_wallet.smart_wallet_address;
     let smart_wallet_str = format!("{smart_wallet_address:?}");
 
@@ -727,19 +858,12 @@ pub async fn handle_get_wallet_balance(
     // of the call response, handles short-return gracefully).
     let mut tokens = Vec::new();
     for (symbol, contract_addr_str) in &chain_cfg.accepted_tokens {
-        let decimals = chain_cfg
-            .token_decimals
-            .get(symbol)
-            .copied()
-            .unwrap_or(6);
+        let decimals = chain_cfg.token_decimals.get(symbol).copied().unwrap_or(6);
 
-        let raw_balance = fetch_erc20_balance_of(
-            provider.as_ref(),
-            contract_addr_str,
-            smart_wallet_address,
-        )
-        .await
-        .unwrap_or(U256::zero()); // graceful zero on any RPC error
+        let raw_balance =
+            fetch_erc20_balance_of(provider.as_ref(), contract_addr_str, smart_wallet_address)
+                .await
+                .unwrap_or(U256::zero()); // graceful zero on any RPC error
 
         let formatted = {
             let divisor = 10u128.pow(decimals as u32) as f64;
@@ -778,6 +902,7 @@ pub async fn handle_simulate(
     pool: &PgPool,
     wallet_registry: &AgentWalletRegistry,
     bundler_clients: &HashMap<Chain, BundlerClient>,
+    paymaster_signers: &HashMap<Chain, PaymasterSigner>,
     api_key_id: Uuid,
     payment_mode: PaymentMode,
     req: &ExecutionRequest,
@@ -804,9 +929,17 @@ pub async fn handle_simulate(
     .await?;
     let request_id = db_row.id;
 
-    let sim = engine
-        .simulate(req, &chain, agent_wallet.smart_wallet_address)
-        .await?;
+    let sim = simulate_request(
+        engine,
+        bundler_client,
+        paymaster_signers.get(&chain),
+        wallet_registry,
+        req,
+        &chain,
+        &agent_wallet,
+        &smart_wallet_str,
+    )
+    .await?;
     let cost = if sim.success {
         match payment_mode {
             PaymentMode::Manual => Some(

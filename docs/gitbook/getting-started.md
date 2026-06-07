@@ -73,11 +73,15 @@ Aliases like `eth` and `arb` are accepted by server side chain parsing, but usin
 
 ## 7. Testnet token details for Sepolia users
 
-Current x402 payment tokens on Ethereum Sepolia:
+Current x402 payment tokens in the hosted Sepolia-family testnet environment:
 
-1. `USDC` at `0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238`
-2. `USDT` at `0xd077A400968890Eacc75cdc901F0356c943e4fDb`
-3. `aUSD` at `0x112a19d6236016fc4dda49257c724E63a3CE5bEA`
+| Payload chain | Test network | USDC | aUSD |
+| --- | --- | --- | --- |
+| `ethereum` | Ethereum Sepolia | `0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238` | `0xE9df660c675F6f649677Ae408FCf6665D4F0F5Be` |
+| `base` | Base Sepolia | `0x036CbD53842c5426634e7929541eC2318f3dCF7e` | `0xE9df660c675F6f649677Ae408FCf6665D4F0F5Be` |
+| `arbitrum` | Arbitrum Sepolia | `0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d` | `0xE9df660c675F6f649677Ae408FCf6665D4F0F5Be` |
+
+Circle faucet USDC is available at `https://faucet.circle.com`; select the matching Sepolia network before funding. Ethereum Sepolia may also accept `USDT` at `0xd077A400968890Eacc75cdc901F0356c943e4fDb` when enabled for your environment.
 
 For approved testers, `aUSD` (Ardent USD) is accepted in the hosted testnet payment flow and is requested through a separate faucet flow.
 

@@ -60,7 +60,7 @@ Example:
     },
     {
       "symbol": "aUSD",
-      "contract_address": "0x112a19d6236016fc4dda49257c724E63a3CE5bEA",
+      "contract_address": "0xE9df660c675F6f649677Ae408FCf6665D4F0F5Be",
       "raw": "25000000",
       "formatted": "25",
       "decimals": 6

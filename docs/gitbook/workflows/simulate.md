@@ -67,3 +67,13 @@ See [Agent Integration](../agent-integration.md) for the one-line installer.
 1. Call simulate first.
 2. Validate gas and cost constraints.
 3. Continue to execute only when output is acceptable.
+
+## Batch simulation semantics
+
+Simulation builds the same smart-wallet operation shape used by execution and
+checks it before broadcast. Batch requests are simulated as a full ERC-4337
+`executeBatch` UserOperation through the configured bundler, including
+`eth_estimateUserOperationGas` where supported.
+
+This means dependent call sequences such as `approve -> supply` are checked as
+one atomic wallet operation instead of as independent calls.

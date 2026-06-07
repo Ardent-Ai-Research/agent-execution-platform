@@ -38,6 +38,7 @@ pub struct ExecutionRequestRow {
     pub agent_id: Option<String>,
     pub smart_wallet_address: Option<String>,
     pub callback_url: Option<String>,
+    pub payload_hash: Option<String>,
 }
 
 // ──────────────────────────── transactions ───────────────────────────
