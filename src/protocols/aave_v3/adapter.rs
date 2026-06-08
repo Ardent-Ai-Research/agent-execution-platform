@@ -166,6 +166,13 @@ pub struct AavePositionQuery {
     pub chain: String,
 }
 
+#[derive(Debug, Clone, Deserialize)]
+pub struct AaveBalancesQuery {
+    pub agent_id: String,
+    #[serde(default = "default_chain")]
+    pub chain: String,
+}
+
 #[derive(Debug, Clone, Serialize)]
 pub struct AavePositionResponse {
     pub agent_id: String,
@@ -180,6 +187,33 @@ pub struct AavePositionResponse {
     pub health_factor: String,
 }
 
+#[derive(Debug, Clone, Serialize)]
+pub struct AaveBalancesResponse {
+    pub agent_id: String,
+    pub chain: String,
+    pub smart_wallet_address: String,
+    pub pool_address: String,
+    pub assets: Vec<AaveAssetBalance>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct AaveAssetBalance {
+    pub symbol: String,
+    pub underlying_address: String,
+    pub decimals: u8,
+    pub wallet_balance_raw: String,
+    pub wallet_balance_formatted: String,
+    pub a_token_address: String,
+    pub a_token_balance_raw: String,
+    pub a_token_balance_formatted: String,
+    pub stable_debt_token_address: String,
+    pub stable_debt_balance_raw: String,
+    pub stable_debt_balance_formatted: String,
+    pub variable_debt_token_address: String,
+    pub variable_debt_balance_raw: String,
+    pub variable_debt_balance_formatted: String,
+}
+
 #[derive(Debug, Clone)]
 pub struct AaveAccountData {
     pub total_collateral_base: U256,
@@ -192,6 +226,7 @@ pub struct AaveAccountData {
 
 #[derive(Debug, Clone)]
 pub struct AaveReserveDebtTokens {
+    pub a_token: Address,
     pub stable_debt_token: Address,
     pub variable_debt_token: Address,
 }
@@ -272,6 +307,22 @@ fn sepolia_assets() -> HashMap<&'static str, AaveAsset> {
             },
         ),
     ])
+}
+
+pub fn supported_assets() -> Vec<(&'static str, Address, u8)> {
+    let assets = sepolia_assets();
+    let mut entries = assets
+        .iter()
+        .map(|(symbol, asset)| {
+            let address = asset
+                .underlying
+                .parse::<Address>()
+                .expect("hardcoded Aave Sepolia asset address must be valid");
+            (*symbol, address, asset.decimals)
+        })
+        .collect::<Vec<_>>();
+    entries.sort_by_key(|(symbol, _, _)| *symbol);
+    entries
 }
 
 pub fn compile_supply(
@@ -561,6 +612,11 @@ pub fn validate_position_query(query: &AavePositionQuery) -> Result<()> {
     Ok(())
 }
 
+pub fn validate_balances_query(query: &AaveBalancesQuery) -> Result<()> {
+    validate_chain_and_agent(&query.agent_id, &query.chain)?;
+    Ok(())
+}
+
 pub fn pool_address() -> &'static str {
     AAVE_V3_SEPOLIA_POOL
 }
@@ -641,13 +697,16 @@ pub fn decode_reserve_debt_tokens(raw: &[u8]) -> Result<AaveReserveDebtTokens> {
         _ => return Err(anyhow!("unexpected getReserveData return token")),
     };
 
-    match (tokens.get(9), tokens.get(10)) {
-        (Some(Token::Address(stable)), Some(Token::Address(variable))) => {
-            Ok(AaveReserveDebtTokens {
-                stable_debt_token: *stable,
-                variable_debt_token: *variable,
-            })
-        }
+    match (tokens.get(8), tokens.get(9), tokens.get(10)) {
+        (
+            Some(Token::Address(a_token)),
+            Some(Token::Address(stable)),
+            Some(Token::Address(variable)),
+        ) => Ok(AaveReserveDebtTokens {
+            a_token: *a_token,
+            stable_debt_token: *stable,
+            variable_debt_token: *variable,
+        }),
         _ => Err(anyhow!("unexpected getReserveData debt token fields")),
     }
 }
@@ -1170,7 +1229,10 @@ mod tests {
     }
 
     #[test]
-    fn decode_reserve_debt_tokens_reads_stable_and_variable_addresses() {
+    fn decode_reserve_debt_tokens_reads_a_stable_and_variable_addresses() {
+        let a_token: Address = "0x1111111111111111111111111111111111111111"
+            .parse()
+            .expect("aToken");
         let stable: Address = "0x2222222222222222222222222222222222222222"
             .parse()
             .expect("stable");
@@ -1186,11 +1248,7 @@ mod tests {
             Token::Uint(U256::zero()),
             Token::Uint(U256::zero()),
             Token::Uint(U256::zero()),
-            Token::Address(
-                "0x1111111111111111111111111111111111111111"
-                    .parse()
-                    .unwrap(),
-            ),
+            Token::Address(a_token),
             Token::Address(stable),
             Token::Address(variable),
             Token::Address(
@@ -1205,6 +1263,7 @@ mod tests {
         let raw = abi::encode(&[reserve_tuple]);
         let decoded = decode_reserve_debt_tokens(&raw).expect("decode");
 
+        assert_eq!(decoded.a_token, a_token);
         assert_eq!(decoded.stable_debt_token, stable);
         assert_eq!(decoded.variable_debt_token, variable);
     }

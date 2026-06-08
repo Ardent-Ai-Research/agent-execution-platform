@@ -392,6 +392,34 @@ paths:
           $ref: '#/components/responses/ErrorResponse'
         '401':
           $ref: '#/components/responses/ErrorResponse'
+  /protocols/aave-v3/balances:
+    get:
+      summary: Read Aave V3 Sepolia reserve balances for an agent wallet
+      description: Returns underlying wallet balances, supplied aToken balances, stable debt, and variable debt for every supported Aave V3 Sepolia reserve.
+      parameters:
+        - in: query
+          name: agent_id
+          required: true
+          schema:
+            type: string
+        - in: query
+          name: chain
+          required: false
+          schema:
+            type: string
+            enum: [ethereum]
+            default: ethereum
+      responses:
+        '200':
+          description: Aave reserve balances response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AaveBalancesResponse'
+        '400':
+          $ref: '#/components/responses/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/ErrorResponse'
   /status/{id}:
     get:
       summary: Get request status by request ID
@@ -649,6 +677,75 @@ components:
         - current_liquidation_threshold_bps
         - ltv_bps
         - health_factor
+
+    AaveAssetBalance:
+      type: object
+      properties:
+        symbol:
+          type: string
+        underlying_address:
+          type: string
+        decimals:
+          type: integer
+        wallet_balance_raw:
+          type: string
+        wallet_balance_formatted:
+          type: string
+        a_token_address:
+          type: string
+        a_token_balance_raw:
+          type: string
+        a_token_balance_formatted:
+          type: string
+        stable_debt_token_address:
+          type: string
+        stable_debt_balance_raw:
+          type: string
+        stable_debt_balance_formatted:
+          type: string
+        variable_debt_token_address:
+          type: string
+        variable_debt_balance_raw:
+          type: string
+        variable_debt_balance_formatted:
+          type: string
+      required:
+        - symbol
+        - underlying_address
+        - decimals
+        - wallet_balance_raw
+        - wallet_balance_formatted
+        - a_token_address
+        - a_token_balance_raw
+        - a_token_balance_formatted
+        - stable_debt_token_address
+        - stable_debt_balance_raw
+        - stable_debt_balance_formatted
+        - variable_debt_token_address
+        - variable_debt_balance_raw
+        - variable_debt_balance_formatted
+
+    AaveBalancesResponse:
+      type: object
+      properties:
+        agent_id:
+          type: string
+        chain:
+          type: string
+        smart_wallet_address:
+          type: string
+        pool_address:
+          type: string
+        assets:
+          type: array
+          items:
+            $ref: '#/components/schemas/AaveAssetBalance'
+      required:
+        - agent_id
+        - chain
+        - smart_wallet_address
+        - pool_address
+        - assets
 
     ExecutionResponse:
       type: object

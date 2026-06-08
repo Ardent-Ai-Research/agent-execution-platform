@@ -1,6 +1,7 @@
 use anyhow::Result;
 use ethers::prelude::Middleware;
 use ethers::types::{Address, Bytes, TransactionRequest, U256};
+use ethers::utils::format_units;
 use redis::aio::ConnectionManager;
 use sqlx::PgPool;
 use std::collections::HashMap;
@@ -8,8 +9,9 @@ use uuid::Uuid;
 
 use super::adapter as aave_v3;
 use super::adapter::{
-    AaveBorrowRequest, AavePositionQuery, AavePositionResponse, AaveRepayRequest,
-    AaveSupplyRequest, AaveWithdrawRequest,
+    AaveAssetBalance, AaveBalancesQuery, AaveBalancesResponse, AaveBorrowRequest,
+    AavePositionQuery, AavePositionResponse, AaveRepayRequest, AaveSupplyRequest,
+    AaveWithdrawRequest,
 };
 use crate::agent_wallet::AgentWalletRegistry;
 use crate::api::services::{handle_execute, handle_simulate};
@@ -590,4 +592,69 @@ pub async fn handle_position(
         query.chain.clone(),
         agent_wallet.smart_wallet_address,
     )
+}
+
+pub async fn handle_balances(
+    engine: &ExecutionEngine,
+    wallet_registry: &AgentWalletRegistry,
+    api_key_id: Uuid,
+    query: &AaveBalancesQuery,
+) -> Result<AaveBalancesResponse> {
+    aave_v3::validate_balances_query(query)?;
+    let chain = Chain::from_str_loose(&query.chain)
+        .ok_or_else(|| anyhow::anyhow!("unsupported chain: {}", query.chain))?;
+    let agent_wallet = wallet_registry
+        .get_or_create(api_key_id, &query.agent_id)
+        .await?;
+
+    let mut assets = Vec::new();
+    for (symbol, underlying, decimals) in aave_v3::supported_assets() {
+        let reserve_tokens = fetch_reserve_debt_tokens(engine, &chain, underlying).await?;
+        let balance_call = aave_v3::encode_balance_of(agent_wallet.smart_wallet_address);
+        let (wallet_balance, a_token_balance, stable_debt_balance, variable_debt_balance) = tokio::try_join!(
+            call_u256(engine, &chain, underlying, balance_call.clone()),
+            call_u256(engine, &chain, reserve_tokens.a_token, balance_call.clone()),
+            call_u256(
+                engine,
+                &chain,
+                reserve_tokens.stable_debt_token,
+                balance_call.clone()
+            ),
+            call_u256(
+                engine,
+                &chain,
+                reserve_tokens.variable_debt_token,
+                balance_call
+            ),
+        )?;
+
+        assets.push(AaveAssetBalance {
+            symbol: symbol.to_string(),
+            underlying_address: format!("{underlying:?}"),
+            decimals,
+            wallet_balance_raw: wallet_balance.to_string(),
+            wallet_balance_formatted: format_token_units(wallet_balance, decimals)?,
+            a_token_address: format!("{:?}", reserve_tokens.a_token),
+            a_token_balance_raw: a_token_balance.to_string(),
+            a_token_balance_formatted: format_token_units(a_token_balance, decimals)?,
+            stable_debt_token_address: format!("{:?}", reserve_tokens.stable_debt_token),
+            stable_debt_balance_raw: stable_debt_balance.to_string(),
+            stable_debt_balance_formatted: format_token_units(stable_debt_balance, decimals)?,
+            variable_debt_token_address: format!("{:?}", reserve_tokens.variable_debt_token),
+            variable_debt_balance_raw: variable_debt_balance.to_string(),
+            variable_debt_balance_formatted: format_token_units(variable_debt_balance, decimals)?,
+        });
+    }
+
+    Ok(AaveBalancesResponse {
+        agent_id: query.agent_id.clone(),
+        chain: query.chain.clone(),
+        smart_wallet_address: format!("{:?}", agent_wallet.smart_wallet_address),
+        pool_address: aave_v3::pool_address().to_string(),
+        assets,
+    })
+}
+
+fn format_token_units(value: U256, decimals: u8) -> Result<String> {
+    format_units(value, decimals as usize).map_err(Into::into)
 }

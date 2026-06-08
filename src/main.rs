@@ -511,6 +511,10 @@ async fn main() -> anyhow::Result<()> {
             "/protocols/aave-v3/position",
             get(routes::aave_position_handler),
         )
+        .route(
+            "/protocols/aave-v3/balances",
+            get(routes::aave_balances_handler),
+        )
         .layer(middleware::from_fn_with_state(
             payment_verifier,
             x402_middleware,

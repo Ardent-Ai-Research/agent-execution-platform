@@ -11,8 +11,9 @@ curl -fsSL https://raw.githubusercontent.com/Ardent-Ai-Research/agent-execution-
 The installer:
 
 - Places the `ardent` CLI in `~/.local/bin`
+- Adds `~/.local/bin` to your shell profile when needed so new terminals can find `ardent`
 - Downloads MCP server + runtime files into `~/.ardent/`
-- Auto-patches MCP configs for **Claude Desktop, ChatGPT Desktop, Cursor, and Windsurf** if any are detected
+- Auto-patches MCP configs for **Codex, Claude Desktop, ChatGPT Desktop, Cursor, and Windsurf** if any are detected
 - Preserves any existing `ARDENT_API_KEY` already set in those configs
 
 ## Set credentials
@@ -54,6 +55,7 @@ ardent aave-repay --agent-id my-agent-001 --asset USDC --amount max
 ardent aave-borrow-simulate --agent-id my-agent-001 --asset USDC --amount max --min-health-factor 1.10
 ardent aave-borrow --agent-id my-agent-001 --asset USDC --amount max --min-health-factor 1.10
 ardent aave-position --agent-id my-agent-001
+ardent aave-balances --agent-id my-agent-001
 ```
 
 Manual payment re-submit (after a `402` response):
@@ -85,7 +87,7 @@ ardent self-update --with-runtime
 | --- | --- | --- |
 | `install.sh` | One-line installer | Everyone |
 | `ardent_cli.py` | Zero-dependency CLI | Developers, scripts, CI |
-| `mcp_server.py` | stdio MCP server | Claude, ChatGPT, Cursor, Windsurf |
+| `mcp_server.py` | stdio MCP server | Codex, Claude, ChatGPT, Cursor, Windsurf |
 | `mcp-tools.json` | MCP tool definitions | `mcp_server.py` |
 | `openapi.yaml` | OpenAPI 3.1 spec | ChatGPT custom actions, code generators |
 | `skills.md` | Setup guide + agent playbook | Humans and LLM system prompts |
@@ -98,4 +100,4 @@ ardent self-update --with-runtime
 
 ## Notes
 
-- MCP tools available: `ardent_health`, `ardent_feed_recent`, `ardent_get_wallet`, `ardent_wallet_balance`, `ardent_simulate`, `ardent_execute`, Aave tools (`ardent_aave_supply_simulate`, `ardent_aave_supply_execute`, `ardent_aave_withdraw_simulate`, `ardent_aave_withdraw_execute`, `ardent_aave_repay_simulate`, `ardent_aave_repay_execute`, `ardent_aave_borrow_simulate`, `ardent_aave_borrow_execute`, `ardent_aave_position`), and `ardent_status`
+- MCP tools available: `ardent_health`, `ardent_feed_recent`, `ardent_get_wallet`, `ardent_wallet_balance`, `ardent_simulate`, `ardent_execute`, Aave tools (`ardent_aave_supply_simulate`, `ardent_aave_supply_execute`, `ardent_aave_withdraw_simulate`, `ardent_aave_withdraw_execute`, `ardent_aave_repay_simulate`, `ardent_aave_repay_execute`, `ardent_aave_borrow_simulate`, `ardent_aave_borrow_execute`, `ardent_aave_position`, `ardent_aave_balances`), and `ardent_status`

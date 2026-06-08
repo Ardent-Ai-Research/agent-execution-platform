@@ -5,6 +5,7 @@
 * [Testnet Guide](testnet-guide.md)
 * [Authentication and Keys](authentication-and-keys.md)
 * [Payment Modes](payment-modes.md)
+* [Aave V3 Sepolia](aave-v3.md)
 * [Endpoint Reference](endpoint-reference.md)
 * [Workflows](workflows/request-api-key.md)
   * [Request API Key](workflows/request-api-key.md)

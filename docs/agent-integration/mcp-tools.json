@@ -445,6 +445,22 @@
       }
     },
     {
+      "name": "ardent_aave_balances",
+      "description": "Read wallet, supplied aToken, stable debt, and variable debt balances for all supported Aave V3 Sepolia reserve assets.",
+      "method": "GET",
+      "path": "/protocols/aave-v3/balances",
+      "authRequired": true,
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "agent_id": { "type": "string" },
+          "chain": { "type": "string", "enum": ["ethereum"], "default": "ethereum" }
+        },
+        "required": ["agent_id"],
+        "additionalProperties": false
+      }
+    },
+    {
       "name": "ardent_status",
       "description": "Get execution request status by request_id",
       "method": "GET",

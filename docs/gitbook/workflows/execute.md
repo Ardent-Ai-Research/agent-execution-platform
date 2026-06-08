@@ -175,6 +175,8 @@ See [Agent Integration](../agent-integration.md) for the one-line installer.
 For testnet Aave V3 supply actions, prefer the typed protocol endpoint instead
 of manually encoding calldata.
 
+For the full Aave command/reference page, including reserve balances and test asset funding, see [Aave V3 Sepolia](../aave-v3.md).
+
 Simulate:
 
 ```bash
@@ -344,6 +346,7 @@ curl -X GET "$BASE_URL/protocols/aave-v3/position?agent_id=my-agent-001&chain=et
 CLI equivalent:
 
 ```bash
+ardent aave-balances --agent-id my-agent-001
 ardent aave-position --agent-id my-agent-001
 ```
 

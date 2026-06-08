@@ -16,7 +16,7 @@ Then set your key:
 export ARDENT_API_KEY="your_api_key"
 ```
 
-> If `ardent` is not found after install, add `~/.local/bin` to your PATH:
+The installer adds `~/.local/bin` to your shell profile when needed. Open a new terminal after install. If `ardent` is still not found, run:
 >
 > ```bash
 > export PATH="${HOME}/.local/bin:${PATH}"
@@ -89,6 +89,8 @@ ardent wallet         --agent-id <id> --chain <chain>
 ardent wallet-balance --agent-id <id> --chain <chain>   # native + ERC-20 token balances
 ardent simulate --agent-id <id> --chain <chain> --target-contract <addr> --calldata <hex> --value <wei>
 ardent execute  --agent-id <id> --chain <chain> --target-contract <addr> --calldata <hex> --value <wei>
+ardent aave-balances --agent-id <id>                   # Aave reserve wallet/aToken/debt balances
+ardent aave-position --agent-id <id>                   # Aave account data and health factor
 ardent status   --request-id <id>
 ardent self-update
 ardent self-update --with-runtime       # also refreshes ~/.ardent files
@@ -98,7 +100,7 @@ ardent self-update --with-runtime       # also refreshes ~/.ardent files
 
 ### AI assistant users — the MCP server
 
-**Best for:** developers and power users who run Claude Desktop, ChatGPT Desktop, Cursor, or Windsurf and want their AI tool to call the Ardent platform directly during a session.
+**Best for:** developers and power users who run Codex, Claude Desktop, ChatGPT Desktop, Cursor, or Windsurf and want their AI tool to call the Ardent platform directly during a session.
 
 The MCP server (`~/.ardent/mcp_server.py`) speaks the Model Context Protocol over stdio. Once registered, the AI assistant can invoke Ardent tools in response to natural language without you writing any code or curl commands.
 
@@ -106,6 +108,7 @@ The installer automatically patches the config file for any supported app it det
 
 | App | Config file patched |
 | --- | --- |
+| Codex | `~/.codex/config.toml` |
 | Claude Desktop | `~/Library/Application Support/Claude/claude_desktop_config.json` |
 | ChatGPT Desktop | `~/Library/Application Support/com.openai.chat/mcp_servers.json` |
 | Cursor | `~/.cursor/mcp.json` |
@@ -128,6 +131,8 @@ The installer automatically patches the config file for any supported app it det
 **Example conversations once the MCP server is active:**
 
 > *"What are the current token balances for agent-001 on Base?"*
+
+> *"Show my Aave wallet, supplied, and debt balances for agent-001."*
 
 > *"Simulate a transfer of 100 USDC from my agent wallet on Base and tell me the gas cost."*
 
@@ -153,6 +158,8 @@ python3 ~/.ardent/mcp_server.py
 | `ardent_feed_recent` | Fetch public execution activity |
 | `ardent_get_wallet` | Resolve or provision an agent smart wallet |
 | `ardent_wallet_balance` | Get native + ERC-20 token balances for an agent wallet |
+| `ardent_aave_balances` | Read Aave reserve wallet, supplied aToken, and debt balances |
+| `ardent_aave_position` | Read Aave account data, borrowing capacity, and health factor |
 | `ardent_simulate` | Simulate a transaction and return estimated cost |
 | `ardent_execute` | Submit a transaction for execution |
 | `ardent_status` | Poll execution request status |
@@ -209,7 +216,7 @@ Full skills file:
 | --- | --- | --- |
 | `install.sh` | One-line installer | Everyone |
 | `ardent_cli.py` | Zero-dependency CLI | Developers, scripts, CI |
-| `mcp_server.py` | stdio MCP server | Claude, ChatGPT, Cursor, Windsurf |
+| `mcp_server.py` | stdio MCP server | Codex, Claude, ChatGPT, Cursor, Windsurf |
 | `mcp-tools.json` | MCP tool definitions | `mcp_server.py` |
 | `openapi.yaml` | OpenAPI 3.1 spec | ChatGPT custom actions, code generators, framework builders |
 | `skills.md` | Setup guide and agent playbook | Humans and LLM system prompts |

@@ -28,6 +28,7 @@ ardent health
 ardent feed                             # public activity feed
 ardent wallet         --agent-id my-agent-001 --chain ethereum
 ardent wallet-balance --agent-id my-agent-001 --chain ethereum
+ardent aave-balances --agent-id my-agent-001
 ardent simulate --agent-id my-agent-001 --chain ethereum --target-contract 0xTargetContract --calldata 0xCalldata --value 0
 ardent execute --agent-id my-agent-001 --chain ethereum --target-contract 0xTargetContract --calldata 0xCalldata --value 0
 ardent status --request-id your_request_id
@@ -58,7 +59,7 @@ ardent self-update --with-runtime # also refreshes ~/.ardent files
 
 ### Optional: MCP server for AI tool runtimes
 
-The installer automatically registers Ardent in Claude Desktop, ChatGPT Desktop, Cursor, and Windsurf if any are detected. Just restart the app after install.
+The installer automatically registers Ardent in Codex, Claude Desktop, ChatGPT Desktop, Cursor, and Windsurf if any are detected. Just restart the app after install.
 
 > **After install, open the patched config file and replace the `ARDENT_API_KEY` placeholder with your real key before restarting the app.**
 > The installer prints the exact path of every file it patches.
@@ -101,9 +102,21 @@ REQUEST_ID="your_request_id"
 
 ### Typed Aave V3 Sepolia Flow
 
-Use typed protocol tools for Aave V3 Sepolia supply actions instead of manually
-encoding calldata. The API compiles the request into an atomic
-`approve -> Pool.supply` ERC-4337 batch and runs full UserOperation simulation.
+Use typed protocol tools for Aave V3 Sepolia actions instead of manually
+encoding calldata. Before changing state, read balances and position:
+
+```bash
+curl -X GET "$BASE_URL/protocols/aave-v3/balances?agent_id=$AGENT_ID&chain=ethereum" \
+  -H "X-API-Key: $API_KEY"
+```
+
+```bash
+curl -X GET "$BASE_URL/protocols/aave-v3/position?agent_id=$AGENT_ID&chain=ethereum" \
+  -H "X-API-Key: $API_KEY"
+```
+
+For supply, the API compiles the request into an atomic `approve -> Pool.supply`
+ERC-4337 batch and runs full UserOperation simulation.
 
 ```bash
 curl -X POST "$BASE_URL/protocols/aave-v3/supply/simulate" \

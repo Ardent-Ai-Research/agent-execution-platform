@@ -87,15 +87,15 @@ Yes. Run the one-line installer:
 curl -fsSL https://raw.githubusercontent.com/Ardent-Ai-Research/agent-execution-platform/master/docs/agent-integration/install.sh | bash
 ```
 
-This installs an `ardent` command with subcommands for every platform operation: `health`, `feed`, `wallet`, `simulate`, `execute`, `status`, and `self-update`.
+This installs an `ardent` command with subcommands for every platform operation: `health`, `feed`, `wallet`, `wallet-balance`, `simulate`, `execute`, `status`, Aave commands, and `self-update`.
 
 See [Agent Integration](agent-integration.md).
 
-## 14. Can I use Ardent tools inside Claude, ChatGPT, Cursor, or Windsurf
+## 14. Can I use Ardent tools inside Codex, Claude, ChatGPT, Cursor, or Windsurf
 
-Yes. The installer auto-patches MCP configs for all four apps if they are detected on your machine.
+Yes. The installer auto-patches MCP configs for supported apps if they are detected on your machine.
 
-After install, restart the desktop app and all Ardent tools (`ardent_health`, `ardent_feed_recent`, `ardent_get_wallet`, `ardent_simulate`, `ardent_execute`, `ardent_status`) will appear in the tool list.
+After install, restart the desktop app and Ardent tools such as `ardent_health`, `ardent_get_wallet`, `ardent_simulate`, `ardent_execute`, `ardent_aave_balances`, `ardent_aave_position`, and `ardent_status` will appear in the tool list.
 
 For manual or other MCP-compatible runtimes, point them at:
 

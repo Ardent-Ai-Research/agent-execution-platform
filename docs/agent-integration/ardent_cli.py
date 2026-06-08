@@ -8,6 +8,7 @@ Commands:
 - wallet-balance
 - simulate
 - execute
+- aave-balances
 - status
 - self-update
 """
@@ -23,7 +24,7 @@ from urllib import parse, request
 from urllib.error import HTTPError, URLError
 
 
-VERSION = "0.2.0"
+VERSION = "0.3.0"
 REPO_RAW_BASE = "https://raw.githubusercontent.com/Ardent-Ai-Research/agent-execution-platform/master/docs/agent-integration"
 RUNTIME_DIR = Path(os.getenv("ARDENT_RUNTIME_DIR", str(Path.home() / ".ardent")))
 
@@ -347,6 +348,15 @@ def run_aave_position(args: argparse.Namespace) -> int:
     return 0 if 200 <= status < 300 else 1
 
 
+def run_aave_balances(args: argparse.Namespace) -> int:
+    api_key = require_api_key(args)
+    qs = parse.urlencode({"agent_id": args.agent_id, "chain": args.chain})
+    url = f"{build_base_url(args)}/protocols/aave-v3/balances?{qs}"
+    status, payload = call_api("GET", url, api_key=api_key)
+    output({"status": status, "data": payload})
+    return 0 if 200 <= status < 300 else 1
+
+
 def run_status(args: argparse.Namespace) -> int:
     api_key = require_api_key(args)
     request_id = args.request_id
@@ -550,6 +560,12 @@ def build_parser() -> argparse.ArgumentParser:
     p_aave_position.add_argument("--agent-id", required=True, help="Agent identifier")
     p_aave_position.add_argument("--chain", default="ethereum", choices=["ethereum"], help="Aave V3 Sepolia chain label")
     p_aave_position.set_defaults(func=run_aave_position)
+
+    p_aave_balances = subparsers.add_parser("aave-balances", help="GET /protocols/aave-v3/balances")
+    add_global_flags(p_aave_balances)
+    p_aave_balances.add_argument("--agent-id", required=True, help="Agent identifier")
+    p_aave_balances.add_argument("--chain", default="ethereum", choices=["ethereum"], help="Aave V3 Sepolia chain label")
+    p_aave_balances.set_defaults(func=run_aave_balances)
 
     p_status = subparsers.add_parser("status", help="GET /status/{id}")
     add_global_flags(p_status)

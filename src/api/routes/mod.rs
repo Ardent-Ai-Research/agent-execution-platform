@@ -20,8 +20,8 @@ use crate::db;
 use crate::execution_engine::ExecutionEngine;
 use crate::payments::PaymentRequiredBody;
 use crate::protocols::aave_v3::{
-    service as aave_v3_service, AaveBorrowRequest, AavePositionQuery, AaveRepayRequest,
-    AaveSupplyRequest, AaveWithdrawRequest,
+    service as aave_v3_service, AaveBalancesQuery, AaveBorrowRequest, AavePositionQuery,
+    AaveRepayRequest, AaveSupplyRequest, AaveWithdrawRequest,
 };
 use crate::relayer::erc4337::BundlerClient;
 use crate::relayer::paymaster::PaymasterSigner;
@@ -460,6 +460,26 @@ pub async fn aave_position_handler(
     info!(agent_id = %query.agent_id, chain = %query.chain, "GET /protocols/aave-v3/position");
 
     match aave_v3_service::handle_position(
+        &state.engine,
+        &state.wallet_registry,
+        api_ctx.api_key_id,
+        &query,
+    )
+    .await
+    {
+        Ok(resp) => (StatusCode::OK, Json(serde_json::to_value(resp).unwrap())).into_response(),
+        Err(e) => protocol_error_to_http(e),
+    }
+}
+
+pub async fn aave_balances_handler(
+    State(state): State<AppState>,
+    Extension(api_ctx): Extension<ApiKeyContext>,
+    Query(query): Query<AaveBalancesQuery>,
+) -> impl IntoResponse {
+    info!(agent_id = %query.agent_id, chain = %query.chain, "GET /protocols/aave-v3/balances");
+
+    match aave_v3_service::handle_balances(
         &state.engine,
         &state.wallet_registry,
         api_ctx.api_key_id,
