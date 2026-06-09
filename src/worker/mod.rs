@@ -155,7 +155,8 @@ pub async fn run_worker(mut redis_conn: ConnectionManager, ctx: WorkerContext, w
                 "execution confirmed on-chain ✓"
             );
 
-            let persisted_cost_usd = match db::get_execution_request(&ctx.db_pool, request_id).await {
+            let persisted_cost_usd = match db::get_execution_request(&ctx.db_pool, request_id).await
+            {
                 Ok(Some(row)) => row.cost_usd,
                 Ok(None) => None,
                 Err(e) => {

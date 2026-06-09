@@ -15,7 +15,7 @@ use super::adapter::{
     GmxUpdateOrderRequest,
 };
 use crate::agent_wallet::AgentWalletRegistry;
-use crate::api::services::{handle_execute, handle_simulate};
+use crate::api::services::{handle_execute, handle_simulate, resolve_chain_smart_wallet_address};
 use crate::execution_engine::ExecutionEngine;
 use crate::relayer::erc4337::BundlerClient;
 use crate::relayer::paymaster::PaymasterSigner;
@@ -83,13 +83,15 @@ pub async fn handle_positions(
     let agent_wallet = wallet_registry
         .get_or_create(api_key_id, &query.agent_id)
         .await?;
+    let smart_wallet_address =
+        resolve_chain_smart_wallet_address(engine, &chain, &agent_wallet).await?;
     let data_store: Address = gmx_v2::data_store_address().parse()?;
     let raw = call_reader(
         engine,
         &chain,
         gmx_v2::encode_get_account_positions(
             data_store,
-            agent_wallet.smart_wallet_address,
+            smart_wallet_address,
             U256::from(start),
             U256::from(end),
         ),
@@ -99,7 +101,7 @@ pub async fn handle_positions(
     Ok(GmxPositionsResponse {
         agent_id: query.agent_id.clone(),
         chain: query.chain.clone(),
-        smart_wallet_address: format!("{:?}", agent_wallet.smart_wallet_address),
+        smart_wallet_address: format!("{:?}", smart_wallet_address),
         start,
         end,
         positions,
@@ -118,13 +120,15 @@ pub async fn handle_orders(
     let agent_wallet = wallet_registry
         .get_or_create(api_key_id, &query.agent_id)
         .await?;
+    let smart_wallet_address =
+        resolve_chain_smart_wallet_address(engine, &chain, &agent_wallet).await?;
     let data_store: Address = gmx_v2::data_store_address().parse()?;
     let raw = call_reader(
         engine,
         &chain,
         gmx_v2::encode_get_account_orders(
             data_store,
-            agent_wallet.smart_wallet_address,
+            smart_wallet_address,
             U256::from(start),
             U256::from(end),
         ),
@@ -134,7 +138,7 @@ pub async fn handle_orders(
     Ok(GmxOrdersResponse {
         agent_id: query.agent_id.clone(),
         chain: query.chain.clone(),
-        smart_wallet_address: format!("{:?}", agent_wallet.smart_wallet_address),
+        smart_wallet_address: format!("{:?}", smart_wallet_address),
         start,
         end,
         orders,
@@ -163,6 +167,8 @@ pub async fn handle_balances(
     let agent_wallet = wallet_registry
         .get_or_create(api_key_id, &query.agent_id)
         .await?;
+    let smart_wallet_address =
+        resolve_chain_smart_wallet_address(engine, &chain, &agent_wallet).await?;
     let mut balances = Vec::new();
     for market in markets {
         let token: Address = market.market_token.parse()?;
@@ -171,7 +177,7 @@ pub async fn handle_balances(
                 engine,
                 &chain,
                 token,
-                gmx_v2::encode_balance_of(agent_wallet.smart_wallet_address)
+                gmx_v2::encode_balance_of(smart_wallet_address)
             ),
             call_u256(engine, &chain, token, gmx_v2::encode_decimals())
         )?;
@@ -186,7 +192,7 @@ pub async fn handle_balances(
     Ok(GmxBalancesResponse {
         agent_id: query.agent_id.clone(),
         chain: query.chain.clone(),
-        smart_wallet_address: format!("{:?}", agent_wallet.smart_wallet_address),
+        smart_wallet_address: format!("{:?}", smart_wallet_address),
         balances,
     })
 }
@@ -209,7 +215,9 @@ pub async fn handle_create_order(
     let agent_wallet = wallet_registry
         .get_or_create(api_key_id, &req.agent_id)
         .await?;
-    let execution_req = gmx_v2::compile_create_order(req, agent_wallet.smart_wallet_address)?;
+    let smart_wallet_address =
+        resolve_chain_smart_wallet_address(engine, &chain, &agent_wallet).await?;
+    let execution_req = gmx_v2::compile_create_order(req, smart_wallet_address)?;
 
     handle_execute(
         engine,
@@ -238,10 +246,14 @@ pub async fn handle_create_order_simulate(
     req: &GmxCreateOrderRequest,
 ) -> Result<ExecutionResponse> {
     gmx_v2::validate_create_order_request(req)?;
+    let chain = Chain::from_str_loose(&req.chain)
+        .ok_or_else(|| anyhow::anyhow!("unsupported chain: {}", req.chain))?;
     let agent_wallet = wallet_registry
         .get_or_create(api_key_id, &req.agent_id)
         .await?;
-    let execution_req = gmx_v2::compile_create_order(req, agent_wallet.smart_wallet_address)?;
+    let smart_wallet_address =
+        resolve_chain_smart_wallet_address(engine, &chain, &agent_wallet).await?;
+    let execution_req = gmx_v2::compile_create_order(req, smart_wallet_address)?;
 
     handle_simulate(
         engine,
@@ -402,7 +414,9 @@ pub async fn handle_create_deposit(
     let agent_wallet = wallet_registry
         .get_or_create(api_key_id, &req.agent_id)
         .await?;
-    let execution_req = gmx_v2::compile_create_deposit(req, agent_wallet.smart_wallet_address)?;
+    let smart_wallet_address =
+        resolve_chain_smart_wallet_address(engine, &chain, &agent_wallet).await?;
+    let execution_req = gmx_v2::compile_create_deposit(req, smart_wallet_address)?;
     handle_execute(
         engine,
         pool,
@@ -430,10 +444,14 @@ pub async fn handle_create_deposit_simulate(
     req: &GmxCreateDepositRequest,
 ) -> Result<ExecutionResponse> {
     gmx_v2::validate_create_deposit_request(req)?;
+    let chain = Chain::from_str_loose(&req.chain)
+        .ok_or_else(|| anyhow::anyhow!("unsupported chain: {}", req.chain))?;
     let agent_wallet = wallet_registry
         .get_or_create(api_key_id, &req.agent_id)
         .await?;
-    let execution_req = gmx_v2::compile_create_deposit(req, agent_wallet.smart_wallet_address)?;
+    let smart_wallet_address =
+        resolve_chain_smart_wallet_address(engine, &chain, &agent_wallet).await?;
+    let execution_req = gmx_v2::compile_create_deposit(req, smart_wallet_address)?;
     handle_simulate(
         engine,
         pool,
@@ -465,7 +483,9 @@ pub async fn handle_create_withdrawal(
     let agent_wallet = wallet_registry
         .get_or_create(api_key_id, &req.agent_id)
         .await?;
-    let execution_req = gmx_v2::compile_create_withdrawal(req, agent_wallet.smart_wallet_address)?;
+    let smart_wallet_address =
+        resolve_chain_smart_wallet_address(engine, &chain, &agent_wallet).await?;
+    let execution_req = gmx_v2::compile_create_withdrawal(req, smart_wallet_address)?;
     handle_execute(
         engine,
         pool,
@@ -493,10 +513,14 @@ pub async fn handle_create_withdrawal_simulate(
     req: &GmxCreateWithdrawalRequest,
 ) -> Result<ExecutionResponse> {
     gmx_v2::validate_create_withdrawal_request(req)?;
+    let chain = Chain::from_str_loose(&req.chain)
+        .ok_or_else(|| anyhow::anyhow!("unsupported chain: {}", req.chain))?;
     let agent_wallet = wallet_registry
         .get_or_create(api_key_id, &req.agent_id)
         .await?;
-    let execution_req = gmx_v2::compile_create_withdrawal(req, agent_wallet.smart_wallet_address)?;
+    let smart_wallet_address =
+        resolve_chain_smart_wallet_address(engine, &chain, &agent_wallet).await?;
+    let execution_req = gmx_v2::compile_create_withdrawal(req, smart_wallet_address)?;
     handle_simulate(
         engine,
         pool,
@@ -591,7 +615,9 @@ pub async fn handle_claim(
     let agent_wallet = wallet_registry
         .get_or_create(api_key_id, &req.agent_id)
         .await?;
-    let execution_req = gmx_v2::compile_claim(req, agent_wallet.smart_wallet_address)?;
+    let smart_wallet_address =
+        resolve_chain_smart_wallet_address(engine, &chain, &agent_wallet).await?;
+    let execution_req = gmx_v2::compile_claim(req, smart_wallet_address)?;
     handle_execute(
         engine,
         pool,
@@ -619,10 +645,14 @@ pub async fn handle_claim_simulate(
     req: &GmxClaimRequest,
 ) -> Result<ExecutionResponse> {
     gmx_v2::validate_claim_request(req)?;
+    let chain = Chain::from_str_loose(&req.chain)
+        .ok_or_else(|| anyhow::anyhow!("unsupported chain: {}", req.chain))?;
     let agent_wallet = wallet_registry
         .get_or_create(api_key_id, &req.agent_id)
         .await?;
-    let execution_req = gmx_v2::compile_claim(req, agent_wallet.smart_wallet_address)?;
+    let smart_wallet_address =
+        resolve_chain_smart_wallet_address(engine, &chain, &agent_wallet).await?;
+    let execution_req = gmx_v2::compile_claim(req, smart_wallet_address)?;
     handle_simulate(
         engine,
         pool,

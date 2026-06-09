@@ -14,7 +14,7 @@ use super::adapter::{
     AaveWithdrawRequest,
 };
 use crate::agent_wallet::AgentWalletRegistry;
-use crate::api::services::{handle_execute, handle_simulate};
+use crate::api::services::{handle_execute, handle_simulate, resolve_chain_smart_wallet_address};
 use crate::execution_engine::ExecutionEngine;
 use crate::relayer::erc4337::BundlerClient;
 use crate::relayer::paymaster::PaymasterSigner;
@@ -38,7 +38,9 @@ pub async fn handle_supply(
     let agent_wallet = wallet_registry
         .get_or_create(api_key_id, &req.agent_id)
         .await?;
-    let execution_req = aave_v3::compile_supply(req, agent_wallet.smart_wallet_address)?;
+    let smart_wallet_address =
+        resolve_chain_smart_wallet_address(engine, &chain, &agent_wallet).await?;
+    let execution_req = aave_v3::compile_supply(req, smart_wallet_address)?;
 
     handle_execute(
         engine,
@@ -67,10 +69,14 @@ pub async fn handle_supply_simulate(
     req: &AaveSupplyRequest,
 ) -> Result<ExecutionResponse> {
     aave_v3::validate_supply_request(req)?;
+    let chain = Chain::from_str_loose(&req.chain)
+        .ok_or_else(|| anyhow::anyhow!("unsupported chain: {}", req.chain))?;
     let agent_wallet = wallet_registry
         .get_or_create(api_key_id, &req.agent_id)
         .await?;
-    let execution_req = aave_v3::compile_supply(req, agent_wallet.smart_wallet_address)?;
+    let smart_wallet_address =
+        resolve_chain_smart_wallet_address(engine, &chain, &agent_wallet).await?;
+    let execution_req = aave_v3::compile_supply(req, smart_wallet_address)?;
 
     handle_simulate(
         engine,
@@ -103,7 +109,9 @@ pub async fn handle_withdraw(
     let agent_wallet = wallet_registry
         .get_or_create(api_key_id, &req.agent_id)
         .await?;
-    let execution_req = aave_v3::compile_withdraw(req, agent_wallet.smart_wallet_address)?;
+    let smart_wallet_address =
+        resolve_chain_smart_wallet_address(engine, &chain, &agent_wallet).await?;
+    let execution_req = aave_v3::compile_withdraw(req, smart_wallet_address)?;
 
     handle_execute(
         engine,
@@ -132,10 +140,14 @@ pub async fn handle_withdraw_simulate(
     req: &AaveWithdrawRequest,
 ) -> Result<ExecutionResponse> {
     aave_v3::validate_withdraw_request(req)?;
+    let chain = Chain::from_str_loose(&req.chain)
+        .ok_or_else(|| anyhow::anyhow!("unsupported chain: {}", req.chain))?;
     let agent_wallet = wallet_registry
         .get_or_create(api_key_id, &req.agent_id)
         .await?;
-    let execution_req = aave_v3::compile_withdraw(req, agent_wallet.smart_wallet_address)?;
+    let smart_wallet_address =
+        resolve_chain_smart_wallet_address(engine, &chain, &agent_wallet).await?;
+    let execution_req = aave_v3::compile_withdraw(req, smart_wallet_address)?;
 
     handle_simulate(
         engine,
@@ -168,9 +180,10 @@ pub async fn handle_repay(
     let agent_wallet = wallet_registry
         .get_or_create(api_key_id, &req.agent_id)
         .await?;
-    let resolved_req =
-        resolve_repay_amount(engine, &chain, req, agent_wallet.smart_wallet_address).await?;
-    let execution_req = aave_v3::compile_repay(&resolved_req, agent_wallet.smart_wallet_address)?;
+    let smart_wallet_address =
+        resolve_chain_smart_wallet_address(engine, &chain, &agent_wallet).await?;
+    let resolved_req = resolve_repay_amount(engine, &chain, req, smart_wallet_address).await?;
+    let execution_req = aave_v3::compile_repay(&resolved_req, smart_wallet_address)?;
 
     handle_execute(
         engine,
@@ -204,9 +217,10 @@ pub async fn handle_repay_simulate(
     let agent_wallet = wallet_registry
         .get_or_create(api_key_id, &req.agent_id)
         .await?;
-    let resolved_req =
-        resolve_repay_amount(engine, &chain, req, agent_wallet.smart_wallet_address).await?;
-    let execution_req = aave_v3::compile_repay(&resolved_req, agent_wallet.smart_wallet_address)?;
+    let smart_wallet_address =
+        resolve_chain_smart_wallet_address(engine, &chain, &agent_wallet).await?;
+    let resolved_req = resolve_repay_amount(engine, &chain, req, smart_wallet_address).await?;
+    let execution_req = aave_v3::compile_repay(&resolved_req, smart_wallet_address)?;
 
     handle_simulate(
         engine,
@@ -511,9 +525,10 @@ pub async fn handle_borrow(
     let agent_wallet = wallet_registry
         .get_or_create(api_key_id, &req.agent_id)
         .await?;
-    let resolved_req =
-        guard_borrow_health(engine, &chain, req, agent_wallet.smart_wallet_address).await?;
-    let execution_req = aave_v3::compile_borrow(&resolved_req, agent_wallet.smart_wallet_address)?;
+    let smart_wallet_address =
+        resolve_chain_smart_wallet_address(engine, &chain, &agent_wallet).await?;
+    let resolved_req = guard_borrow_health(engine, &chain, req, smart_wallet_address).await?;
+    let execution_req = aave_v3::compile_borrow(&resolved_req, smart_wallet_address)?;
 
     handle_execute(
         engine,
@@ -547,9 +562,10 @@ pub async fn handle_borrow_simulate(
     let agent_wallet = wallet_registry
         .get_or_create(api_key_id, &req.agent_id)
         .await?;
-    let resolved_req =
-        guard_borrow_health(engine, &chain, req, agent_wallet.smart_wallet_address).await?;
-    let execution_req = aave_v3::compile_borrow(&resolved_req, agent_wallet.smart_wallet_address)?;
+    let smart_wallet_address =
+        resolve_chain_smart_wallet_address(engine, &chain, &agent_wallet).await?;
+    let resolved_req = guard_borrow_health(engine, &chain, req, smart_wallet_address).await?;
+    let execution_req = aave_v3::compile_borrow(&resolved_req, smart_wallet_address)?;
 
     handle_simulate(
         engine,
@@ -577,10 +593,11 @@ pub async fn handle_position(
     let agent_wallet = wallet_registry
         .get_or_create(api_key_id, &query.agent_id)
         .await?;
+    let smart_wallet_address =
+        resolve_chain_smart_wallet_address(engine, &chain, &agent_wallet).await?;
     let pool_addr: Address = aave_v3::pool_address().parse()?;
     let calldata: Bytes = hex::decode(
-        aave_v3::encode_get_user_account_data(agent_wallet.smart_wallet_address)
-            .trim_start_matches("0x"),
+        aave_v3::encode_get_user_account_data(smart_wallet_address).trim_start_matches("0x"),
     )?
     .into();
     let tx = TransactionRequest::new().to(pool_addr).data(calldata);
@@ -590,7 +607,7 @@ pub async fn handle_position(
         &raw.0,
         query.agent_id.clone(),
         query.chain.clone(),
-        agent_wallet.smart_wallet_address,
+        smart_wallet_address,
     )
 }
 
@@ -606,11 +623,13 @@ pub async fn handle_balances(
     let agent_wallet = wallet_registry
         .get_or_create(api_key_id, &query.agent_id)
         .await?;
+    let smart_wallet_address =
+        resolve_chain_smart_wallet_address(engine, &chain, &agent_wallet).await?;
 
     let mut assets = Vec::new();
     for (symbol, underlying, decimals) in aave_v3::supported_assets() {
         let reserve_tokens = fetch_reserve_debt_tokens(engine, &chain, underlying).await?;
-        let balance_call = aave_v3::encode_balance_of(agent_wallet.smart_wallet_address);
+        let balance_call = aave_v3::encode_balance_of(smart_wallet_address);
         let (wallet_balance, a_token_balance, stable_debt_balance, variable_debt_balance) = tokio::try_join!(
             call_u256(engine, &chain, underlying, balance_call.clone()),
             call_u256(engine, &chain, reserve_tokens.a_token, balance_call.clone()),
@@ -649,7 +668,7 @@ pub async fn handle_balances(
     Ok(AaveBalancesResponse {
         agent_id: query.agent_id.clone(),
         chain: query.chain.clone(),
-        smart_wallet_address: format!("{:?}", agent_wallet.smart_wallet_address),
+        smart_wallet_address: format!("{:?}", smart_wallet_address),
         pool_address: aave_v3::pool_address().to_string(),
         assets,
     })

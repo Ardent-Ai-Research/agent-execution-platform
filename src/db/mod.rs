@@ -179,8 +179,8 @@ pub async fn get_recent_feed_rows(pool: &PgPool, limit: i64) -> Result<Vec<Recen
 pub async fn get_locked_quote_cost(
     pool: &PgPool,
     quote_request_id: Uuid,
-    api_key_id: Uuid,
     req: &crate::types::ExecutionRequest,
+    smart_wallet_address: &str,
 ) -> Result<Option<f64>> {
     let payload_hash = execution_payload_hash(req)?;
     let allow_legacy_single_call_match = req.batch_calls.is_none();
@@ -188,9 +188,8 @@ pub async fn get_locked_quote_cost(
         r#"
         SELECT er.cost_usd
         FROM execution_requests er
-        JOIN agent_wallets aw ON aw.smart_wallet_address = er.smart_wallet_address
         WHERE er.id = $1
-          AND aw.api_key_id = $2
+          AND er.smart_wallet_address = $2
           AND er.chain = $3
           AND er.target_contract = $4
           AND er.calldata = $5
@@ -205,7 +204,7 @@ pub async fn get_locked_quote_cost(
         "#,
     )
     .bind(quote_request_id)
-    .bind(api_key_id)
+    .bind(smart_wallet_address)
     .bind(&req.chain)
     .bind(&req.target_contract)
     .bind(&req.calldata)
@@ -331,28 +330,17 @@ pub async fn payment_tx_hash_exists(pool: &PgPool, tx_hash: &str) -> Result<bool
     Ok(row.0)
 }
 
-/// Resolve the API key hash for a given execution request ID.
-///
-/// Joins `execution_requests → agent_wallets → api_keys` to find the
-/// key_hash that the worker needs for webhook HMAC signing.
-///
-/// The join uses `smart_wallet_address` (unique per wallet) rather than
-/// `agent_id` (which can collide across different API keys).
-pub async fn get_api_key_hash_for_request(
-    pool: &PgPool,
-    request_id: Uuid,
-) -> Result<Option<String>> {
+/// Resolve the API key hash by API key id.
+pub async fn get_api_key_hash_by_id(pool: &PgPool, api_key_id: Uuid) -> Result<Option<String>> {
     let row: Option<(String,)> = sqlx::query_as(
         r#"
-        SELECT ak.key_hash
-        FROM execution_requests er
-        JOIN agent_wallets aw ON aw.smart_wallet_address = er.smart_wallet_address
-        JOIN api_keys ak ON ak.id = aw.api_key_id
-        WHERE er.id = $1
+        SELECT key_hash
+        FROM api_keys
+        WHERE id = $1
         LIMIT 1
         "#,
     )
-    .bind(request_id)
+    .bind(api_key_id)
     .fetch_optional(pool)
     .await?;
     Ok(row.map(|r| r.0))

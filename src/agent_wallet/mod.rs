@@ -285,7 +285,20 @@ impl AgentWalletRegistry {
     /// address the factory would deploy to for the given (owner, salt) pair.
     /// Always accurate regardless of factory version or proxy init code.
     pub async fn compute_smart_wallet_address(&self, owner: Address) -> Result<Address> {
-        let provider = &self.provider;
+        Self::compute_smart_wallet_address_with(self.provider.clone(), self.factory_address, owner)
+            .await
+    }
+
+    /// Compute the counterfactual smart wallet address against an explicit
+    /// provider/factory pair.
+    ///
+    /// This is used for chain-specific address resolution when existing
+    /// wallets predate the deterministic multi-chain factory rollout.
+    pub async fn compute_smart_wallet_address_with(
+        provider: Arc<Provider<Http>>,
+        factory_address: Address,
+        owner: Address,
+    ) -> Result<Address> {
         // Encode: getAddress(address owner, uint256 salt)
         let params = abi::encode(&[
             Token::Address(owner),
@@ -296,7 +309,7 @@ impl AgentWalletRegistry {
         calldata.extend_from_slice(&params);
 
         let tx = ethers::types::TransactionRequest::new()
-            .to(self.factory_address)
+            .to(factory_address)
             .data(Bytes::from(calldata));
 
         let result = provider
@@ -316,6 +329,7 @@ impl AgentWalletRegistry {
 
         info!(
             owner = %owner,
+            factory = %factory_address,
             smart_wallet = %address,
             "computed smart wallet address via factory.getAddress()"
         );

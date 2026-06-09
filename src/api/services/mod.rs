@@ -32,6 +32,7 @@ async fn simulate_request(
     req: &ExecutionRequest,
     chain: &Chain,
     agent_wallet: &crate::agent_wallet::AgentWallet,
+    smart_wallet_address: Address,
     smart_wallet_str: &str,
 ) -> Result<SimulationResult> {
     if req.batch_calls.is_some() {
@@ -42,13 +43,12 @@ async fn simulate_request(
             req,
             chain,
             agent_wallet,
+            smart_wallet_address,
             smart_wallet_str,
         )
         .await
     } else {
-        engine
-            .simulate(req, chain, agent_wallet.smart_wallet_address)
-            .await
+        engine.simulate(req, chain, smart_wallet_address).await
     }
 }
 
@@ -66,6 +66,7 @@ async fn simulate_batch_user_op(
     req: &ExecutionRequest,
     chain: &Chain,
     agent_wallet: &crate::agent_wallet::AgentWallet,
+    smart_wallet: Address,
     smart_wallet_str: &str,
 ) -> Result<SimulationResult> {
     let job = ExecutionJob {
@@ -85,7 +86,6 @@ async fn simulate_batch_user_op(
         api_key_hash: None,
     };
 
-    let smart_wallet = agent_wallet.smart_wallet_address;
     let chain_id = bundler_client.provider().get_chainid().await?.as_u64();
 
     let estimation_paymaster = match paymaster_signer {
@@ -164,6 +164,53 @@ fn usd_to_token_raw_amount(usd: f64, decimals: u8) -> Result<U256> {
     Ok(U256::from(rounded as u128))
 }
 
+/// Resolve the smart wallet address that must be used as the ERC-4337 sender
+/// on a specific chain.
+///
+/// Existing production wallets originally had one persisted smart-wallet
+/// address, usually derived from the first configured chain.  On newer
+/// deterministic multi-chain deployments, non-Ethereum chains must derive the
+/// counterfactual sender from that chain's configured factory; otherwise the
+/// UserOp `sender` can disagree with `initCode`, causing EntryPoint AA14.
+pub async fn resolve_chain_smart_wallet_address(
+    engine: &ExecutionEngine,
+    chain: &Chain,
+    agent_wallet: &crate::agent_wallet::AgentWallet,
+) -> Result<Address> {
+    if chain == &Chain::Ethereum {
+        return Ok(agent_wallet.smart_wallet_address);
+    }
+
+    let chain_cfg = engine.config.chain_config(chain)?;
+    let factory_address: Address = chain_cfg
+        .factory_address
+        .parse()
+        .map_err(|e| anyhow::anyhow!("invalid factory address for {}: {}", chain, e))?;
+    if factory_address == Address::zero() {
+        anyhow::bail!("factory address is not configured for {}", chain);
+    }
+
+    let provider = engine.provider_for_chain(chain)?;
+    let resolved = AgentWalletRegistry::compute_smart_wallet_address_with(
+        provider,
+        factory_address,
+        agent_wallet.eoa_address,
+    )
+    .await?;
+
+    if resolved != agent_wallet.smart_wallet_address {
+        info!(
+            chain = %chain,
+            agent_id = %agent_wallet.agent_id,
+            stored_smart_wallet = %agent_wallet.smart_wallet_address,
+            chain_smart_wallet = %resolved,
+            "using chain-specific smart wallet address"
+        );
+    }
+
+    Ok(resolved)
+}
+
 /// Handle a full execution request:
 /// validate → resolve smart wallet → simulate → price → check payment → enqueue.
 pub async fn handle_execute(
@@ -193,7 +240,9 @@ pub async fn handle_execute(
     let agent_wallet = wallet_registry
         .get_or_create(api_key_id, &req.agent_id)
         .await?;
-    let smart_wallet_str = format!("{:?}", agent_wallet.smart_wallet_address);
+    let smart_wallet_address =
+        resolve_chain_smart_wallet_address(engine, &chain, &agent_wallet).await?;
+    let smart_wallet_str = format!("{:?}", smart_wallet_address);
 
     // 3. Persist initial request
     let db_row = db::insert_execution_request(
@@ -215,6 +264,7 @@ pub async fn handle_execute(
         req,
         &chain,
         &agent_wallet,
+        smart_wallet_address,
         &smart_wallet_str,
     )
     .await?;
@@ -246,7 +296,9 @@ pub async fn handle_execute(
     let quote_request_id = payment_proof.and_then(|p| p.quote_request_id);
     let locked_quote_cost = if payment_mode == PaymentMode::Manual {
         match quote_request_id {
-            Some(quote_id) => db::get_locked_quote_cost(pool, quote_id, api_key_id, req).await?,
+            Some(quote_id) => {
+                db::get_locked_quote_cost(pool, quote_id, req, &smart_wallet_str).await?
+            }
             None => None,
         }
     } else {
@@ -396,7 +448,7 @@ pub async fn handle_execute(
 
     // Resolve API key hash for webhook HMAC signing (only if callback_url is set)
     let api_key_hash = if callback_url.is_some() {
-        db::get_api_key_hash_for_request(pool, request_id)
+        db::get_api_key_hash_by_id(pool, api_key_id)
             .await
             .ok()
             .flatten()
@@ -835,7 +887,8 @@ pub async fn handle_get_wallet_balance(
 
     // Resolve (or provision) the agent's smart wallet
     let agent_wallet = wallet_registry.get_or_create(api_key_id, agent_id).await?;
-    let smart_wallet_address = agent_wallet.smart_wallet_address;
+    let smart_wallet_address =
+        resolve_chain_smart_wallet_address(engine, &chain, &agent_wallet).await?;
     let smart_wallet_str = format!("{smart_wallet_address:?}");
 
     // ── Native balance ────────────────────────────────────────────────
@@ -917,7 +970,9 @@ pub async fn handle_simulate(
     let agent_wallet = wallet_registry
         .get_or_create(api_key_id, &req.agent_id)
         .await?;
-    let smart_wallet_str = format!("{:?}", agent_wallet.smart_wallet_address);
+    let smart_wallet_address =
+        resolve_chain_smart_wallet_address(engine, &chain, &agent_wallet).await?;
+    let smart_wallet_str = format!("{:?}", smart_wallet_address);
 
     let db_row = db::insert_execution_request(
         pool,
@@ -937,6 +992,7 @@ pub async fn handle_simulate(
         req,
         &chain,
         &agent_wallet,
+        smart_wallet_address,
         &smart_wallet_str,
     )
     .await?;
@@ -1019,7 +1075,8 @@ pub async fn handle_get_wallet(
 
     // Resolve or create the smart wallet
     let agent_wallet = wallet_registry.get_or_create(api_key_id, agent_id).await?;
-    let smart_wallet_addr = agent_wallet.smart_wallet_address;
+    let smart_wallet_addr =
+        resolve_chain_smart_wallet_address(engine, &resolved_chain, &agent_wallet).await?;
 
     // Check if the smart wallet is already deployed on-chain
     let provider = engine.provider_for_chain(&resolved_chain)?;
