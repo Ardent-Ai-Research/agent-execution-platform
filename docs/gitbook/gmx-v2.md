@@ -74,6 +74,10 @@ Ranges are capped at 100 items per request.
 Market responses include token symbols where ERC-20 metadata is available.
 The balances response keeps GM/market LP token balances in `balances` and adds
 underlying market asset balances in `token_balances`.
+Token metadata is best-effort on GMX testnet. If `symbol()` is unavailable, the
+API falls back to a derived GM market label or compact token address, and a
+failed token read is reported on that item with `error` instead of failing the
+whole response.
 
 ## Create a market increase
 

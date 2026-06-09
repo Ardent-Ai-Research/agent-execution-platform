@@ -356,6 +356,8 @@ pub struct GmxMarketBalance {
     pub balance_raw: String,
     pub balance_formatted: String,
     pub decimals: u8,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -367,6 +369,8 @@ pub struct GmxTokenBalance {
     pub decimals: u8,
     pub roles: Vec<String>,
     pub markets: Vec<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error: Option<String>,
 }
 
 fn default_chain() -> String {

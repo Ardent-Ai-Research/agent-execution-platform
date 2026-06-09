@@ -46,6 +46,17 @@ async fn call_u256(
     }
 }
 
+async fn try_call_u256(
+    engine: &ExecutionEngine,
+    chain: &Chain,
+    to: Address,
+    calldata: String,
+) -> std::result::Result<U256, String> {
+    call_u256(engine, chain, to, calldata)
+        .await
+        .map_err(|e| format!("{e:#}"))
+}
+
 async fn call_erc20_symbol(
     engine: &ExecutionEngine,
     chain: &Chain,
@@ -58,6 +69,17 @@ async fn call_erc20_symbol(
     let tx = TransactionRequest::new().to(token).data(data);
     let raw = provider.call(&tx.into(), None).await.ok()?;
     decode_erc20_symbol(&raw.0)
+}
+
+async fn call_erc20_decimals(
+    engine: &ExecutionEngine,
+    chain: &Chain,
+    token: Address,
+) -> Option<u8> {
+    let value = call_u256(engine, chain, token, gmx_v2::encode_decimals())
+        .await
+        .ok()?;
+    Some(value.as_u32().min(u8::MAX as u32) as u8)
 }
 
 fn decode_erc20_symbol(raw: &[u8]) -> Option<String> {
@@ -95,14 +117,15 @@ async fn enrich_market_symbols(
     let mut cache: HashMap<String, Option<String>> = HashMap::new();
 
     for market in markets {
-        market.market_token_symbol =
-            cached_symbol(engine, chain, &mut cache, &market.market_token).await;
         market.index_token_symbol =
             cached_symbol(engine, chain, &mut cache, &market.index_token).await;
         market.long_token_symbol =
             cached_symbol(engine, chain, &mut cache, &market.long_token).await;
         market.short_token_symbol =
             cached_symbol(engine, chain, &mut cache, &market.short_token).await;
+        market.market_token_symbol = cached_symbol(engine, chain, &mut cache, &market.market_token)
+            .await
+            .or_else(|| derived_market_symbol(market));
     }
 }
 
@@ -123,6 +146,41 @@ async fn cached_symbol(
     };
     cache.insert(key, symbol.clone());
     symbol
+}
+
+fn derived_market_symbol(market: &gmx_v2::GmxMarket) -> Option<String> {
+    let index = market
+        .index_token_symbol
+        .clone()
+        .or_else(|| compact_address_label(&market.index_token));
+    let long = market
+        .long_token_symbol
+        .clone()
+        .or_else(|| compact_address_label(&market.long_token));
+    let short = market
+        .short_token_symbol
+        .clone()
+        .or_else(|| compact_address_label(&market.short_token));
+
+    match (index, long, short) {
+        (Some(index), Some(long), Some(short)) if long == short => {
+            Some(format!("GM:{index}/{long}"))
+        }
+        (Some(index), Some(long), Some(short)) => Some(format!("GM:{index}/{long}-{short}")),
+        _ => None,
+    }
+}
+
+fn compact_address_label(raw: &str) -> Option<String> {
+    let address = raw.strip_prefix("0x")?;
+    if address.len() < 10 {
+        return None;
+    }
+    Some(format!(
+        "0x{}...{}",
+        &address[..6],
+        &address[address.len() - 4..]
+    ))
 }
 
 pub async fn handle_markets(
@@ -275,22 +333,27 @@ pub async fn handle_balances(
 
     for market in &markets {
         let token: Address = market.market_token.parse()?;
-        let (balance, decimals_u256) = tokio::try_join!(
-            call_u256(
-                engine,
-                &chain,
-                token,
-                gmx_v2::encode_balance_of(smart_wallet_address)
-            ),
-            call_u256(engine, &chain, token, gmx_v2::encode_decimals())
-        )?;
-        let decimals = decimals_u256.as_u32().min(u8::MAX as u32) as u8;
+        let balance_result = try_call_u256(
+            engine,
+            &chain,
+            token,
+            gmx_v2::encode_balance_of(smart_wallet_address),
+        )
+        .await;
+        let decimals = call_erc20_decimals(engine, &chain, token)
+            .await
+            .unwrap_or(18);
+        let (balance, error) = match balance_result {
+            Ok(balance) => (balance, None),
+            Err(error) => (U256::zero(), Some(error)),
+        };
         balances.push(GmxMarketBalance {
             market_token: market.market_token.clone(),
             market_token_symbol: market.market_token_symbol.clone(),
             balance_raw: balance.to_string(),
             balance_formatted: format_units(balance, decimals as usize)?,
             decimals,
+            error,
         });
     }
 
@@ -298,23 +361,28 @@ pub async fn handle_balances(
     let mut assets = asset_roles.into_iter().collect::<Vec<_>>();
     assets.sort_by_key(|(address, _)| format!("{address:?}"));
     for (token, (roles, market_tokens)) in assets {
-        let (balance, decimals_u256) = tokio::try_join!(
-            call_u256(
-                engine,
-                &chain,
-                token,
-                gmx_v2::encode_balance_of(smart_wallet_address)
-            ),
-            call_u256(engine, &chain, token, gmx_v2::encode_decimals())
-        )?;
-        let decimals = decimals_u256.as_u32().min(u8::MAX as u32) as u8;
+        let balance_result = try_call_u256(
+            engine,
+            &chain,
+            token,
+            gmx_v2::encode_balance_of(smart_wallet_address),
+        )
+        .await;
+        let decimals = call_erc20_decimals(engine, &chain, token)
+            .await
+            .unwrap_or(18);
+        let (balance, error) = match balance_result {
+            Ok(balance) => (balance, None),
+            Err(error) => (U256::zero(), Some(error)),
+        };
         let mut roles = roles.into_iter().collect::<Vec<_>>();
         roles.sort();
         let mut markets = market_tokens.into_iter().collect::<Vec<_>>();
         markets.sort();
         let symbol = call_erc20_symbol(engine, &chain, token)
             .await
-            .unwrap_or_else(|| format!("{token:?}"));
+            .or_else(|| compact_address_label(&format!("{token:?}")))
+            .unwrap_or_else(|| "UNKNOWN".to_string());
         token_balances.push(GmxTokenBalance {
             token_address: format!("{token:?}"),
             symbol,
@@ -323,6 +391,7 @@ pub async fn handle_balances(
             decimals,
             roles,
             markets,
+            error,
         });
     }
 

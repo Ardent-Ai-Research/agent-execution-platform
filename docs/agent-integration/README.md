@@ -92,6 +92,8 @@ ardent gmx-claim-simulate --agent-id my-agent-001 --claim-type funding_fees --ma
 `gmx-markets` includes token symbols when ERC-20 metadata is available.
 `gmx-balances` returns GM/market LP token balances plus underlying GMX market
 asset token balances for the smart wallet.
+GMX testnet token metadata is best-effort; unavailable symbols fall back to
+derived market labels or compact token addresses.
 
 Manual payment re-submit (after a `402` response):
 
