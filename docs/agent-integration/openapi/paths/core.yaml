@@ -1,0 +1,168 @@
+---
+"/health":
+  get:
+    summary: Health check
+    security: []
+    responses:
+      '200':
+        description: Service healthy
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                status:
+                  type: string
+"/feed/recent":
+  get:
+    summary: Recent public feed activity
+    security: []
+    parameters:
+    - in: query
+      name: limit
+      required: false
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 50
+        default: 12
+    responses:
+      '200':
+        description: Feed rows
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                items:
+                  type: array
+                  items:
+                    type: object
+"/wallet":
+  get:
+    summary: Resolve or provision smart wallet
+    parameters:
+    - in: query
+      name: agent_id
+      required: true
+      schema:
+        type: string
+    - in: query
+      name: chain
+      required: false
+      schema:
+        type: string
+        default: ethereum
+    responses:
+      '200':
+        description: Wallet response
+        content:
+          application/json:
+            schema:
+              "$ref": "#/components/schemas/WalletResponse"
+      '400':
+        "$ref": "#/components/responses/ErrorResponse"
+      '401':
+        "$ref": "#/components/responses/ErrorResponse"
+"/wallet/balance":
+  get:
+    summary: Get native + ERC-20 token balances for an agent's smart wallet
+    parameters:
+    - in: query
+      name: agent_id
+      required: true
+      schema:
+        type: string
+    - in: query
+      name: chain
+      required: false
+      schema:
+        type: string
+        default: ethereum
+    responses:
+      '200':
+        description: Wallet balance response
+        content:
+          application/json:
+            schema:
+              "$ref": "#/components/schemas/WalletBalanceResponse"
+      '400':
+        "$ref": "#/components/responses/ErrorResponse"
+      '401':
+        "$ref": "#/components/responses/ErrorResponse"
+"/simulate":
+  post:
+    summary: Simulate execution request
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            "$ref": "#/components/schemas/ExecutionRequest"
+    responses:
+      '200':
+        description: Simulation result
+        content:
+          application/json:
+            schema:
+              "$ref": "#/components/schemas/ExecutionResponse"
+      '400':
+        "$ref": "#/components/responses/ErrorResponse"
+      '401':
+        "$ref": "#/components/responses/ErrorResponse"
+"/execute":
+  post:
+    summary: Execute transaction (or return payment quote)
+    parameters:
+    - in: header
+      name: X-Payment-Proof
+      required: false
+      description: JSON string proof header for manual payment flow re-submit.
+      schema:
+        type: string
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            "$ref": "#/components/schemas/ExecutionRequest"
+    responses:
+      '200':
+        description: Execution accepted/queued
+        content:
+          application/json:
+            schema:
+              "$ref": "#/components/schemas/ExecutionResponse"
+      '402':
+        description: Payment required for manual mode
+        content:
+          application/json:
+            schema:
+              "$ref": "#/components/schemas/PaymentRequiredBody"
+      '400':
+        "$ref": "#/components/responses/ErrorResponse"
+      '401':
+        "$ref": "#/components/responses/ErrorResponse"
+"/status/{id}":
+  get:
+    summary: Get request status by request ID
+    parameters:
+    - in: path
+      name: id
+      required: true
+      schema:
+        type: string
+        format: uuid
+    responses:
+      '200':
+        description: Status response
+        content:
+          application/json:
+            schema:
+              "$ref": "#/components/schemas/StatusResponse"
+      '400':
+        "$ref": "#/components/responses/ErrorResponse"
+      '401':
+        "$ref": "#/components/responses/ErrorResponse"
+      '404':
+        "$ref": "#/components/responses/ErrorResponse"

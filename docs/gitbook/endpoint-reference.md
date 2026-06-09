@@ -36,7 +36,9 @@ curl -X GET "$BASE_URL/feed/recent?limit=12"
 2. `GET /wallet/balance`
 3. `POST /simulate`
 4. `POST /execute`
-5. `GET /status/:id`
+5. Aave V3 typed protocol endpoints
+6. GMX V2 typed protocol endpoints
+7. `GET /status/:id`
 
 Authentication:
 
@@ -116,6 +118,46 @@ curl -X POST "$BASE_URL/execute" \
 curl -X GET "$BASE_URL/status/your_request_id" \
   -H "X-API-Key: $API_KEY"
 ```
+
+## Protocol endpoints
+
+### Aave V3 Sepolia
+
+1. `GET /protocols/aave-v3/balances`
+2. `GET /protocols/aave-v3/position`
+3. `POST /protocols/aave-v3/supply/simulate`
+4. `POST /protocols/aave-v3/supply`
+5. `POST /protocols/aave-v3/withdraw/simulate`
+6. `POST /protocols/aave-v3/withdraw`
+7. `POST /protocols/aave-v3/repay/simulate`
+8. `POST /protocols/aave-v3/repay`
+9. `POST /protocols/aave-v3/borrow/simulate`
+10. `POST /protocols/aave-v3/borrow`
+
+See [Aave V3 Sepolia](aave-v3.md).
+
+### GMX V2 Arbitrum Sepolia
+
+1. `POST /protocols/gmx-v2/orders/simulate`
+2. `POST /protocols/gmx-v2/orders`
+3. `POST /protocols/gmx-v2/orders/cancel/simulate`
+4. `POST /protocols/gmx-v2/orders/cancel`
+5. `GET /protocols/gmx-v2/markets`
+6. `GET /protocols/gmx-v2/positions`
+7. `GET /protocols/gmx-v2/orders`
+8. `GET /protocols/gmx-v2/balances`
+9. `POST /protocols/gmx-v2/orders/update/simulate`
+10. `POST /protocols/gmx-v2/orders/update`
+11. `POST /protocols/gmx-v2/deposits/simulate`
+12. `POST /protocols/gmx-v2/deposits`
+13. `POST /protocols/gmx-v2/withdrawals/simulate`
+14. `POST /protocols/gmx-v2/withdrawals`
+15. `POST /protocols/gmx-v2/requests/cancel/simulate`
+16. `POST /protocols/gmx-v2/requests/cancel`
+17. `POST /protocols/gmx-v2/claims/simulate`
+18. `POST /protocols/gmx-v2/claims`
+
+See [GMX V2 Arbitrum Sepolia](gmx-v2.md).
 
 ## Standard content type
 

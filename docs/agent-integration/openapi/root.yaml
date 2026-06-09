@@ -1,0 +1,19 @@
+---
+openapi: 3.1.0
+info:
+  title: Ardent Agent Execution API
+  version: 1.0.0
+  description: Minimal hosted API spec for LLM agent tooling (ChatGPT/Grok/MCP wrappers).
+servers:
+- url: https://api.ardentresearch.xyz
+security:
+- ApiKeyAuth: []
+x-ardent-bundle:
+  paths:
+  - paths/core.yaml
+  - paths/aave-v3.yaml
+  - paths/gmx-v2.yaml
+  components:
+  - components/common.yaml
+  - components/aave-v3.yaml
+  - components/gmx-v2.yaml

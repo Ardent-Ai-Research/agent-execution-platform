@@ -5,3 +5,4 @@
 //! executor.
 
 pub mod aave_v3;
+pub mod gmx_v2;

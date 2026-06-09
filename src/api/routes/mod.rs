@@ -23,6 +23,11 @@ use crate::protocols::aave_v3::{
     service as aave_v3_service, AaveBalancesQuery, AaveBorrowRequest, AavePositionQuery,
     AaveRepayRequest, AaveSupplyRequest, AaveWithdrawRequest,
 };
+use crate::protocols::gmx_v2::{
+    service as gmx_v2_service, GmxAccountQuery, GmxCancelOrderRequest, GmxCancelRequest,
+    GmxClaimRequest, GmxCreateDepositRequest, GmxCreateOrderRequest, GmxCreateWithdrawalRequest,
+    GmxMarketsQuery, GmxUpdateOrderRequest,
+};
 use crate::relayer::erc4337::BundlerClient;
 use crate::relayer::paymaster::PaymasterSigner;
 use crate::types::*;
@@ -491,6 +496,302 @@ pub async fn aave_balances_handler(
         Err(e) => protocol_error_to_http(e),
     }
 }
+
+pub async fn gmx_create_order_handler(
+    State(state): State<AppState>,
+    Extension(api_ctx): Extension<ApiKeyContext>,
+    payment_proof: Option<Extension<PaymentProof>>,
+    Json(req): Json<GmxCreateOrderRequest>,
+) -> impl IntoResponse {
+    info!(agent_id = %req.agent_id, chain = %req.chain, order_type = %req.order_type, "POST /protocols/gmx-v2/orders");
+
+    let proof_ref = payment_proof.as_ref().map(|p| &p.0);
+    let mut redis = state.redis_conn.clone();
+
+    match gmx_v2_service::handle_create_order(
+        &state.engine,
+        &state.db_pool,
+        &mut redis,
+        &state.wallet_registry,
+        &state.bundler_clients,
+        &state.paymaster_signers,
+        api_ctx.api_key_id,
+        api_ctx.payment_mode.clone(),
+        &req,
+        proof_ref,
+    )
+    .await
+    {
+        Ok(resp) => execution_response_to_http(&state, &req.chain, resp),
+        Err(e) => protocol_error_to_http(e),
+    }
+}
+
+pub async fn gmx_create_order_simulate_handler(
+    State(state): State<AppState>,
+    Extension(api_ctx): Extension<ApiKeyContext>,
+    Json(req): Json<GmxCreateOrderRequest>,
+) -> impl IntoResponse {
+    info!(agent_id = %req.agent_id, chain = %req.chain, order_type = %req.order_type, "POST /protocols/gmx-v2/orders/simulate");
+
+    match gmx_v2_service::handle_create_order_simulate(
+        &state.engine,
+        &state.db_pool,
+        &state.wallet_registry,
+        &state.bundler_clients,
+        &state.paymaster_signers,
+        api_ctx.api_key_id,
+        api_ctx.payment_mode.clone(),
+        &req,
+    )
+    .await
+    {
+        Ok(resp) => (StatusCode::OK, Json(serde_json::to_value(resp).unwrap())).into_response(),
+        Err(e) => protocol_error_to_http(e),
+    }
+}
+
+pub async fn gmx_cancel_order_handler(
+    State(state): State<AppState>,
+    Extension(api_ctx): Extension<ApiKeyContext>,
+    payment_proof: Option<Extension<PaymentProof>>,
+    Json(req): Json<GmxCancelOrderRequest>,
+) -> impl IntoResponse {
+    info!(agent_id = %req.agent_id, chain = %req.chain, order_key = %req.order_key, "POST /protocols/gmx-v2/orders/cancel");
+
+    let proof_ref = payment_proof.as_ref().map(|p| &p.0);
+    let mut redis = state.redis_conn.clone();
+
+    match gmx_v2_service::handle_cancel_order(
+        &state.engine,
+        &state.db_pool,
+        &mut redis,
+        &state.wallet_registry,
+        &state.bundler_clients,
+        &state.paymaster_signers,
+        api_ctx.api_key_id,
+        api_ctx.payment_mode.clone(),
+        &req,
+        proof_ref,
+    )
+    .await
+    {
+        Ok(resp) => execution_response_to_http(&state, &req.chain, resp),
+        Err(e) => protocol_error_to_http(e),
+    }
+}
+
+pub async fn gmx_cancel_order_simulate_handler(
+    State(state): State<AppState>,
+    Extension(api_ctx): Extension<ApiKeyContext>,
+    Json(req): Json<GmxCancelOrderRequest>,
+) -> impl IntoResponse {
+    info!(agent_id = %req.agent_id, chain = %req.chain, order_key = %req.order_key, "POST /protocols/gmx-v2/orders/cancel/simulate");
+
+    match gmx_v2_service::handle_cancel_order_simulate(
+        &state.engine,
+        &state.db_pool,
+        &state.wallet_registry,
+        &state.bundler_clients,
+        &state.paymaster_signers,
+        api_ctx.api_key_id,
+        api_ctx.payment_mode.clone(),
+        &req,
+    )
+    .await
+    {
+        Ok(resp) => (StatusCode::OK, Json(serde_json::to_value(resp).unwrap())).into_response(),
+        Err(e) => protocol_error_to_http(e),
+    }
+}
+
+pub async fn gmx_markets_handler(
+    State(state): State<AppState>,
+    Query(query): Query<GmxMarketsQuery>,
+) -> impl IntoResponse {
+    info!(chain = %query.chain, "GET /protocols/gmx-v2/markets");
+    match gmx_v2_service::handle_markets(&state.engine, &query).await {
+        Ok(resp) => (StatusCode::OK, Json(serde_json::to_value(resp).unwrap())).into_response(),
+        Err(e) => protocol_error_to_http(e),
+    }
+}
+
+pub async fn gmx_positions_handler(
+    State(state): State<AppState>,
+    Extension(api_ctx): Extension<ApiKeyContext>,
+    Query(query): Query<GmxAccountQuery>,
+) -> impl IntoResponse {
+    info!(agent_id = %query.agent_id, chain = %query.chain, "GET /protocols/gmx-v2/positions");
+    match gmx_v2_service::handle_positions(
+        &state.engine,
+        &state.wallet_registry,
+        api_ctx.api_key_id,
+        &query,
+    )
+    .await
+    {
+        Ok(resp) => (StatusCode::OK, Json(serde_json::to_value(resp).unwrap())).into_response(),
+        Err(e) => protocol_error_to_http(e),
+    }
+}
+
+pub async fn gmx_orders_handler(
+    State(state): State<AppState>,
+    Extension(api_ctx): Extension<ApiKeyContext>,
+    Query(query): Query<GmxAccountQuery>,
+) -> impl IntoResponse {
+    info!(agent_id = %query.agent_id, chain = %query.chain, "GET /protocols/gmx-v2/orders");
+    match gmx_v2_service::handle_orders(
+        &state.engine,
+        &state.wallet_registry,
+        api_ctx.api_key_id,
+        &query,
+    )
+    .await
+    {
+        Ok(resp) => (StatusCode::OK, Json(serde_json::to_value(resp).unwrap())).into_response(),
+        Err(e) => protocol_error_to_http(e),
+    }
+}
+
+pub async fn gmx_balances_handler(
+    State(state): State<AppState>,
+    Extension(api_ctx): Extension<ApiKeyContext>,
+    Query(query): Query<GmxAccountQuery>,
+) -> impl IntoResponse {
+    info!(agent_id = %query.agent_id, chain = %query.chain, "GET /protocols/gmx-v2/balances");
+    match gmx_v2_service::handle_balances(
+        &state.engine,
+        &state.wallet_registry,
+        api_ctx.api_key_id,
+        &query,
+    )
+    .await
+    {
+        Ok(resp) => (StatusCode::OK, Json(serde_json::to_value(resp).unwrap())).into_response(),
+        Err(e) => protocol_error_to_http(e),
+    }
+}
+
+macro_rules! gmx_execute_handler {
+    ($fn_name:ident, $req_ty:ty, $service_fn:path, $log_name:literal) => {
+        pub async fn $fn_name(
+            State(state): State<AppState>,
+            Extension(api_ctx): Extension<ApiKeyContext>,
+            payment_proof: Option<Extension<PaymentProof>>,
+            Json(req): Json<$req_ty>,
+        ) -> impl IntoResponse {
+            info!(agent_id = %req.agent_id, chain = %req.chain, $log_name);
+            let proof_ref = payment_proof.as_ref().map(|p| &p.0);
+            let mut redis = state.redis_conn.clone();
+            match $service_fn(
+                &state.engine,
+                &state.db_pool,
+                &mut redis,
+                &state.wallet_registry,
+                &state.bundler_clients,
+                &state.paymaster_signers,
+                api_ctx.api_key_id,
+                api_ctx.payment_mode.clone(),
+                &req,
+                proof_ref,
+            )
+            .await
+            {
+                Ok(resp) => execution_response_to_http(&state, &req.chain, resp),
+                Err(e) => protocol_error_to_http(e),
+            }
+        }
+    };
+}
+
+macro_rules! gmx_simulate_handler {
+    ($fn_name:ident, $req_ty:ty, $service_fn:path, $log_name:literal) => {
+        pub async fn $fn_name(
+            State(state): State<AppState>,
+            Extension(api_ctx): Extension<ApiKeyContext>,
+            Json(req): Json<$req_ty>,
+        ) -> impl IntoResponse {
+            info!(agent_id = %req.agent_id, chain = %req.chain, $log_name);
+            match $service_fn(
+                &state.engine,
+                &state.db_pool,
+                &state.wallet_registry,
+                &state.bundler_clients,
+                &state.paymaster_signers,
+                api_ctx.api_key_id,
+                api_ctx.payment_mode.clone(),
+                &req,
+            )
+            .await
+            {
+                Ok(resp) => (StatusCode::OK, Json(serde_json::to_value(resp).unwrap())).into_response(),
+                Err(e) => protocol_error_to_http(e),
+            }
+        }
+    };
+}
+
+gmx_execute_handler!(
+    gmx_update_order_handler,
+    GmxUpdateOrderRequest,
+    gmx_v2_service::handle_update_order,
+    "POST /protocols/gmx-v2/orders/update"
+);
+gmx_simulate_handler!(
+    gmx_update_order_simulate_handler,
+    GmxUpdateOrderRequest,
+    gmx_v2_service::handle_update_order_simulate,
+    "POST /protocols/gmx-v2/orders/update/simulate"
+);
+gmx_execute_handler!(
+    gmx_create_deposit_handler,
+    GmxCreateDepositRequest,
+    gmx_v2_service::handle_create_deposit,
+    "POST /protocols/gmx-v2/deposits"
+);
+gmx_simulate_handler!(
+    gmx_create_deposit_simulate_handler,
+    GmxCreateDepositRequest,
+    gmx_v2_service::handle_create_deposit_simulate,
+    "POST /protocols/gmx-v2/deposits/simulate"
+);
+gmx_execute_handler!(
+    gmx_create_withdrawal_handler,
+    GmxCreateWithdrawalRequest,
+    gmx_v2_service::handle_create_withdrawal,
+    "POST /protocols/gmx-v2/withdrawals"
+);
+gmx_simulate_handler!(
+    gmx_create_withdrawal_simulate_handler,
+    GmxCreateWithdrawalRequest,
+    gmx_v2_service::handle_create_withdrawal_simulate,
+    "POST /protocols/gmx-v2/withdrawals/simulate"
+);
+gmx_execute_handler!(
+    gmx_cancel_handler,
+    GmxCancelRequest,
+    gmx_v2_service::handle_cancel,
+    "POST /protocols/gmx-v2/requests/cancel"
+);
+gmx_simulate_handler!(
+    gmx_cancel_simulate_handler,
+    GmxCancelRequest,
+    gmx_v2_service::handle_cancel_simulate,
+    "POST /protocols/gmx-v2/requests/cancel/simulate"
+);
+gmx_execute_handler!(
+    gmx_claim_handler,
+    GmxClaimRequest,
+    gmx_v2_service::handle_claim,
+    "POST /protocols/gmx-v2/claims"
+);
+gmx_simulate_handler!(
+    gmx_claim_simulate_handler,
+    GmxClaimRequest,
+    gmx_v2_service::handle_claim_simulate,
+    "POST /protocols/gmx-v2/claims/simulate"
+);
 
 fn execution_response_to_http(
     state: &AppState,

@@ -58,6 +58,37 @@ ardent aave-position --agent-id my-agent-001
 ardent aave-balances --agent-id my-agent-001
 ```
 
+### GMX V2 Arbitrum Sepolia
+
+Use raw GMX values for order sizing. Market increase `size_delta_usd_raw` and
+`acceptable_price_raw` use GMX 30-decimal precision.
+
+```bash
+ardent gmx-create-order-simulate \
+  --agent-id my-agent-001 \
+  --order-type market_increase \
+  --market 0xYourGmxMarketToken \
+  --initial-collateral-token 0xYourCollateralToken \
+  --initial-collateral-delta-amount-raw 1000000 \
+  --size-delta-usd-raw 50000000000000000000000000000000000 \
+  --acceptable-price-raw 30000000000000000000000000000000000000000 \
+  --execution-fee-raw 1000000000000000 \
+  --long
+
+ardent gmx-create-order --agent-id my-agent-001 --body-file ./gmx-order.json
+ardent gmx-markets --start 0 --end 50
+ardent gmx-positions --agent-id my-agent-001
+ardent gmx-orders --agent-id my-agent-001
+ardent gmx-balances --agent-id my-agent-001
+ardent gmx-cancel-order-simulate --agent-id my-agent-001 --order-key 0xYourBytes32OrderKey
+ardent gmx-cancel-order --agent-id my-agent-001 --order-key 0xYourBytes32OrderKey
+ardent gmx-update-order-simulate --agent-id my-agent-001 --body-file ./gmx-update.json
+ardent gmx-create-deposit-simulate --agent-id my-agent-001 --body-file ./gmx-deposit.json
+ardent gmx-create-withdrawal-simulate --agent-id my-agent-001 --body-file ./gmx-withdrawal.json
+ardent gmx-cancel-simulate --agent-id my-agent-001 --request-type deposit --key 0xYourBytes32RequestKey
+ardent gmx-claim-simulate --agent-id my-agent-001 --claim-type funding_fees --market 0xYourGmxMarketToken --token 0xClaimToken
+```
+
 Manual payment re-submit (after a `402` response):
 
 ```bash
@@ -89,8 +120,15 @@ ardent self-update --with-runtime
 | `ardent_cli.py` | Zero-dependency CLI | Developers, scripts, CI |
 | `mcp_server.py` | stdio MCP server | Codex, Claude, ChatGPT, Cursor, Windsurf |
 | `mcp-tools.json` | MCP tool definitions | `mcp_server.py` |
-| `openapi.yaml` | OpenAPI 3.1 spec | ChatGPT custom actions, code generators |
+| `openapi.yaml` | Generated bundled OpenAPI 3.1 spec | ChatGPT custom actions, code generators |
+| `openapi/` | Split OpenAPI source + bundler | Maintainers |
 | `skills.md` | Setup guide + agent playbook | Humans and LLM system prompts |
+
+When editing the API spec, update files under `openapi/`, then run:
+
+```bash
+ruby docs/agent-integration/openapi/bundle.rb
+```
 
 ## MCP — supported methods
 
@@ -100,4 +138,4 @@ ardent self-update --with-runtime
 
 ## Notes
 
-- MCP tools available: `ardent_health`, `ardent_feed_recent`, `ardent_get_wallet`, `ardent_wallet_balance`, `ardent_simulate`, `ardent_execute`, Aave tools (`ardent_aave_supply_simulate`, `ardent_aave_supply_execute`, `ardent_aave_withdraw_simulate`, `ardent_aave_withdraw_execute`, `ardent_aave_repay_simulate`, `ardent_aave_repay_execute`, `ardent_aave_borrow_simulate`, `ardent_aave_borrow_execute`, `ardent_aave_position`, `ardent_aave_balances`), and `ardent_status`
+- MCP tools available: `ardent_health`, `ardent_feed_recent`, `ardent_get_wallet`, `ardent_wallet_balance`, `ardent_simulate`, `ardent_execute`, Aave tools (`ardent_aave_supply_simulate`, `ardent_aave_supply_execute`, `ardent_aave_withdraw_simulate`, `ardent_aave_withdraw_execute`, `ardent_aave_repay_simulate`, `ardent_aave_repay_execute`, `ardent_aave_borrow_simulate`, `ardent_aave_borrow_execute`, `ardent_aave_position`, `ardent_aave_balances`), GMX tools (`ardent_gmx_create_order_simulate`, `ardent_gmx_create_order_execute`, `ardent_gmx_cancel_order_simulate`, `ardent_gmx_cancel_order_execute`), and `ardent_status`

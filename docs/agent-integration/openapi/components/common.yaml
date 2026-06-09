@@ -1,0 +1,229 @@
+---
+securitySchemes:
+  ApiKeyAuth:
+    type: apiKey
+    in: header
+    name: X-API-Key
+responses:
+  ErrorResponse:
+    description: Error
+    content:
+      application/json:
+        schema:
+          type: object
+          properties:
+            error:
+              type: string
+schemas:
+  BatchCall:
+    type: object
+    properties:
+      target_contract:
+        type: string
+      calldata:
+        type: string
+      value:
+        type: string
+    required:
+    - target_contract
+    - calldata
+  ExecutionRequest:
+    type: object
+    properties:
+      agent_id:
+        type: string
+      chain:
+        type: string
+        enum:
+        - ethereum
+        - base
+        - arbitrum
+      target_contract:
+        type: string
+      calldata:
+        type: string
+      value:
+        type: string
+      strategy_id:
+        type:
+        - string
+        - 'null'
+      batch_calls:
+        type:
+        - array
+        - 'null'
+        items:
+          "$ref": "#/components/schemas/BatchCall"
+      callback_url:
+        type:
+        - string
+        - 'null'
+        format: uri
+    required:
+    - agent_id
+    - chain
+  ExecutionResponse:
+    type: object
+    properties:
+      request_id:
+        type: string
+        format: uuid
+      status:
+        type: string
+        enum:
+        - pending
+        - payment_required
+        - payment_verified
+        - queued
+        - broadcasting
+        - confirmed
+        - failed
+        - reverted
+      smart_wallet_address:
+        type:
+        - string
+        - 'null'
+      estimated_gas:
+        type:
+        - integer
+        - 'null'
+      estimated_cost_usd:
+        type:
+        - number
+        - 'null'
+      tx_hash:
+        type:
+        - string
+        - 'null'
+      message:
+        type: string
+    required:
+    - request_id
+    - status
+    - message
+  TokenBalance:
+    type: object
+    properties:
+      symbol:
+        type: string
+      contract_address:
+        type: string
+      raw:
+        type: string
+        description: Raw on-chain balance in the token's smallest unit.
+      formatted:
+        type: string
+        description: Human-readable balance scaled by token decimals.
+      decimals:
+        type: integer
+    required:
+    - symbol
+    - contract_address
+    - raw
+    - formatted
+    - decimals
+  WalletBalanceResponse:
+    type: object
+    properties:
+      agent_id:
+        type: string
+      smart_wallet_address:
+        type: string
+      chain:
+        type: string
+      native_balance_wei:
+        type: string
+        description: Native token balance in wei as a decimal string.
+      native_balance_formatted:
+        type: string
+        description: Native balance in the chain's base unit (e.g. ETH).
+      tokens:
+        type: array
+        items:
+          "$ref": "#/components/schemas/TokenBalance"
+    required:
+    - agent_id
+    - smart_wallet_address
+    - chain
+    - native_balance_wei
+    - native_balance_formatted
+    - tokens
+  WalletResponse:
+    type: object
+    properties:
+      agent_id:
+        type: string
+      smart_wallet_address:
+        type: string
+      deployed:
+        type: boolean
+      message:
+        type: string
+    required:
+    - agent_id
+    - smart_wallet_address
+    - deployed
+    - message
+  StatusResponse:
+    type: object
+    properties:
+      request_id:
+        type: string
+        format: uuid
+      status:
+        type: string
+      chain:
+        type: string
+      tx_hash:
+        type:
+        - string
+        - 'null'
+      cost_usd:
+        type:
+        - number
+        - 'null'
+      created_at:
+        type: string
+        format: date-time
+      updated_at:
+        type: string
+        format: date-time
+    required:
+    - request_id
+    - status
+    - chain
+    - created_at
+    - updated_at
+  PaymentRequiredBody:
+    type: object
+    properties:
+      error:
+        type: string
+        example: payment_required
+      amount_usd:
+        type: number
+      accepted_tokens:
+        type: array
+        items:
+          type: string
+      required_amount_raw:
+        type: object
+        additionalProperties:
+          type: string
+      payment_address:
+        type: string
+      chain:
+        type: string
+      request_id:
+        type: string
+      smart_wallet_address:
+        type: string
+    required:
+    - error
+    - amount_usd
+    - accepted_tokens
+    - required_amount_raw
+    - payment_address
+    - chain
+    - request_id
+    - smart_wallet_address

@@ -1,16 +1,17 @@
+# This file is generated from docs/agent-integration/openapi/.
+# Edit the split source files, then run: ruby docs/agent-integration/openapi/bundle.rb
+---
 openapi: 3.1.0
 info:
   title: Ardent Agent Execution API
   version: 1.0.0
-  description: >-
-    Minimal hosted API spec for LLM agent tooling (ChatGPT/Grok/MCP wrappers).
+  description: Minimal hosted API spec for LLM agent tooling (ChatGPT/Grok/MCP wrappers).
 servers:
-  - url: https://api.ardentresearch.xyz
+- url: https://api.ardentresearch.xyz
 security:
-  - ApiKeyAuth: []
-
+- ApiKeyAuth: []
 paths:
-  /health:
+  "/health":
     get:
       summary: Health check
       security: []
@@ -24,19 +25,19 @@ paths:
                 properties:
                   status:
                     type: string
-  /feed/recent:
+  "/feed/recent":
     get:
       summary: Recent public feed activity
       security: []
       parameters:
-        - in: query
-          name: limit
-          required: false
-          schema:
-            type: integer
-            minimum: 1
-            maximum: 50
-            default: 12
+      - in: query
+        name: limit
+        required: false
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 50
+          default: 12
       responses:
         '200':
           description: Feed rows
@@ -49,59 +50,59 @@ paths:
                     type: array
                     items:
                       type: object
-  /wallet:
+  "/wallet":
     get:
       summary: Resolve or provision smart wallet
       parameters:
-        - in: query
-          name: agent_id
-          required: true
-          schema:
-            type: string
-        - in: query
-          name: chain
-          required: false
-          schema:
-            type: string
-            default: ethereum
+      - in: query
+        name: agent_id
+        required: true
+        schema:
+          type: string
+      - in: query
+        name: chain
+        required: false
+        schema:
+          type: string
+          default: ethereum
       responses:
         '200':
           description: Wallet response
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/WalletResponse'
+                "$ref": "#/components/schemas/WalletResponse"
         '400':
-          $ref: '#/components/responses/ErrorResponse'
+          "$ref": "#/components/responses/ErrorResponse"
         '401':
-          $ref: '#/components/responses/ErrorResponse'
-  /wallet/balance:
+          "$ref": "#/components/responses/ErrorResponse"
+  "/wallet/balance":
     get:
       summary: Get native + ERC-20 token balances for an agent's smart wallet
       parameters:
-        - in: query
-          name: agent_id
-          required: true
-          schema:
-            type: string
-        - in: query
-          name: chain
-          required: false
-          schema:
-            type: string
-            default: ethereum
+      - in: query
+        name: agent_id
+        required: true
+        schema:
+          type: string
+      - in: query
+        name: chain
+        required: false
+        schema:
+          type: string
+          default: ethereum
       responses:
         '200':
           description: Wallet balance response
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/WalletBalanceResponse'
+                "$ref": "#/components/schemas/WalletBalanceResponse"
         '400':
-          $ref: '#/components/responses/ErrorResponse'
+          "$ref": "#/components/responses/ErrorResponse"
         '401':
-          $ref: '#/components/responses/ErrorResponse'
-  /simulate:
+          "$ref": "#/components/responses/ErrorResponse"
+  "/simulate":
     post:
       summary: Simulate execution request
       requestBody:
@@ -109,52 +110,75 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/ExecutionRequest'
+              "$ref": "#/components/schemas/ExecutionRequest"
       responses:
         '200':
           description: Simulation result
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ExecutionResponse'
+                "$ref": "#/components/schemas/ExecutionResponse"
         '400':
-          $ref: '#/components/responses/ErrorResponse'
+          "$ref": "#/components/responses/ErrorResponse"
         '401':
-          $ref: '#/components/responses/ErrorResponse'
-  /execute:
+          "$ref": "#/components/responses/ErrorResponse"
+  "/execute":
     post:
       summary: Execute transaction (or return payment quote)
       parameters:
-        - in: header
-          name: X-Payment-Proof
-          required: false
-          description: JSON string proof header for manual payment flow re-submit.
-          schema:
-            type: string
+      - in: header
+        name: X-Payment-Proof
+        required: false
+        description: JSON string proof header for manual payment flow re-submit.
+        schema:
+          type: string
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/ExecutionRequest'
+              "$ref": "#/components/schemas/ExecutionRequest"
       responses:
         '200':
           description: Execution accepted/queued
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ExecutionResponse'
+                "$ref": "#/components/schemas/ExecutionResponse"
         '402':
           description: Payment required for manual mode
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PaymentRequiredBody'
+                "$ref": "#/components/schemas/PaymentRequiredBody"
         '400':
-          $ref: '#/components/responses/ErrorResponse'
+          "$ref": "#/components/responses/ErrorResponse"
         '401':
-          $ref: '#/components/responses/ErrorResponse'
-  /protocols/aave-v3/supply/simulate:
+          "$ref": "#/components/responses/ErrorResponse"
+  "/status/{id}":
+    get:
+      summary: Get request status by request ID
+      parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Status response
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/StatusResponse"
+        '400':
+          "$ref": "#/components/responses/ErrorResponse"
+        '401':
+          "$ref": "#/components/responses/ErrorResponse"
+        '404':
+          "$ref": "#/components/responses/ErrorResponse"
+  "/protocols/aave-v3/supply/simulate":
     post:
       summary: Simulate Aave V3 Sepolia supply action
       requestBody:
@@ -162,52 +186,52 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/AaveSupplyRequest'
+              "$ref": "#/components/schemas/AaveSupplyRequest"
       responses:
         '200':
           description: Simulation result
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ExecutionResponse'
+                "$ref": "#/components/schemas/ExecutionResponse"
         '400':
-          $ref: '#/components/responses/ErrorResponse'
+          "$ref": "#/components/responses/ErrorResponse"
         '401':
-          $ref: '#/components/responses/ErrorResponse'
-  /protocols/aave-v3/supply:
+          "$ref": "#/components/responses/ErrorResponse"
+  "/protocols/aave-v3/supply":
     post:
       summary: Execute Aave V3 Sepolia supply action
       parameters:
-        - in: header
-          name: X-Payment-Proof
-          required: false
-          description: JSON string proof header for manual payment flow re-submit.
-          schema:
-            type: string
+      - in: header
+        name: X-Payment-Proof
+        required: false
+        description: JSON string proof header for manual payment flow re-submit.
+        schema:
+          type: string
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/AaveSupplyRequest'
+              "$ref": "#/components/schemas/AaveSupplyRequest"
       responses:
         '200':
           description: Execution accepted/queued
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ExecutionResponse'
+                "$ref": "#/components/schemas/ExecutionResponse"
         '402':
           description: Payment required for manual mode
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PaymentRequiredBody'
+                "$ref": "#/components/schemas/PaymentRequiredBody"
         '400':
-          $ref: '#/components/responses/ErrorResponse'
+          "$ref": "#/components/responses/ErrorResponse"
         '401':
-          $ref: '#/components/responses/ErrorResponse'
-  /protocols/aave-v3/withdraw/simulate:
+          "$ref": "#/components/responses/ErrorResponse"
+  "/protocols/aave-v3/withdraw/simulate":
     post:
       summary: Simulate Aave V3 Sepolia withdraw action
       requestBody:
@@ -215,51 +239,51 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/AaveWithdrawRequest'
+              "$ref": "#/components/schemas/AaveWithdrawRequest"
       responses:
         '200':
           description: Simulation result
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ExecutionResponse'
+                "$ref": "#/components/schemas/ExecutionResponse"
         '400':
-          $ref: '#/components/responses/ErrorResponse'
+          "$ref": "#/components/responses/ErrorResponse"
         '401':
-          $ref: '#/components/responses/ErrorResponse'
-  /protocols/aave-v3/withdraw:
+          "$ref": "#/components/responses/ErrorResponse"
+  "/protocols/aave-v3/withdraw":
     post:
       summary: Execute Aave V3 Sepolia withdraw action
       parameters:
-        - in: header
-          name: X-Payment-Proof
-          required: false
-          schema:
-            type: string
+      - in: header
+        name: X-Payment-Proof
+        required: false
+        schema:
+          type: string
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/AaveWithdrawRequest'
+              "$ref": "#/components/schemas/AaveWithdrawRequest"
       responses:
         '200':
           description: Execution accepted/queued
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ExecutionResponse'
+                "$ref": "#/components/schemas/ExecutionResponse"
         '402':
           description: Payment required for manual mode
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PaymentRequiredBody'
+                "$ref": "#/components/schemas/PaymentRequiredBody"
         '400':
-          $ref: '#/components/responses/ErrorResponse'
+          "$ref": "#/components/responses/ErrorResponse"
         '401':
-          $ref: '#/components/responses/ErrorResponse'
-  /protocols/aave-v3/repay/simulate:
+          "$ref": "#/components/responses/ErrorResponse"
+  "/protocols/aave-v3/repay/simulate":
     post:
       summary: Simulate Aave V3 Sepolia repay action
       requestBody:
@@ -267,190 +291,614 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/AaveRepayRequest'
+              "$ref": "#/components/schemas/AaveRepayRequest"
       responses:
         '200':
           description: Simulation result
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ExecutionResponse'
+                "$ref": "#/components/schemas/ExecutionResponse"
         '400':
-          $ref: '#/components/responses/ErrorResponse'
+          "$ref": "#/components/responses/ErrorResponse"
         '401':
-          $ref: '#/components/responses/ErrorResponse'
-  /protocols/aave-v3/repay:
+          "$ref": "#/components/responses/ErrorResponse"
+  "/protocols/aave-v3/repay":
     post:
       summary: Execute Aave V3 Sepolia repay action
       parameters:
-        - in: header
-          name: X-Payment-Proof
-          required: false
-          schema:
-            type: string
+      - in: header
+        name: X-Payment-Proof
+        required: false
+        schema:
+          type: string
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/AaveRepayRequest'
+              "$ref": "#/components/schemas/AaveRepayRequest"
       responses:
         '200':
           description: Execution accepted/queued
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ExecutionResponse'
+                "$ref": "#/components/schemas/ExecutionResponse"
         '402':
           description: Payment required for manual mode
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PaymentRequiredBody'
+                "$ref": "#/components/schemas/PaymentRequiredBody"
         '400':
-          $ref: '#/components/responses/ErrorResponse'
+          "$ref": "#/components/responses/ErrorResponse"
         '401':
-          $ref: '#/components/responses/ErrorResponse'
-  /protocols/aave-v3/borrow/simulate:
+          "$ref": "#/components/responses/ErrorResponse"
+  "/protocols/aave-v3/borrow/simulate":
     post:
       summary: Simulate Aave V3 Sepolia borrow action
-      description: Checks projected health factor using Aave account data and oracle price before simulating Pool.borrow.
+      description: Checks projected health factor using Aave account data and oracle
+        price before simulating Pool.borrow.
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/AaveBorrowRequest'
+              "$ref": "#/components/schemas/AaveBorrowRequest"
       responses:
         '200':
           description: Simulation result
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ExecutionResponse'
+                "$ref": "#/components/schemas/ExecutionResponse"
         '400':
-          $ref: '#/components/responses/ErrorResponse'
+          "$ref": "#/components/responses/ErrorResponse"
         '401':
-          $ref: '#/components/responses/ErrorResponse'
-  /protocols/aave-v3/borrow:
+          "$ref": "#/components/responses/ErrorResponse"
+  "/protocols/aave-v3/borrow":
     post:
       summary: Execute Aave V3 Sepolia borrow action
-      description: Checks projected health factor using Aave account data and oracle price before executing Pool.borrow.
+      description: Checks projected health factor using Aave account data and oracle
+        price before executing Pool.borrow.
       parameters:
-        - in: header
-          name: X-Payment-Proof
-          required: false
-          schema:
-            type: string
+      - in: header
+        name: X-Payment-Proof
+        required: false
+        schema:
+          type: string
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/AaveBorrowRequest'
+              "$ref": "#/components/schemas/AaveBorrowRequest"
       responses:
         '200':
           description: Execution accepted/queued
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ExecutionResponse'
+                "$ref": "#/components/schemas/ExecutionResponse"
         '402':
           description: Payment required for manual mode
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PaymentRequiredBody'
+                "$ref": "#/components/schemas/PaymentRequiredBody"
         '400':
-          $ref: '#/components/responses/ErrorResponse'
+          "$ref": "#/components/responses/ErrorResponse"
         '401':
-          $ref: '#/components/responses/ErrorResponse'
-  /protocols/aave-v3/position:
+          "$ref": "#/components/responses/ErrorResponse"
+  "/protocols/aave-v3/position":
     get:
       summary: Read Aave V3 Sepolia account data for an agent wallet
       parameters:
-        - in: query
-          name: agent_id
-          required: true
-          schema:
-            type: string
-        - in: query
-          name: chain
-          required: false
-          schema:
-            type: string
-            enum: [ethereum]
-            default: ethereum
+      - in: query
+        name: agent_id
+        required: true
+        schema:
+          type: string
+      - in: query
+        name: chain
+        required: false
+        schema:
+          type: string
+          enum:
+          - ethereum
+          default: ethereum
       responses:
         '200':
           description: Aave position response
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/AavePositionResponse'
+                "$ref": "#/components/schemas/AavePositionResponse"
         '400':
-          $ref: '#/components/responses/ErrorResponse'
+          "$ref": "#/components/responses/ErrorResponse"
         '401':
-          $ref: '#/components/responses/ErrorResponse'
-  /protocols/aave-v3/balances:
+          "$ref": "#/components/responses/ErrorResponse"
+  "/protocols/aave-v3/balances":
     get:
       summary: Read Aave V3 Sepolia reserve balances for an agent wallet
-      description: Returns underlying wallet balances, supplied aToken balances, stable debt, and variable debt for every supported Aave V3 Sepolia reserve.
+      description: Returns underlying wallet balances, supplied aToken balances, stable
+        debt, and variable debt for every supported Aave V3 Sepolia reserve.
       parameters:
-        - in: query
-          name: agent_id
-          required: true
-          schema:
-            type: string
-        - in: query
-          name: chain
-          required: false
-          schema:
-            type: string
-            enum: [ethereum]
-            default: ethereum
+      - in: query
+        name: agent_id
+        required: true
+        schema:
+          type: string
+      - in: query
+        name: chain
+        required: false
+        schema:
+          type: string
+          enum:
+          - ethereum
+          default: ethereum
       responses:
         '200':
           description: Aave reserve balances response
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/AaveBalancesResponse'
+                "$ref": "#/components/schemas/AaveBalancesResponse"
         '400':
-          $ref: '#/components/responses/ErrorResponse'
+          "$ref": "#/components/responses/ErrorResponse"
         '401':
-          $ref: '#/components/responses/ErrorResponse'
-  /status/{id}:
+          "$ref": "#/components/responses/ErrorResponse"
+  "/protocols/gmx-v2/markets":
     get:
-      summary: Get request status by request ID
+      summary: Read GMX V2 Arbitrum Sepolia markets
       parameters:
-        - in: path
-          name: id
-          required: true
-          schema:
-            type: string
-            format: uuid
+      - &1
+        in: query
+        name: chain
+        required: false
+        schema:
+          type: string
+          enum:
+          - arbitrum
+          default: arbitrum
+      - &2
+        in: query
+        name: start
+        required: false
+        schema:
+          type: integer
+          minimum: 0
+          default: 0
+      - &3
+        in: query
+        name: end
+        required: false
+        schema:
+          type: integer
+          minimum: 1
       responses:
         '200':
-          description: Status response
+          description: GMX markets response
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/StatusResponse'
+                type: object
         '400':
-          $ref: '#/components/responses/ErrorResponse'
+          "$ref": "#/components/responses/ErrorResponse"
         '401':
-          $ref: '#/components/responses/ErrorResponse'
-        '404':
-          $ref: '#/components/responses/ErrorResponse'
-
+          "$ref": "#/components/responses/ErrorResponse"
+  "/protocols/gmx-v2/positions":
+    get:
+      summary: Read GMX V2 Arbitrum Sepolia positions for an agent wallet
+      parameters: &4
+      - in: query
+        name: agent_id
+        required: true
+        schema:
+          type: string
+      - *1
+      - *2
+      - *3
+      responses:
+        '200':
+          description: GMX positions response
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          "$ref": "#/components/responses/ErrorResponse"
+        '401':
+          "$ref": "#/components/responses/ErrorResponse"
+  "/protocols/gmx-v2/orders":
+    post:
+      summary: Execute GMX V2 Arbitrum Sepolia create order action
+      parameters:
+      - in: header
+        name: X-Payment-Proof
+        required: false
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              "$ref": "#/components/schemas/GmxCreateOrderRequest"
+      responses:
+        '200':
+          description: Execution accepted/queued
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/ExecutionResponse"
+        '402':
+          description: Payment required for manual mode
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/PaymentRequiredBody"
+        '400':
+          "$ref": "#/components/responses/ErrorResponse"
+        '401':
+          "$ref": "#/components/responses/ErrorResponse"
+  "/protocols/gmx-v2/orders/simulate":
+    post:
+      summary: Simulate GMX V2 Arbitrum Sepolia create order action
+      description: Compiles approve -> ExchangeRouter.multicall(sendWnt, sendTokens,
+        createOrder) as a single ERC-4337 batch.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              "$ref": "#/components/schemas/GmxCreateOrderRequest"
+      responses:
+        '200':
+          description: Simulation result
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/ExecutionResponse"
+        '400':
+          "$ref": "#/components/responses/ErrorResponse"
+        '401':
+          "$ref": "#/components/responses/ErrorResponse"
+  "/protocols/gmx-v2/orders/cancel/simulate":
+    post:
+      summary: Simulate GMX V2 Arbitrum Sepolia cancel order action
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              "$ref": "#/components/schemas/GmxCancelOrderRequest"
+      responses:
+        '200':
+          description: Simulation result
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/ExecutionResponse"
+        '400':
+          "$ref": "#/components/responses/ErrorResponse"
+        '401':
+          "$ref": "#/components/responses/ErrorResponse"
+  "/protocols/gmx-v2/orders/cancel":
+    post:
+      summary: Execute GMX V2 Arbitrum Sepolia cancel order action
+      parameters:
+      - in: header
+        name: X-Payment-Proof
+        required: false
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              "$ref": "#/components/schemas/GmxCancelOrderRequest"
+      responses:
+        '200':
+          description: Execution accepted/queued
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/ExecutionResponse"
+        '402':
+          description: Payment required for manual mode
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/PaymentRequiredBody"
+        '400':
+          "$ref": "#/components/responses/ErrorResponse"
+        '401':
+          "$ref": "#/components/responses/ErrorResponse"
+  "/protocols/gmx-v2/orders/update/simulate":
+    post:
+      summary: Simulate GMX V2 Arbitrum Sepolia update order action
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              "$ref": "#/components/schemas/GmxUpdateOrderRequest"
+      responses:
+        '200':
+          description: Simulation result
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/ExecutionResponse"
+        '400':
+          "$ref": "#/components/responses/ErrorResponse"
+        '401':
+          "$ref": "#/components/responses/ErrorResponse"
+  "/protocols/gmx-v2/orders/update":
+    post:
+      summary: Execute GMX V2 Arbitrum Sepolia update order action
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              "$ref": "#/components/schemas/GmxUpdateOrderRequest"
+      responses:
+        '200':
+          description: Execution accepted/queued
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/ExecutionResponse"
+        '400':
+          "$ref": "#/components/responses/ErrorResponse"
+        '401':
+          "$ref": "#/components/responses/ErrorResponse"
+        '402':
+          description: Payment required for manual mode
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/PaymentRequiredBody"
+      parameters:
+      - in: header
+        name: X-Payment-Proof
+        required: false
+        schema:
+          type: string
+  "/protocols/gmx-v2/deposits/simulate":
+    post:
+      summary: Simulate GMX V2 Arbitrum Sepolia create deposit action
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              "$ref": "#/components/schemas/GmxCreateDepositRequest"
+      responses:
+        '200':
+          description: Simulation result
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/ExecutionResponse"
+        '400':
+          "$ref": "#/components/responses/ErrorResponse"
+        '401':
+          "$ref": "#/components/responses/ErrorResponse"
+  "/protocols/gmx-v2/deposits":
+    post:
+      summary: Execute GMX V2 Arbitrum Sepolia create deposit action
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              "$ref": "#/components/schemas/GmxCreateDepositRequest"
+      responses:
+        '200':
+          description: Execution accepted/queued
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/ExecutionResponse"
+        '400':
+          "$ref": "#/components/responses/ErrorResponse"
+        '401':
+          "$ref": "#/components/responses/ErrorResponse"
+        '402':
+          description: Payment required for manual mode
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/PaymentRequiredBody"
+      parameters:
+      - in: header
+        name: X-Payment-Proof
+        required: false
+        schema:
+          type: string
+  "/protocols/gmx-v2/withdrawals/simulate":
+    post:
+      summary: Simulate GMX V2 Arbitrum Sepolia create withdrawal action
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              "$ref": "#/components/schemas/GmxCreateWithdrawalRequest"
+      responses:
+        '200':
+          description: Simulation result
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/ExecutionResponse"
+        '400':
+          "$ref": "#/components/responses/ErrorResponse"
+        '401':
+          "$ref": "#/components/responses/ErrorResponse"
+  "/protocols/gmx-v2/withdrawals":
+    post:
+      summary: Execute GMX V2 Arbitrum Sepolia create withdrawal action
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              "$ref": "#/components/schemas/GmxCreateWithdrawalRequest"
+      responses:
+        '200':
+          description: Execution accepted/queued
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/ExecutionResponse"
+        '400':
+          "$ref": "#/components/responses/ErrorResponse"
+        '401':
+          "$ref": "#/components/responses/ErrorResponse"
+        '402':
+          description: Payment required for manual mode
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/PaymentRequiredBody"
+      parameters:
+      - in: header
+        name: X-Payment-Proof
+        required: false
+        schema:
+          type: string
+  "/protocols/gmx-v2/requests/cancel/simulate":
+    post:
+      summary: Simulate GMX V2 Arbitrum Sepolia cancel request action
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              "$ref": "#/components/schemas/GmxCancelRequest"
+      responses:
+        '200':
+          description: Simulation result
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/ExecutionResponse"
+        '400':
+          "$ref": "#/components/responses/ErrorResponse"
+        '401':
+          "$ref": "#/components/responses/ErrorResponse"
+  "/protocols/gmx-v2/requests/cancel":
+    post:
+      summary: Execute GMX V2 Arbitrum Sepolia cancel request action
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              "$ref": "#/components/schemas/GmxCancelRequest"
+      responses:
+        '200':
+          description: Execution accepted/queued
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/ExecutionResponse"
+        '400':
+          "$ref": "#/components/responses/ErrorResponse"
+        '401':
+          "$ref": "#/components/responses/ErrorResponse"
+        '402':
+          description: Payment required for manual mode
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/PaymentRequiredBody"
+      parameters:
+      - in: header
+        name: X-Payment-Proof
+        required: false
+        schema:
+          type: string
+  "/protocols/gmx-v2/claims/simulate":
+    post:
+      summary: Simulate GMX V2 Arbitrum Sepolia claim action
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              "$ref": "#/components/schemas/GmxClaimRequest"
+      responses:
+        '200':
+          description: Simulation result
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/ExecutionResponse"
+        '400':
+          "$ref": "#/components/responses/ErrorResponse"
+        '401':
+          "$ref": "#/components/responses/ErrorResponse"
+  "/protocols/gmx-v2/claims":
+    post:
+      summary: Execute GMX V2 Arbitrum Sepolia claim action
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              "$ref": "#/components/schemas/GmxClaimRequest"
+      responses:
+        '200':
+          description: Execution accepted/queued
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/ExecutionResponse"
+        '400':
+          "$ref": "#/components/responses/ErrorResponse"
+        '401':
+          "$ref": "#/components/responses/ErrorResponse"
+        '402':
+          description: Payment required for manual mode
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/PaymentRequiredBody"
+      parameters:
+      - in: header
+        name: X-Payment-Proof
+        required: false
+        schema:
+          type: string
+  "/protocols/gmx-v2/balances":
+    get:
+      summary: Read GMX V2 Arbitrum Sepolia GM market token balances for an agent
+        wallet
+      parameters: *4
+      responses:
+        '200':
+          description: GMX balances response
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          "$ref": "#/components/responses/ErrorResponse"
+        '401':
+          "$ref": "#/components/responses/ErrorResponse"
 components:
   securitySchemes:
     ApiKeyAuth:
       type: apiKey
       in: header
       name: X-API-Key
-
   responses:
     ErrorResponse:
       description: Error
@@ -461,7 +909,6 @@ components:
             properties:
               error:
                 type: string
-
   schemas:
     BatchCall:
       type: object
@@ -473,9 +920,8 @@ components:
         value:
           type: string
       required:
-        - target_contract
-        - calldata
-
+      - target_contract
+      - calldata
     ExecutionRequest:
       type: object
       properties:
@@ -483,7 +929,10 @@ components:
           type: string
         chain:
           type: string
-          enum: [ethereum, base, arbitrum]
+          enum:
+          - ethereum
+          - base
+          - arbitrum
         target_contract:
           type: string
         calldata:
@@ -491,18 +940,188 @@ components:
         value:
           type: string
         strategy_id:
-          type: ["string", "null"]
+          type:
+          - string
+          - 'null'
         batch_calls:
-          type: ["array", "null"]
+          type:
+          - array
+          - 'null'
           items:
-            $ref: '#/components/schemas/BatchCall'
+            "$ref": "#/components/schemas/BatchCall"
         callback_url:
-          type: ["string", "null"]
+          type:
+          - string
+          - 'null'
           format: uri
       required:
-        - agent_id
-        - chain
-
+      - agent_id
+      - chain
+    ExecutionResponse:
+      type: object
+      properties:
+        request_id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum:
+          - pending
+          - payment_required
+          - payment_verified
+          - queued
+          - broadcasting
+          - confirmed
+          - failed
+          - reverted
+        smart_wallet_address:
+          type:
+          - string
+          - 'null'
+        estimated_gas:
+          type:
+          - integer
+          - 'null'
+        estimated_cost_usd:
+          type:
+          - number
+          - 'null'
+        tx_hash:
+          type:
+          - string
+          - 'null'
+        message:
+          type: string
+      required:
+      - request_id
+      - status
+      - message
+    TokenBalance:
+      type: object
+      properties:
+        symbol:
+          type: string
+        contract_address:
+          type: string
+        raw:
+          type: string
+          description: Raw on-chain balance in the token's smallest unit.
+        formatted:
+          type: string
+          description: Human-readable balance scaled by token decimals.
+        decimals:
+          type: integer
+      required:
+      - symbol
+      - contract_address
+      - raw
+      - formatted
+      - decimals
+    WalletBalanceResponse:
+      type: object
+      properties:
+        agent_id:
+          type: string
+        smart_wallet_address:
+          type: string
+        chain:
+          type: string
+        native_balance_wei:
+          type: string
+          description: Native token balance in wei as a decimal string.
+        native_balance_formatted:
+          type: string
+          description: Native balance in the chain's base unit (e.g. ETH).
+        tokens:
+          type: array
+          items:
+            "$ref": "#/components/schemas/TokenBalance"
+      required:
+      - agent_id
+      - smart_wallet_address
+      - chain
+      - native_balance_wei
+      - native_balance_formatted
+      - tokens
+    WalletResponse:
+      type: object
+      properties:
+        agent_id:
+          type: string
+        smart_wallet_address:
+          type: string
+        deployed:
+          type: boolean
+        message:
+          type: string
+      required:
+      - agent_id
+      - smart_wallet_address
+      - deployed
+      - message
+    StatusResponse:
+      type: object
+      properties:
+        request_id:
+          type: string
+          format: uuid
+        status:
+          type: string
+        chain:
+          type: string
+        tx_hash:
+          type:
+          - string
+          - 'null'
+        cost_usd:
+          type:
+          - number
+          - 'null'
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+      required:
+      - request_id
+      - status
+      - chain
+      - created_at
+      - updated_at
+    PaymentRequiredBody:
+      type: object
+      properties:
+        error:
+          type: string
+          example: payment_required
+        amount_usd:
+          type: number
+        accepted_tokens:
+          type: array
+          items:
+            type: string
+        required_amount_raw:
+          type: object
+          additionalProperties:
+            type: string
+        payment_address:
+          type: string
+        chain:
+          type: string
+        request_id:
+          type: string
+        smart_wallet_address:
+          type: string
+      required:
+      - error
+      - amount_usd
+      - accepted_tokens
+      - required_amount_raw
+      - payment_address
+      - chain
+      - request_id
+      - smart_wallet_address
     AaveSupplyRequest:
       type: object
       properties:
@@ -510,31 +1129,50 @@ components:
           type: string
         chain:
           type: string
-          enum: [ethereum]
+          enum:
+          - ethereum
           default: ethereum
           description: Hosted testnet uses ethereum as the Sepolia chain label.
         asset:
           type: string
-          enum: [AAVE, DAI, EURS, GHO, LINK, USDC, USDT, WBTC, WETH]
+          enum:
+          - AAVE
+          - DAI
+          - EURS
+          - GHO
+          - LINK
+          - USDC
+          - USDT
+          - WBTC
+          - WETH
         amount:
-          type: ["string", "null"]
+          type:
+          - string
+          - 'null'
           description: Human-readable token amount, e.g. "1.25".
         amount_raw:
-          type: ["string", "null"]
+          type:
+          - string
+          - 'null'
           description: Raw token base-unit amount. Provide either amount or amount_raw.
         referral_code:
-          type: ["integer", "null"]
+          type:
+          - integer
+          - 'null'
           minimum: 0
           maximum: 65535
         strategy_id:
-          type: ["string", "null"]
+          type:
+          - string
+          - 'null'
         callback_url:
-          type: ["string", "null"]
+          type:
+          - string
+          - 'null'
           format: uri
       required:
-        - agent_id
-        - asset
-
+      - agent_id
+      - asset
     AaveWithdrawRequest:
       type: object
       properties:
@@ -542,29 +1180,48 @@ components:
           type: string
         chain:
           type: string
-          enum: [ethereum]
+          enum:
+          - ethereum
           default: ethereum
         asset:
           type: string
-          enum: [AAVE, DAI, EURS, GHO, LINK, USDC, USDT, WBTC, WETH]
+          enum:
+          - AAVE
+          - DAI
+          - EURS
+          - GHO
+          - LINK
+          - USDC
+          - USDT
+          - WBTC
+          - WETH
         amount:
-          type: ["string", "null"]
+          type:
+          - string
+          - 'null'
           description: Human-readable token amount, or "max".
         amount_raw:
-          type: ["string", "null"]
+          type:
+          - string
+          - 'null'
           description: Raw token base-unit amount, or "max".
         to:
-          type: ["string", "null"]
+          type:
+          - string
+          - 'null'
           description: Optional recipient address. Defaults to the agent wallet.
         strategy_id:
-          type: ["string", "null"]
+          type:
+          - string
+          - 'null'
         callback_url:
-          type: ["string", "null"]
+          type:
+          - string
+          - 'null'
           format: uri
       required:
-        - agent_id
-        - asset
-
+      - agent_id
+      - asset
     AaveRepayRequest:
       type: object
       properties:
@@ -572,34 +1229,57 @@ components:
           type: string
         chain:
           type: string
-          enum: [ethereum]
+          enum:
+          - ethereum
           default: ethereum
         asset:
           type: string
-          enum: [AAVE, DAI, EURS, GHO, LINK, USDC, USDT, WBTC, WETH]
+          enum:
+          - AAVE
+          - DAI
+          - EURS
+          - GHO
+          - LINK
+          - USDC
+          - USDT
+          - WBTC
+          - WETH
         amount:
-          type: ["string", "null"]
+          type:
+          - string
+          - 'null'
           description: Human-readable token amount, or "max".
         amount_raw:
-          type: ["string", "null"]
+          type:
+          - string
+          - 'null'
           description: Raw token base-unit amount, or "max".
         interest_rate_mode:
-          type: ["integer", "null"]
-          enum: [1, 2]
+          type:
+          - integer
+          - 'null'
+          enum:
+          - 1
+          - 2
           default: 2
           description: 1 = stable, 2 = variable.
         on_behalf_of:
-          type: ["string", "null"]
+          type:
+          - string
+          - 'null'
           description: Optional debt owner. Defaults to the agent wallet.
         strategy_id:
-          type: ["string", "null"]
+          type:
+          - string
+          - 'null'
         callback_url:
-          type: ["string", "null"]
+          type:
+          - string
+          - 'null'
           format: uri
       required:
-        - agent_id
-        - asset
-
+      - agent_id
+      - asset
     AaveBorrowRequest:
       type: object
       properties:
@@ -607,42 +1287,70 @@ components:
           type: string
         chain:
           type: string
-          enum: [ethereum]
+          enum:
+          - ethereum
           default: ethereum
         asset:
           type: string
-          enum: [AAVE, DAI, EURS, GHO, LINK, USDC, USDT, WBTC, WETH]
+          enum:
+          - AAVE
+          - DAI
+          - EURS
+          - GHO
+          - LINK
+          - USDC
+          - USDT
+          - WBTC
+          - WETH
         amount:
-          type: ["string", "null"]
+          type:
+          - string
+          - 'null'
           description: Human-readable token amount, or "max".
         amount_raw:
-          type: ["string", "null"]
+          type:
+          - string
+          - 'null'
           description: Raw token base-unit amount, or "max".
         interest_rate_mode:
-          type: ["integer", "null"]
-          enum: [1, 2]
+          type:
+          - integer
+          - 'null'
+          enum:
+          - 1
+          - 2
           default: 2
           description: 1 = stable, 2 = variable.
         referral_code:
-          type: ["integer", "null"]
+          type:
+          - integer
+          - 'null'
           minimum: 0
           maximum: 65535
         on_behalf_of:
-          type: ["string", "null"]
+          type:
+          - string
+          - 'null'
           description: Optional debt owner. Defaults to the agent wallet.
         min_health_factor:
-          type: ["string", "null"]
-          default: "1.05"
-          description: Minimum projected health factor after borrow. Must be at least 1.0.
+          type:
+          - string
+          - 'null'
+          default: '1.05'
+          description: Minimum projected health factor after borrow. Must be at least
+            1.0.
         strategy_id:
-          type: ["string", "null"]
+          type:
+          - string
+          - 'null'
         callback_url:
-          type: ["string", "null"]
+          type:
+          - string
+          - 'null'
           format: uri
       required:
-        - agent_id
-        - asset
-
+      - agent_id
+      - asset
     AavePositionResponse:
       type: object
       properties:
@@ -667,17 +1375,16 @@ components:
         health_factor:
           type: string
       required:
-        - agent_id
-        - chain
-        - smart_wallet_address
-        - pool_address
-        - total_collateral_base
-        - total_debt_base
-        - available_borrows_base
-        - current_liquidation_threshold_bps
-        - ltv_bps
-        - health_factor
-
+      - agent_id
+      - chain
+      - smart_wallet_address
+      - pool_address
+      - total_collateral_base
+      - total_debt_base
+      - available_borrows_base
+      - current_liquidation_threshold_bps
+      - ltv_bps
+      - health_factor
     AaveAssetBalance:
       type: object
       properties:
@@ -710,21 +1417,20 @@ components:
         variable_debt_balance_formatted:
           type: string
       required:
-        - symbol
-        - underlying_address
-        - decimals
-        - wallet_balance_raw
-        - wallet_balance_formatted
-        - a_token_address
-        - a_token_balance_raw
-        - a_token_balance_formatted
-        - stable_debt_token_address
-        - stable_debt_balance_raw
-        - stable_debt_balance_formatted
-        - variable_debt_token_address
-        - variable_debt_balance_raw
-        - variable_debt_balance_formatted
-
+      - symbol
+      - underlying_address
+      - decimals
+      - wallet_balance_raw
+      - wallet_balance_formatted
+      - a_token_address
+      - a_token_balance_raw
+      - a_token_balance_formatted
+      - stable_debt_token_address
+      - stable_debt_balance_raw
+      - stable_debt_balance_formatted
+      - variable_debt_token_address
+      - variable_debt_balance_raw
+      - variable_debt_balance_formatted
     AaveBalancesResponse:
       type: object
       properties:
@@ -739,170 +1445,423 @@ components:
         assets:
           type: array
           items:
-            $ref: '#/components/schemas/AaveAssetBalance'
+            "$ref": "#/components/schemas/AaveAssetBalance"
       required:
-        - agent_id
-        - chain
-        - smart_wallet_address
-        - pool_address
-        - assets
-
-    ExecutionResponse:
-      type: object
-      properties:
-        request_id:
-          type: string
-          format: uuid
-        status:
-          type: string
-          enum:
-            - pending
-            - payment_required
-            - payment_verified
-            - queued
-            - broadcasting
-            - confirmed
-            - failed
-            - reverted
-        smart_wallet_address:
-          type: ["string", "null"]
-        estimated_gas:
-          type: ["integer", "null"]
-        estimated_cost_usd:
-          type: ["number", "null"]
-        tx_hash:
-          type: ["string", "null"]
-        message:
-          type: string
-      required:
-        - request_id
-        - status
-        - message
-
-    TokenBalance:
-      type: object
-      properties:
-        symbol:
-          type: string
-        contract_address:
-          type: string
-        raw:
-          type: string
-          description: Raw on-chain balance in the token's smallest unit.
-        formatted:
-          type: string
-          description: Human-readable balance scaled by token decimals.
-        decimals:
-          type: integer
-      required:
-        - symbol
-        - contract_address
-        - raw
-        - formatted
-        - decimals
-
-    WalletBalanceResponse:
+      - agent_id
+      - chain
+      - smart_wallet_address
+      - pool_address
+      - assets
+    GmxCreateOrderRequest:
       type: object
       properties:
         agent_id:
           type: string
-        smart_wallet_address:
+        chain:
+          type: string
+          enum:
+          - arbitrum
+          default: arbitrum
+          description: Hosted testnet uses arbitrum as the Arbitrum Sepolia chain
+            label.
+        order_type:
+          type: string
+          enum:
+          - market_swap
+          - limit_swap
+          - market_increase
+          - limit_increase
+          - market_decrease
+          - limit_decrease
+          - stop_loss_decrease
+          - stop_increase
+        market:
+          type: string
+          description: GMX market token address.
+        initial_collateral_token:
+          type: string
+          description: Collateral/input token sent to the GMX OrderVault.
+        initial_collateral_delta_amount_raw:
+          type: string
+          description: Raw collateral/input amount in token base units.
+        size_delta_usd_raw:
+          type:
+          - string
+          - 'null'
+          description: Raw 30-decimal USD size delta. Required for market_increase.
+        acceptable_price_raw:
+          type:
+          - string
+          - 'null'
+          description: Raw 30-decimal acceptable price. Required for market_increase.
+        min_output_amount_raw:
+          type:
+          - string
+          - 'null'
+          description: Raw minimum output amount. Required for market_swap.
+        execution_fee_raw:
+          type: string
+          description: Raw ETH execution fee in wei.
+        is_long:
+          type:
+          - boolean
+          - 'null'
+          default: true
+        receiver:
+          type:
+          - string
+          - 'null'
+          description: Optional receiver. Defaults to the agent wallet.
+        cancellation_receiver:
+          type:
+          - string
+          - 'null'
+          description: Optional cancellation receiver. Defaults to receiver.
+        callback_contract:
+          type:
+          - string
+          - 'null'
+        ui_fee_receiver:
+          type:
+          - string
+          - 'null'
+        swap_path:
+          type: array
+          items:
+            type: string
+          default: []
+        trigger_price_raw:
+          type:
+          - string
+          - 'null'
+        callback_gas_limit_raw:
+          type:
+          - string
+          - 'null'
+        valid_from_time_raw:
+          type:
+          - string
+          - 'null'
+          description: Raw timestamp from which the order is valid. Defaults to 0.
+        referral_code:
+          type:
+          - string
+          - 'null'
+          description: bytes32 hex or short ASCII referral code.
+        should_unwrap_native_token:
+          type:
+          - boolean
+          - 'null'
+          default: false
+        auto_cancel:
+          type:
+          - boolean
+          - 'null'
+          default: false
+        strategy_id:
+          type:
+          - string
+          - 'null'
+        callback_url:
+          type:
+          - string
+          - 'null'
+          format: uri
+      required:
+      - agent_id
+      - order_type
+      - market
+      - initial_collateral_token
+      - initial_collateral_delta_amount_raw
+      - execution_fee_raw
+    GmxCancelOrderRequest:
+      type: object
+      properties:
+        agent_id:
           type: string
         chain:
           type: string
-        native_balance_wei:
+          enum:
+          - arbitrum
+          default: arbitrum
+        order_key:
           type: string
-          description: Native token balance in wei as a decimal string.
-        native_balance_formatted:
+          description: GMX bytes32 order key.
+        strategy_id:
+          type:
+          - string
+          - 'null'
+        callback_url:
+          type:
+          - string
+          - 'null'
+          format: uri
+      required:
+      - agent_id
+      - order_key
+    GmxUpdateOrderRequest:
+      type: object
+      properties:
+        agent_id:
           type: string
-          description: Native balance in the chain's base unit (e.g. ETH).
+        chain:
+          type: string
+          enum:
+          - arbitrum
+          default: arbitrum
+        order_key:
+          type: string
+        size_delta_usd_raw:
+          type: string
+        acceptable_price_raw:
+          type: string
+        trigger_price_raw:
+          type: string
+        min_output_amount_raw:
+          type: string
+        valid_from_time_raw:
+          type: string
+        auto_cancel:
+          type:
+          - boolean
+          - 'null'
+          default: false
+        strategy_id:
+          type:
+          - string
+          - 'null'
+        callback_url:
+          type:
+          - string
+          - 'null'
+          format: uri
+      required:
+      - agent_id
+      - order_key
+      - size_delta_usd_raw
+      - acceptable_price_raw
+      - trigger_price_raw
+      - min_output_amount_raw
+      - valid_from_time_raw
+    GmxCreateDepositRequest:
+      type: object
+      properties:
+        agent_id:
+          type: string
+        chain:
+          type: string
+          enum:
+          - arbitrum
+          default: arbitrum
+        market:
+          type: string
+        initial_long_token:
+          type: string
+        initial_short_token:
+          type: string
+        initial_long_token_amount_raw:
+          type:
+          - string
+          - 'null'
+        initial_short_token_amount_raw:
+          type:
+          - string
+          - 'null'
+        min_market_tokens_raw:
+          type: string
+        execution_fee_raw:
+          type: string
+        receiver:
+          type:
+          - string
+          - 'null'
+        callback_contract:
+          type:
+          - string
+          - 'null'
+        ui_fee_receiver:
+          type:
+          - string
+          - 'null'
+        long_token_swap_path:
+          type: array
+          items:
+            type: string
+          default: []
+        short_token_swap_path:
+          type: array
+          items:
+            type: string
+          default: []
+        callback_gas_limit_raw:
+          type:
+          - string
+          - 'null'
+        should_unwrap_native_token:
+          type:
+          - boolean
+          - 'null'
+          default: false
+        strategy_id:
+          type:
+          - string
+          - 'null'
+        callback_url:
+          type:
+          - string
+          - 'null'
+          format: uri
+      required:
+      - agent_id
+      - market
+      - initial_long_token
+      - initial_short_token
+      - min_market_tokens_raw
+      - execution_fee_raw
+    GmxCreateWithdrawalRequest:
+      type: object
+      properties:
+        agent_id:
+          type: string
+        chain:
+          type: string
+          enum:
+          - arbitrum
+          default: arbitrum
+        market:
+          type: string
+        market_token_amount_raw:
+          type: string
+        min_long_token_amount_raw:
+          type: string
+        min_short_token_amount_raw:
+          type: string
+        execution_fee_raw:
+          type: string
+        receiver:
+          type:
+          - string
+          - 'null'
+        callback_contract:
+          type:
+          - string
+          - 'null'
+        ui_fee_receiver:
+          type:
+          - string
+          - 'null'
+        long_token_swap_path:
+          type: array
+          items:
+            type: string
+          default: []
+        short_token_swap_path:
+          type: array
+          items:
+            type: string
+          default: []
+        callback_gas_limit_raw:
+          type:
+          - string
+          - 'null'
+        should_unwrap_native_token:
+          type:
+          - boolean
+          - 'null'
+          default: false
+        strategy_id:
+          type:
+          - string
+          - 'null'
+        callback_url:
+          type:
+          - string
+          - 'null'
+          format: uri
+      required:
+      - agent_id
+      - market
+      - market_token_amount_raw
+      - min_long_token_amount_raw
+      - min_short_token_amount_raw
+      - execution_fee_raw
+    GmxCancelRequest:
+      type: object
+      properties:
+        agent_id:
+          type: string
+        chain:
+          type: string
+          enum:
+          - arbitrum
+          default: arbitrum
+        request_type:
+          type: string
+          enum:
+          - order
+          - deposit
+          - withdrawal
+          - shift
+        key:
+          type: string
+        strategy_id:
+          type:
+          - string
+          - 'null'
+        callback_url:
+          type:
+          - string
+          - 'null'
+          format: uri
+      required:
+      - agent_id
+      - request_type
+      - key
+    GmxClaimRequest:
+      type: object
+      properties:
+        agent_id:
+          type: string
+        chain:
+          type: string
+          enum:
+          - arbitrum
+          default: arbitrum
+        claim_type:
+          type: string
+          enum:
+          - funding_fees
+          - collateral
+          - affiliate_rewards
+          - ui_fees
+        markets:
+          type: array
+          items:
+            type: string
         tokens:
           type: array
           items:
-            $ref: '#/components/schemas/TokenBalance'
-      required:
-        - agent_id
-        - smart_wallet_address
-        - chain
-        - native_balance_wei
-        - native_balance_formatted
-        - tokens
-
-    WalletResponse:
-      type: object
-      properties:
-        agent_id:
-          type: string
-        smart_wallet_address:
-          type: string
-        deployed:
-          type: boolean
-        message:
-          type: string
-
-      required:
-        - agent_id
-        - smart_wallet_address
-        - deployed
-        - message
-
-    StatusResponse:
-      type: object
-      properties:
-        request_id:
-          type: string
-          format: uuid
-        status:
-          type: string
-        chain:
-          type: string
-        tx_hash:
-          type: ["string", "null"]
-        cost_usd:
-          type: ["number", "null"]
-        created_at:
-          type: string
-          format: date-time
-        updated_at:
-          type: string
-          format: date-time
-      required:
-        - request_id
-        - status
-        - chain
-        - created_at
-        - updated_at
-
-    PaymentRequiredBody:
-      type: object
-      properties:
-        error:
-          type: string
-          example: payment_required
-        amount_usd:
-          type: number
-        accepted_tokens:
+            type: string
+        time_keys_raw:
           type: array
           items:
             type: string
-        required_amount_raw:
-          type: object
-          additionalProperties:
-            type: string
-        payment_address:
-          type: string
-        chain:
-          type: string
-        request_id:
-          type: string
-        smart_wallet_address:
-          type: string
+          default: []
+        receiver:
+          type:
+          - string
+          - 'null'
+        strategy_id:
+          type:
+          - string
+          - 'null'
+        callback_url:
+          type:
+          - string
+          - 'null'
+          format: uri
       required:
-        - error
-        - amount_usd
-        - accepted_tokens
-        - required_amount_raw
-        - payment_address
-        - chain
-        - request_id
-        - smart_wallet_address
+      - agent_id
+      - claim_type
+      - markets
+      - tokens

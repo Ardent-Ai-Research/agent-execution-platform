@@ -515,6 +515,71 @@ async fn main() -> anyhow::Result<()> {
             "/protocols/aave-v3/balances",
             get(routes::aave_balances_handler),
         )
+        .route(
+            "/protocols/gmx-v2/orders/simulate",
+            post(routes::gmx_create_order_simulate_handler),
+        )
+        .route(
+            "/protocols/gmx-v2/orders",
+            get(routes::gmx_orders_handler).post(routes::gmx_create_order_handler),
+        )
+        .route(
+            "/protocols/gmx-v2/orders/cancel/simulate",
+            post(routes::gmx_cancel_order_simulate_handler),
+        )
+        .route(
+            "/protocols/gmx-v2/orders/cancel",
+            post(routes::gmx_cancel_order_handler),
+        )
+        .route(
+            "/protocols/gmx-v2/markets",
+            get(routes::gmx_markets_handler),
+        )
+        .route(
+            "/protocols/gmx-v2/positions",
+            get(routes::gmx_positions_handler),
+        )
+        .route(
+            "/protocols/gmx-v2/balances",
+            get(routes::gmx_balances_handler),
+        )
+        .route(
+            "/protocols/gmx-v2/orders/update/simulate",
+            post(routes::gmx_update_order_simulate_handler),
+        )
+        .route(
+            "/protocols/gmx-v2/orders/update",
+            post(routes::gmx_update_order_handler),
+        )
+        .route(
+            "/protocols/gmx-v2/deposits/simulate",
+            post(routes::gmx_create_deposit_simulate_handler),
+        )
+        .route(
+            "/protocols/gmx-v2/deposits",
+            post(routes::gmx_create_deposit_handler),
+        )
+        .route(
+            "/protocols/gmx-v2/withdrawals/simulate",
+            post(routes::gmx_create_withdrawal_simulate_handler),
+        )
+        .route(
+            "/protocols/gmx-v2/withdrawals",
+            post(routes::gmx_create_withdrawal_handler),
+        )
+        .route(
+            "/protocols/gmx-v2/requests/cancel/simulate",
+            post(routes::gmx_cancel_simulate_handler),
+        )
+        .route(
+            "/protocols/gmx-v2/requests/cancel",
+            post(routes::gmx_cancel_handler),
+        )
+        .route(
+            "/protocols/gmx-v2/claims/simulate",
+            post(routes::gmx_claim_simulate_handler),
+        )
+        .route("/protocols/gmx-v2/claims", post(routes::gmx_claim_handler))
         .layer(middleware::from_fn_with_state(
             payment_verifier,
             x402_middleware,

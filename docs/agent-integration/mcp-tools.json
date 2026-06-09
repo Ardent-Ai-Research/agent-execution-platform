@@ -1,5 +1,5 @@
 {
-  "version": "0.1.0",
+  "version": "0.5.0",
   "service": "ardent-agent-execution",
   "baseUrlEnv": "ARDENT_BASE_URL",
   "defaultBaseUrl": "https://api.ardentresearch.xyz",
@@ -16,7 +16,8 @@
       "authRequired": false,
       "inputSchema": {
         "type": "object",
-        "properties": {},
+        "properties": {
+        },
         "additionalProperties": false
       }
     },
@@ -48,14 +49,22 @@
       "inputSchema": {
         "type": "object",
         "properties": {
-          "agent_id": { "type": "string" },
+          "agent_id": {
+            "type": "string"
+          },
           "chain": {
             "type": "string",
-            "enum": ["ethereum", "base", "arbitrum"],
+            "enum": [
+              "ethereum",
+              "base",
+              "arbitrum"
+            ],
             "default": "ethereum"
           }
         },
-        "required": ["agent_id"],
+        "required": [
+          "agent_id"
+        ],
         "additionalProperties": false
       }
     },
@@ -68,14 +77,22 @@
       "inputSchema": {
         "type": "object",
         "properties": {
-          "agent_id": { "type": "string" },
+          "agent_id": {
+            "type": "string"
+          },
           "chain": {
             "type": "string",
-            "enum": ["ethereum", "base", "arbitrum"],
+            "enum": [
+              "ethereum",
+              "base",
+              "arbitrum"
+            ],
             "default": "ethereum"
           }
         },
-        "required": ["agent_id"],
+        "required": [
+          "agent_id"
+        ],
         "additionalProperties": false
       }
     },
@@ -88,31 +105,71 @@
       "inputSchema": {
         "type": "object",
         "properties": {
-          "agent_id": { "type": "string" },
+          "agent_id": {
+            "type": "string"
+          },
           "chain": {
             "type": "string",
-            "enum": ["ethereum", "base", "arbitrum"]
+            "enum": [
+              "ethereum",
+              "base",
+              "arbitrum"
+            ]
           },
-          "target_contract": { "type": "string" },
-          "calldata": { "type": "string" },
-          "value": { "type": "string", "default": "0" },
-          "strategy_id": { "type": ["string", "null"] },
+          "target_contract": {
+            "type": "string"
+          },
+          "calldata": {
+            "type": "string"
+          },
+          "value": {
+            "type": "string",
+            "default": "0"
+          },
+          "strategy_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "batch_calls": {
-            "type": ["array", "null"],
+            "type": [
+              "array",
+              "null"
+            ],
             "items": {
               "type": "object",
               "properties": {
-                "target_contract": { "type": "string" },
-                "calldata": { "type": "string" },
-                "value": { "type": "string", "default": "0" }
+                "target_contract": {
+                  "type": "string"
+                },
+                "calldata": {
+                  "type": "string"
+                },
+                "value": {
+                  "type": "string",
+                  "default": "0"
+                }
               },
-              "required": ["target_contract", "calldata"],
+              "required": [
+                "target_contract",
+                "calldata"
+              ],
               "additionalProperties": false
             }
           },
-          "callback_url": { "type": ["string", "null"], "format": "uri" }
+          "callback_url": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uri"
+          }
         },
-        "required": ["agent_id", "chain"],
+        "required": [
+          "agent_id",
+          "chain"
+        ],
         "additionalProperties": false
       }
     },
@@ -125,44 +182,103 @@
       "inputSchema": {
         "type": "object",
         "properties": {
-          "agent_id": { "type": "string" },
+          "agent_id": {
+            "type": "string"
+          },
           "chain": {
             "type": "string",
-            "enum": ["ethereum", "base", "arbitrum"]
+            "enum": [
+              "ethereum",
+              "base",
+              "arbitrum"
+            ]
           },
-          "target_contract": { "type": "string" },
-          "calldata": { "type": "string" },
-          "value": { "type": "string", "default": "0" },
-          "strategy_id": { "type": ["string", "null"] },
+          "target_contract": {
+            "type": "string"
+          },
+          "calldata": {
+            "type": "string"
+          },
+          "value": {
+            "type": "string",
+            "default": "0"
+          },
+          "strategy_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "batch_calls": {
-            "type": ["array", "null"],
+            "type": [
+              "array",
+              "null"
+            ],
             "items": {
               "type": "object",
               "properties": {
-                "target_contract": { "type": "string" },
-                "calldata": { "type": "string" },
-                "value": { "type": "string", "default": "0" }
+                "target_contract": {
+                  "type": "string"
+                },
+                "calldata": {
+                  "type": "string"
+                },
+                "value": {
+                  "type": "string",
+                  "default": "0"
+                }
               },
-              "required": ["target_contract", "calldata"],
+              "required": [
+                "target_contract",
+                "calldata"
+              ],
               "additionalProperties": false
             }
           },
-          "callback_url": { "type": ["string", "null"], "format": "uri" },
+          "callback_url": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uri"
+          },
           "payment_proof": {
-            "type": ["object", "null"],
+            "type": [
+              "object",
+              "null"
+            ],
             "description": "Optional value to encode as JSON in X-Payment-Proof header",
             "properties": {
-              "request_id": { "type": "string" },
-              "payer": { "type": "string" },
-              "token": { "type": "string" },
-              "chain": { "type": "string" },
-              "tx_hash": { "type": "string" }
+              "request_id": {
+                "type": "string"
+              },
+              "payer": {
+                "type": "string"
+              },
+              "token": {
+                "type": "string"
+              },
+              "chain": {
+                "type": "string"
+              },
+              "tx_hash": {
+                "type": "string"
+              }
             },
-            "required": ["request_id", "payer", "token", "chain", "tx_hash"],
+            "required": [
+              "request_id",
+              "payer",
+              "token",
+              "chain",
+              "tx_hash"
+            ],
             "additionalProperties": false
           }
         },
-        "required": ["agent_id", "chain"],
+        "required": [
+          "agent_id",
+          "chain"
+        ],
         "additionalProperties": false
       }
     },
@@ -175,29 +291,70 @@
       "inputSchema": {
         "type": "object",
         "properties": {
-          "agent_id": { "type": "string" },
+          "agent_id": {
+            "type": "string"
+          },
           "chain": {
             "type": "string",
-            "enum": ["ethereum"],
+            "enum": [
+              "ethereum"
+            ],
             "default": "ethereum"
           },
           "asset": {
             "type": "string",
-            "enum": ["AAVE", "DAI", "EURS", "GHO", "LINK", "USDC", "USDT", "WBTC", "WETH"]
+            "enum": [
+              "AAVE",
+              "DAI",
+              "EURS",
+              "GHO",
+              "LINK",
+              "USDC",
+              "USDT",
+              "WBTC",
+              "WETH"
+            ]
           },
           "amount": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "Human-readable token amount, e.g. 1.25"
           },
           "amount_raw": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "Raw token base-unit amount. Provide either amount or amount_raw."
           },
-          "referral_code": { "type": ["integer", "null"], "minimum": 0, "maximum": 65535 },
-          "strategy_id": { "type": ["string", "null"] },
-          "callback_url": { "type": ["string", "null"], "format": "uri" }
+          "referral_code": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 0,
+            "maximum": 65535
+          },
+          "strategy_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "callback_url": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uri"
+          }
         },
-        "required": ["agent_id", "asset"],
+        "required": [
+          "agent_id",
+          "asset"
+        ],
         "additionalProperties": false
       }
     },
@@ -210,42 +367,102 @@
       "inputSchema": {
         "type": "object",
         "properties": {
-          "agent_id": { "type": "string" },
+          "agent_id": {
+            "type": "string"
+          },
           "chain": {
             "type": "string",
-            "enum": ["ethereum"],
+            "enum": [
+              "ethereum"
+            ],
             "default": "ethereum"
           },
           "asset": {
             "type": "string",
-            "enum": ["AAVE", "DAI", "EURS", "GHO", "LINK", "USDC", "USDT", "WBTC", "WETH"]
+            "enum": [
+              "AAVE",
+              "DAI",
+              "EURS",
+              "GHO",
+              "LINK",
+              "USDC",
+              "USDT",
+              "WBTC",
+              "WETH"
+            ]
           },
           "amount": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "Human-readable token amount, e.g. 1.25"
           },
           "amount_raw": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "Raw token base-unit amount. Provide either amount or amount_raw."
           },
-          "referral_code": { "type": ["integer", "null"], "minimum": 0, "maximum": 65535 },
-          "strategy_id": { "type": ["string", "null"] },
-          "callback_url": { "type": ["string", "null"], "format": "uri" },
+          "referral_code": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 0,
+            "maximum": 65535
+          },
+          "strategy_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "callback_url": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uri"
+          },
           "payment_proof": {
-            "type": ["object", "null"],
+            "type": [
+              "object",
+              "null"
+            ],
             "description": "Optional value to encode as JSON in X-Payment-Proof header",
             "properties": {
-              "request_id": { "type": "string" },
-              "payer": { "type": "string" },
-              "token": { "type": "string" },
-              "chain": { "type": "string" },
-              "tx_hash": { "type": "string" }
+              "request_id": {
+                "type": "string"
+              },
+              "payer": {
+                "type": "string"
+              },
+              "token": {
+                "type": "string"
+              },
+              "chain": {
+                "type": "string"
+              },
+              "tx_hash": {
+                "type": "string"
+              }
             },
-            "required": ["request_id", "payer", "token", "chain", "tx_hash"],
+            "required": [
+              "request_id",
+              "payer",
+              "token",
+              "chain",
+              "tx_hash"
+            ],
             "additionalProperties": false
           }
         },
-        "required": ["agent_id", "asset"],
+        "required": [
+          "agent_id",
+          "asset"
+        ],
         "additionalProperties": false
       }
     },
@@ -258,16 +475,69 @@
       "inputSchema": {
         "type": "object",
         "properties": {
-          "agent_id": { "type": "string" },
-          "chain": { "type": "string", "enum": ["ethereum"], "default": "ethereum" },
-          "asset": { "type": "string", "enum": ["AAVE", "DAI", "EURS", "GHO", "LINK", "USDC", "USDT", "WBTC", "WETH"] },
-          "amount": { "type": ["string", "null"], "description": "Human-readable amount, or max" },
-          "amount_raw": { "type": ["string", "null"], "description": "Raw base-unit amount, or max" },
-          "to": { "type": ["string", "null"], "description": "Optional recipient address; defaults to agent wallet" },
-          "strategy_id": { "type": ["string", "null"] },
-          "callback_url": { "type": ["string", "null"], "format": "uri" }
+          "agent_id": {
+            "type": "string"
+          },
+          "chain": {
+            "type": "string",
+            "enum": [
+              "ethereum"
+            ],
+            "default": "ethereum"
+          },
+          "asset": {
+            "type": "string",
+            "enum": [
+              "AAVE",
+              "DAI",
+              "EURS",
+              "GHO",
+              "LINK",
+              "USDC",
+              "USDT",
+              "WBTC",
+              "WETH"
+            ]
+          },
+          "amount": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Human-readable amount, or max"
+          },
+          "amount_raw": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Raw base-unit amount, or max"
+          },
+          "to": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Optional recipient address; defaults to agent wallet"
+          },
+          "strategy_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "callback_url": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uri"
+          }
         },
-        "required": ["agent_id", "asset"],
+        "required": [
+          "agent_id",
+          "asset"
+        ],
         "additionalProperties": false
       }
     },
@@ -280,29 +550,101 @@
       "inputSchema": {
         "type": "object",
         "properties": {
-          "agent_id": { "type": "string" },
-          "chain": { "type": "string", "enum": ["ethereum"], "default": "ethereum" },
-          "asset": { "type": "string", "enum": ["AAVE", "DAI", "EURS", "GHO", "LINK", "USDC", "USDT", "WBTC", "WETH"] },
-          "amount": { "type": ["string", "null"], "description": "Human-readable amount, or max" },
-          "amount_raw": { "type": ["string", "null"], "description": "Raw base-unit amount, or max" },
-          "to": { "type": ["string", "null"], "description": "Optional recipient address; defaults to agent wallet" },
-          "strategy_id": { "type": ["string", "null"] },
-          "callback_url": { "type": ["string", "null"], "format": "uri" },
+          "agent_id": {
+            "type": "string"
+          },
+          "chain": {
+            "type": "string",
+            "enum": [
+              "ethereum"
+            ],
+            "default": "ethereum"
+          },
+          "asset": {
+            "type": "string",
+            "enum": [
+              "AAVE",
+              "DAI",
+              "EURS",
+              "GHO",
+              "LINK",
+              "USDC",
+              "USDT",
+              "WBTC",
+              "WETH"
+            ]
+          },
+          "amount": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Human-readable amount, or max"
+          },
+          "amount_raw": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Raw base-unit amount, or max"
+          },
+          "to": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Optional recipient address; defaults to agent wallet"
+          },
+          "strategy_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "callback_url": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uri"
+          },
           "payment_proof": {
-            "type": ["object", "null"],
+            "type": [
+              "object",
+              "null"
+            ],
             "description": "Optional value to encode as JSON in X-Payment-Proof header",
             "properties": {
-              "request_id": { "type": "string" },
-              "payer": { "type": "string" },
-              "token": { "type": "string" },
-              "chain": { "type": "string" },
-              "tx_hash": { "type": "string" }
+              "request_id": {
+                "type": "string"
+              },
+              "payer": {
+                "type": "string"
+              },
+              "token": {
+                "type": "string"
+              },
+              "chain": {
+                "type": "string"
+              },
+              "tx_hash": {
+                "type": "string"
+              }
             },
-            "required": ["request_id", "payer", "token", "chain", "tx_hash"],
+            "required": [
+              "request_id",
+              "payer",
+              "token",
+              "chain",
+              "tx_hash"
+            ],
             "additionalProperties": false
           }
         },
-        "required": ["agent_id", "asset"],
+        "required": [
+          "agent_id",
+          "asset"
+        ],
         "additionalProperties": false
       }
     },
@@ -315,17 +657,80 @@
       "inputSchema": {
         "type": "object",
         "properties": {
-          "agent_id": { "type": "string" },
-          "chain": { "type": "string", "enum": ["ethereum"], "default": "ethereum" },
-          "asset": { "type": "string", "enum": ["AAVE", "DAI", "EURS", "GHO", "LINK", "USDC", "USDT", "WBTC", "WETH"] },
-          "amount": { "type": ["string", "null"], "description": "Human-readable amount, or max" },
-          "amount_raw": { "type": ["string", "null"], "description": "Raw base-unit amount, or max" },
-          "interest_rate_mode": { "type": ["integer", "null"], "enum": [1, 2], "default": 2 },
-          "on_behalf_of": { "type": ["string", "null"], "description": "Optional debt owner; defaults to agent wallet" },
-          "strategy_id": { "type": ["string", "null"] },
-          "callback_url": { "type": ["string", "null"], "format": "uri" }
+          "agent_id": {
+            "type": "string"
+          },
+          "chain": {
+            "type": "string",
+            "enum": [
+              "ethereum"
+            ],
+            "default": "ethereum"
+          },
+          "asset": {
+            "type": "string",
+            "enum": [
+              "AAVE",
+              "DAI",
+              "EURS",
+              "GHO",
+              "LINK",
+              "USDC",
+              "USDT",
+              "WBTC",
+              "WETH"
+            ]
+          },
+          "amount": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Human-readable amount, or max"
+          },
+          "amount_raw": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Raw base-unit amount, or max"
+          },
+          "interest_rate_mode": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "enum": [
+              1,
+              2
+            ],
+            "default": 2
+          },
+          "on_behalf_of": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Optional debt owner; defaults to agent wallet"
+          },
+          "strategy_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "callback_url": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uri"
+          }
         },
-        "required": ["agent_id", "asset"],
+        "required": [
+          "agent_id",
+          "asset"
+        ],
         "additionalProperties": false
       }
     },
@@ -338,30 +743,112 @@
       "inputSchema": {
         "type": "object",
         "properties": {
-          "agent_id": { "type": "string" },
-          "chain": { "type": "string", "enum": ["ethereum"], "default": "ethereum" },
-          "asset": { "type": "string", "enum": ["AAVE", "DAI", "EURS", "GHO", "LINK", "USDC", "USDT", "WBTC", "WETH"] },
-          "amount": { "type": ["string", "null"], "description": "Human-readable amount, or max" },
-          "amount_raw": { "type": ["string", "null"], "description": "Raw base-unit amount, or max" },
-          "interest_rate_mode": { "type": ["integer", "null"], "enum": [1, 2], "default": 2 },
-          "on_behalf_of": { "type": ["string", "null"], "description": "Optional debt owner; defaults to agent wallet" },
-          "strategy_id": { "type": ["string", "null"] },
-          "callback_url": { "type": ["string", "null"], "format": "uri" },
+          "agent_id": {
+            "type": "string"
+          },
+          "chain": {
+            "type": "string",
+            "enum": [
+              "ethereum"
+            ],
+            "default": "ethereum"
+          },
+          "asset": {
+            "type": "string",
+            "enum": [
+              "AAVE",
+              "DAI",
+              "EURS",
+              "GHO",
+              "LINK",
+              "USDC",
+              "USDT",
+              "WBTC",
+              "WETH"
+            ]
+          },
+          "amount": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Human-readable amount, or max"
+          },
+          "amount_raw": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Raw base-unit amount, or max"
+          },
+          "interest_rate_mode": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "enum": [
+              1,
+              2
+            ],
+            "default": 2
+          },
+          "on_behalf_of": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Optional debt owner; defaults to agent wallet"
+          },
+          "strategy_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "callback_url": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uri"
+          },
           "payment_proof": {
-            "type": ["object", "null"],
+            "type": [
+              "object",
+              "null"
+            ],
             "description": "Optional value to encode as JSON in X-Payment-Proof header",
             "properties": {
-              "request_id": { "type": "string" },
-              "payer": { "type": "string" },
-              "token": { "type": "string" },
-              "chain": { "type": "string" },
-              "tx_hash": { "type": "string" }
+              "request_id": {
+                "type": "string"
+              },
+              "payer": {
+                "type": "string"
+              },
+              "token": {
+                "type": "string"
+              },
+              "chain": {
+                "type": "string"
+              },
+              "tx_hash": {
+                "type": "string"
+              }
             },
-            "required": ["request_id", "payer", "token", "chain", "tx_hash"],
+            "required": [
+              "request_id",
+              "payer",
+              "token",
+              "chain",
+              "tx_hash"
+            ],
             "additionalProperties": false
           }
         },
-        "required": ["agent_id", "asset"],
+        "required": [
+          "agent_id",
+          "asset"
+        ],
         "additionalProperties": false
       }
     },
@@ -374,19 +861,95 @@
       "inputSchema": {
         "type": "object",
         "properties": {
-          "agent_id": { "type": "string" },
-          "chain": { "type": "string", "enum": ["ethereum"], "default": "ethereum" },
-          "asset": { "type": "string", "enum": ["AAVE", "DAI", "EURS", "GHO", "LINK", "USDC", "USDT", "WBTC", "WETH"] },
-          "amount": { "type": ["string", "null"], "description": "Human-readable amount, or max" },
-          "amount_raw": { "type": ["string", "null"], "description": "Raw base-unit amount, or max" },
-          "interest_rate_mode": { "type": ["integer", "null"], "enum": [1, 2], "default": 2 },
-          "referral_code": { "type": ["integer", "null"], "minimum": 0, "maximum": 65535 },
-          "on_behalf_of": { "type": ["string", "null"], "description": "Optional debt owner; defaults to agent wallet" },
-          "min_health_factor": { "type": ["string", "null"], "description": "Minimum projected health factor after borrow; default 1.05; must be at least 1.0" },
-          "strategy_id": { "type": ["string", "null"] },
-          "callback_url": { "type": ["string", "null"], "format": "uri" }
+          "agent_id": {
+            "type": "string"
+          },
+          "chain": {
+            "type": "string",
+            "enum": [
+              "ethereum"
+            ],
+            "default": "ethereum"
+          },
+          "asset": {
+            "type": "string",
+            "enum": [
+              "AAVE",
+              "DAI",
+              "EURS",
+              "GHO",
+              "LINK",
+              "USDC",
+              "USDT",
+              "WBTC",
+              "WETH"
+            ]
+          },
+          "amount": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Human-readable amount, or max"
+          },
+          "amount_raw": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Raw base-unit amount, or max"
+          },
+          "interest_rate_mode": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "enum": [
+              1,
+              2
+            ],
+            "default": 2
+          },
+          "referral_code": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 0,
+            "maximum": 65535
+          },
+          "on_behalf_of": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Optional debt owner; defaults to agent wallet"
+          },
+          "min_health_factor": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Minimum projected health factor after borrow; default 1.05; must be at least 1.0"
+          },
+          "strategy_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "callback_url": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uri"
+          }
         },
-        "required": ["agent_id", "asset"],
+        "required": [
+          "agent_id",
+          "asset"
+        ],
         "additionalProperties": false
       }
     },
@@ -399,32 +962,127 @@
       "inputSchema": {
         "type": "object",
         "properties": {
-          "agent_id": { "type": "string" },
-          "chain": { "type": "string", "enum": ["ethereum"], "default": "ethereum" },
-          "asset": { "type": "string", "enum": ["AAVE", "DAI", "EURS", "GHO", "LINK", "USDC", "USDT", "WBTC", "WETH"] },
-          "amount": { "type": ["string", "null"], "description": "Human-readable amount, or max" },
-          "amount_raw": { "type": ["string", "null"], "description": "Raw base-unit amount, or max" },
-          "interest_rate_mode": { "type": ["integer", "null"], "enum": [1, 2], "default": 2 },
-          "referral_code": { "type": ["integer", "null"], "minimum": 0, "maximum": 65535 },
-          "on_behalf_of": { "type": ["string", "null"], "description": "Optional debt owner; defaults to agent wallet" },
-          "min_health_factor": { "type": ["string", "null"], "description": "Minimum projected health factor after borrow; default 1.05; must be at least 1.0" },
-          "strategy_id": { "type": ["string", "null"] },
-          "callback_url": { "type": ["string", "null"], "format": "uri" },
+          "agent_id": {
+            "type": "string"
+          },
+          "chain": {
+            "type": "string",
+            "enum": [
+              "ethereum"
+            ],
+            "default": "ethereum"
+          },
+          "asset": {
+            "type": "string",
+            "enum": [
+              "AAVE",
+              "DAI",
+              "EURS",
+              "GHO",
+              "LINK",
+              "USDC",
+              "USDT",
+              "WBTC",
+              "WETH"
+            ]
+          },
+          "amount": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Human-readable amount, or max"
+          },
+          "amount_raw": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Raw base-unit amount, or max"
+          },
+          "interest_rate_mode": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "enum": [
+              1,
+              2
+            ],
+            "default": 2
+          },
+          "referral_code": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 0,
+            "maximum": 65535
+          },
+          "on_behalf_of": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Optional debt owner; defaults to agent wallet"
+          },
+          "min_health_factor": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Minimum projected health factor after borrow; default 1.05; must be at least 1.0"
+          },
+          "strategy_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "callback_url": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uri"
+          },
           "payment_proof": {
-            "type": ["object", "null"],
+            "type": [
+              "object",
+              "null"
+            ],
             "description": "Optional value to encode as JSON in X-Payment-Proof header",
             "properties": {
-              "request_id": { "type": "string" },
-              "payer": { "type": "string" },
-              "token": { "type": "string" },
-              "chain": { "type": "string" },
-              "tx_hash": { "type": "string" }
+              "request_id": {
+                "type": "string"
+              },
+              "payer": {
+                "type": "string"
+              },
+              "token": {
+                "type": "string"
+              },
+              "chain": {
+                "type": "string"
+              },
+              "tx_hash": {
+                "type": "string"
+              }
             },
-            "required": ["request_id", "payer", "token", "chain", "tx_hash"],
+            "required": [
+              "request_id",
+              "payer",
+              "token",
+              "chain",
+              "tx_hash"
+            ],
             "additionalProperties": false
           }
         },
-        "required": ["agent_id", "asset"],
+        "required": [
+          "agent_id",
+          "asset"
+        ],
         "additionalProperties": false
       }
     },
@@ -437,10 +1095,20 @@
       "inputSchema": {
         "type": "object",
         "properties": {
-          "agent_id": { "type": "string" },
-          "chain": { "type": "string", "enum": ["ethereum"], "default": "ethereum" }
+          "agent_id": {
+            "type": "string"
+          },
+          "chain": {
+            "type": "string",
+            "enum": [
+              "ethereum"
+            ],
+            "default": "ethereum"
+          }
         },
-        "required": ["agent_id"],
+        "required": [
+          "agent_id"
+        ],
         "additionalProperties": false
       }
     },
@@ -453,11 +1121,761 @@
       "inputSchema": {
         "type": "object",
         "properties": {
-          "agent_id": { "type": "string" },
-          "chain": { "type": "string", "enum": ["ethereum"], "default": "ethereum" }
+          "agent_id": {
+            "type": "string"
+          },
+          "chain": {
+            "type": "string",
+            "enum": [
+              "ethereum"
+            ],
+            "default": "ethereum"
+          }
         },
-        "required": ["agent_id"],
+        "required": [
+          "agent_id"
+        ],
         "additionalProperties": false
+      }
+    },
+    {
+      "name": "ardent_gmx_create_order_simulate",
+      "description": "Simulate creating a GMX V2 Arbitrum Sepolia market_increase or market_swap order. The server compiles approve -> ExchangeRouter.multicall(sendWnt, sendTokens, createOrder) as one ERC-4337 batch.",
+      "method": "POST",
+      "path": "/protocols/gmx-v2/orders/simulate",
+      "authRequired": true,
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "agent_id": {
+            "type": "string"
+          },
+          "chain": {
+            "type": "string",
+            "enum": [
+              "arbitrum"
+            ],
+            "default": "arbitrum"
+          },
+          "order_type": {
+            "type": "string",
+            "enum": [
+              "market_increase",
+              "market_swap"
+            ]
+          },
+          "market": {
+            "type": "string"
+          },
+          "initial_collateral_token": {
+            "type": "string"
+          },
+          "initial_collateral_delta_amount_raw": {
+            "type": "string"
+          },
+          "size_delta_usd_raw": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "acceptable_price_raw": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "min_output_amount_raw": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "execution_fee_raw": {
+            "type": "string"
+          },
+          "is_long": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "default": true
+          },
+          "receiver": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "cancellation_receiver": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "callback_contract": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "ui_fee_receiver": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "swap_path": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "default": [
+
+            ]
+          },
+          "trigger_price_raw": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "callback_gas_limit_raw": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "valid_from_time_raw": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "referral_code": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "should_unwrap_native_token": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "default": false
+          },
+          "auto_cancel": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "default": false
+          },
+          "strategy_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "callback_url": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uri"
+          }
+        },
+        "required": [
+          "agent_id",
+          "order_type",
+          "market",
+          "initial_collateral_token",
+          "initial_collateral_delta_amount_raw",
+          "execution_fee_raw"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "ardent_gmx_create_order_execute",
+      "description": "Execute creating a GMX V2 Arbitrum Sepolia market_increase or market_swap order. In manual mode may return payment_required (402).",
+      "method": "POST",
+      "path": "/protocols/gmx-v2/orders",
+      "authRequired": true,
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "agent_id": {
+            "type": "string"
+          },
+          "chain": {
+            "type": "string",
+            "enum": [
+              "arbitrum"
+            ],
+            "default": "arbitrum"
+          },
+          "order_type": {
+            "type": "string",
+            "enum": [
+              "market_increase",
+              "market_swap"
+            ]
+          },
+          "market": {
+            "type": "string"
+          },
+          "initial_collateral_token": {
+            "type": "string"
+          },
+          "initial_collateral_delta_amount_raw": {
+            "type": "string"
+          },
+          "size_delta_usd_raw": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "acceptable_price_raw": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "min_output_amount_raw": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "execution_fee_raw": {
+            "type": "string"
+          },
+          "is_long": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "default": true
+          },
+          "receiver": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "cancellation_receiver": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "callback_contract": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "ui_fee_receiver": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "swap_path": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "default": [
+
+            ]
+          },
+          "trigger_price_raw": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "callback_gas_limit_raw": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "valid_from_time_raw": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "referral_code": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "should_unwrap_native_token": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "default": false
+          },
+          "auto_cancel": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "default": false
+          },
+          "strategy_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "callback_url": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uri"
+          },
+          "payment_proof": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "properties": {
+              "request_id": {
+                "type": "string"
+              },
+              "payer": {
+                "type": "string"
+              },
+              "token": {
+                "type": "string"
+              },
+              "chain": {
+                "type": "string"
+              },
+              "tx_hash": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "request_id",
+              "payer",
+              "token",
+              "chain",
+              "tx_hash"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "agent_id",
+          "order_type",
+          "market",
+          "initial_collateral_token",
+          "initial_collateral_delta_amount_raw",
+          "execution_fee_raw"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "ardent_gmx_cancel_order_simulate",
+      "description": "Simulate cancelling a GMX V2 Arbitrum Sepolia order by bytes32 order key.",
+      "method": "POST",
+      "path": "/protocols/gmx-v2/orders/cancel/simulate",
+      "authRequired": true,
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "agent_id": {
+            "type": "string"
+          },
+          "chain": {
+            "type": "string",
+            "enum": [
+              "arbitrum"
+            ],
+            "default": "arbitrum"
+          },
+          "order_key": {
+            "type": "string"
+          },
+          "strategy_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "callback_url": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uri"
+          }
+        },
+        "required": [
+          "agent_id",
+          "order_key"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "ardent_gmx_cancel_order_execute",
+      "description": "Execute cancelling a GMX V2 Arbitrum Sepolia order by bytes32 order key. In manual mode may return payment_required (402).",
+      "method": "POST",
+      "path": "/protocols/gmx-v2/orders/cancel",
+      "authRequired": true,
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "agent_id": {
+            "type": "string"
+          },
+          "chain": {
+            "type": "string",
+            "enum": [
+              "arbitrum"
+            ],
+            "default": "arbitrum"
+          },
+          "order_key": {
+            "type": "string"
+          },
+          "strategy_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "callback_url": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uri"
+          },
+          "payment_proof": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "properties": {
+              "request_id": {
+                "type": "string"
+              },
+              "payer": {
+                "type": "string"
+              },
+              "token": {
+                "type": "string"
+              },
+              "chain": {
+                "type": "string"
+              },
+              "tx_hash": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "request_id",
+              "payer",
+              "token",
+              "chain",
+              "tx_hash"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "agent_id",
+          "order_key"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "ardent_gmx_markets",
+      "description": "Read GMX V2 Arbitrum Sepolia markets",
+      "method": "GET",
+      "path": "/protocols/gmx-v2/markets",
+      "authRequired": true,
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "chain": {
+            "type": "string",
+            "enum": [
+              "arbitrum"
+            ],
+            "default": "arbitrum"
+          },
+          "start": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 0
+          },
+          "end": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 1
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "ardent_gmx_positions",
+      "description": "Read GMX V2 Arbitrum Sepolia positions for an agent wallet",
+      "method": "GET",
+      "path": "/protocols/gmx-v2/positions",
+      "authRequired": true,
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "agent_id": {
+            "type": "string"
+          },
+          "chain": {
+            "type": "string",
+            "enum": [
+              "arbitrum"
+            ],
+            "default": "arbitrum"
+          },
+          "start": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 0
+          },
+          "end": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 1
+          }
+        },
+        "required": [
+          "agent_id"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "ardent_gmx_orders",
+      "description": "Read GMX V2 Arbitrum Sepolia orders for an agent wallet",
+      "method": "GET",
+      "path": "/protocols/gmx-v2/orders",
+      "authRequired": true,
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "agent_id": {
+            "type": "string"
+          },
+          "chain": {
+            "type": "string",
+            "enum": [
+              "arbitrum"
+            ],
+            "default": "arbitrum"
+          },
+          "start": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 0
+          },
+          "end": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 1
+          }
+        },
+        "required": [
+          "agent_id"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "ardent_gmx_balances",
+      "description": "Read GMX V2 GM market token balances for an agent wallet",
+      "method": "GET",
+      "path": "/protocols/gmx-v2/balances",
+      "authRequired": true,
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "agent_id": {
+            "type": "string"
+          },
+          "chain": {
+            "type": "string",
+            "enum": [
+              "arbitrum"
+            ],
+            "default": "arbitrum"
+          },
+          "start": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 0
+          },
+          "end": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 1
+          }
+        },
+        "required": [
+          "agent_id"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "ardent_gmx_update_order_simulate",
+      "description": "Simulate updating a GMX V2 Arbitrum Sepolia order.",
+      "method": "POST",
+      "path": "/protocols/gmx-v2/orders/update/simulate",
+      "authRequired": true,
+      "inputSchema": {
+        "type": "object",
+        "description": "Same request body as GmxUpdateOrderRequest in openapi.yaml",
+        "additionalProperties": true
+      }
+    },
+    {
+      "name": "ardent_gmx_update_order_execute",
+      "description": "Execute updating a GMX V2 Arbitrum Sepolia order.",
+      "method": "POST",
+      "path": "/protocols/gmx-v2/orders/update",
+      "authRequired": true,
+      "inputSchema": {
+        "type": "object",
+        "description": "Same request body as GmxUpdateOrderRequest in openapi.yaml",
+        "additionalProperties": true
+      }
+    },
+    {
+      "name": "ardent_gmx_create_deposit_simulate",
+      "description": "Simulate creating a GMX V2 Arbitrum Sepolia liquidity deposit.",
+      "method": "POST",
+      "path": "/protocols/gmx-v2/deposits/simulate",
+      "authRequired": true,
+      "inputSchema": {
+        "type": "object",
+        "description": "Same request body as GmxCreateDepositRequest in openapi.yaml",
+        "additionalProperties": true
+      }
+    },
+    {
+      "name": "ardent_gmx_create_deposit_execute",
+      "description": "Execute creating a GMX V2 Arbitrum Sepolia liquidity deposit.",
+      "method": "POST",
+      "path": "/protocols/gmx-v2/deposits",
+      "authRequired": true,
+      "inputSchema": {
+        "type": "object",
+        "description": "Same request body as GmxCreateDepositRequest in openapi.yaml",
+        "additionalProperties": true
+      }
+    },
+    {
+      "name": "ardent_gmx_create_withdrawal_simulate",
+      "description": "Simulate creating a GMX V2 Arbitrum Sepolia liquidity withdrawal.",
+      "method": "POST",
+      "path": "/protocols/gmx-v2/withdrawals/simulate",
+      "authRequired": true,
+      "inputSchema": {
+        "type": "object",
+        "description": "Same request body as GmxCreateWithdrawalRequest in openapi.yaml",
+        "additionalProperties": true
+      }
+    },
+    {
+      "name": "ardent_gmx_create_withdrawal_execute",
+      "description": "Execute creating a GMX V2 Arbitrum Sepolia liquidity withdrawal.",
+      "method": "POST",
+      "path": "/protocols/gmx-v2/withdrawals",
+      "authRequired": true,
+      "inputSchema": {
+        "type": "object",
+        "description": "Same request body as GmxCreateWithdrawalRequest in openapi.yaml",
+        "additionalProperties": true
+      }
+    },
+    {
+      "name": "ardent_gmx_cancel_request_simulate",
+      "description": "Simulate cancelling a GMX V2 order, deposit, withdrawal, or shift request.",
+      "method": "POST",
+      "path": "/protocols/gmx-v2/requests/cancel/simulate",
+      "authRequired": true,
+      "inputSchema": {
+        "type": "object",
+        "description": "Same request body as GmxCancelRequest in openapi.yaml",
+        "additionalProperties": true
+      }
+    },
+    {
+      "name": "ardent_gmx_cancel_request_execute",
+      "description": "Execute cancelling a GMX V2 order, deposit, withdrawal, or shift request.",
+      "method": "POST",
+      "path": "/protocols/gmx-v2/requests/cancel",
+      "authRequired": true,
+      "inputSchema": {
+        "type": "object",
+        "description": "Same request body as GmxCancelRequest in openapi.yaml",
+        "additionalProperties": true
+      }
+    },
+    {
+      "name": "ardent_gmx_claim_simulate",
+      "description": "Simulate claiming GMX V2 funding fees, collateral, affiliate rewards, or UI fees.",
+      "method": "POST",
+      "path": "/protocols/gmx-v2/claims/simulate",
+      "authRequired": true,
+      "inputSchema": {
+        "type": "object",
+        "description": "Same request body as GmxClaimRequest in openapi.yaml",
+        "additionalProperties": true
+      }
+    },
+    {
+      "name": "ardent_gmx_claim_execute",
+      "description": "Execute claiming GMX V2 funding fees, collateral, affiliate rewards, or UI fees.",
+      "method": "POST",
+      "path": "/protocols/gmx-v2/claims",
+      "authRequired": true,
+      "inputSchema": {
+        "type": "object",
+        "description": "Same request body as GmxClaimRequest in openapi.yaml",
+        "additionalProperties": true
       }
     },
     {
@@ -474,7 +1892,9 @@
             "description": "request_id UUID"
           }
         },
-        "required": ["id"],
+        "required": [
+          "id"
+        ],
         "additionalProperties": false
       }
     }

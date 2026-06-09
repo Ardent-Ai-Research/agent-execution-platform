@@ -74,7 +74,7 @@ class ArdentMcpServer:
         path, remaining = self._render_path(path_template, arguments)
 
         headers: dict[str, str] = {
-            "User-Agent": "ardent-mcp-server/0.1.0",
+            "User-Agent": "ardent-mcp-server/0.5.0",
             "Accept": "application/json",
         }
 
@@ -199,7 +199,7 @@ def handle_request(server: ArdentMcpServer, message: dict[str, Any]) -> None:
             message_id,
             {
                 "protocolVersion": "2024-11-05",
-                "serverInfo": {"name": "ardent-mcp", "version": "0.3.0"},
+                "serverInfo": {"name": "ardent-mcp", "version": "0.5.0"},
                 "capabilities": {"tools": {}},
             },
         )

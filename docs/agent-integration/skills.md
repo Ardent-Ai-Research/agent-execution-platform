@@ -29,6 +29,7 @@ ardent feed                             # public activity feed
 ardent wallet         --agent-id my-agent-001 --chain ethereum
 ardent wallet-balance --agent-id my-agent-001 --chain ethereum
 ardent aave-balances --agent-id my-agent-001
+ardent gmx-create-order-simulate --agent-id my-agent-001 --body-file ./gmx-order.json
 ardent simulate --agent-id my-agent-001 --chain ethereum --target-contract 0xTargetContract --calldata 0xCalldata --value 0
 ardent execute --agent-id my-agent-001 --chain ethereum --target-contract 0xTargetContract --calldata 0xCalldata --value 0
 ardent status --request-id your_request_id
@@ -200,6 +201,69 @@ Withdraw, repay, and borrow support `amount: "max"`. Repay max resolves to the
 smaller of selected-rate debt and wallet token balance. Borrow max resolves to
 the largest amount allowed by available borrows and the projected health-factor
 floor.
+
+### Typed GMX V2 Arbitrum Sepolia Flow
+
+Use typed protocol tools for GMX V2 Arbitrum Sepolia orders instead of manually
+encoding `ExchangeRouter` calldata. For create-order actions, the API compiles
+`approve -> ExchangeRouter.multicall(sendWnt, sendTokens, createOrder)` and
+runs full UserOperation simulation.
+
+Create a market increase simulation:
+
+```bash
+curl -X POST "$BASE_URL/protocols/gmx-v2/orders/simulate" \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: $API_KEY" \
+  -d '{
+    "agent_id": "my-agent-001",
+    "chain": "arbitrum",
+    "order_type": "market_increase",
+    "market": "0xYourGmxMarketToken",
+    "initial_collateral_token": "0xYourCollateralToken",
+    "initial_collateral_delta_amount_raw": "1000000",
+    "size_delta_usd_raw": "50000000000000000000000000000000000",
+    "acceptable_price_raw": "30000000000000000000000000000000000000000",
+    "execution_fee_raw": "1000000000000000",
+    "is_long": true
+  }'
+```
+
+Create a market swap simulation:
+
+```bash
+curl -X POST "$BASE_URL/protocols/gmx-v2/orders/simulate" \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: $API_KEY" \
+  -d '{
+    "agent_id": "my-agent-001",
+    "chain": "arbitrum",
+    "order_type": "market_swap",
+    "market": "0xYourGmxMarketToken",
+    "initial_collateral_token": "0xYourInputToken",
+    "initial_collateral_delta_amount_raw": "1000000",
+    "min_output_amount_raw": "1",
+    "execution_fee_raw": "1000000000000000"
+  }'
+```
+
+Cancel an order:
+
+```bash
+curl -X POST "$BASE_URL/protocols/gmx-v2/orders/cancel/simulate" \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: $API_KEY" \
+  -d '{
+    "agent_id": "my-agent-001",
+    "chain": "arbitrum",
+    "order_key": "0xYourBytes32OrderKey"
+  }'
+```
+
+Agents should treat GMX values as raw integers: token amounts use token base
+units, while size and price values use GMX 30-decimal precision. The agent smart
+wallet must hold the collateral/input token and enough Arbitrum Sepolia ETH for
+the GMX execution fee.
 
 ### Canonical curl Commands
 

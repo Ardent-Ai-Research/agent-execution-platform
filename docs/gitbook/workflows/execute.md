@@ -350,6 +350,67 @@ ardent aave-balances --agent-id my-agent-001
 ardent aave-position --agent-id my-agent-001
 ```
 
+## GMX V2 Arbitrum Sepolia
+
+For GMX V2, prefer the typed protocol endpoints instead of manually encoding
+the `ExchangeRouter` calldata. For the full GMX command/reference page, see
+[GMX V2 Arbitrum Sepolia](../gmx-v2.md).
+
+Create-order simulation:
+
+```bash
+curl -X POST "$BASE_URL/protocols/gmx-v2/orders/simulate" \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: $API_KEY" \
+  -d '{
+    "agent_id": "my-agent-001",
+    "chain": "arbitrum",
+    "order_type": "market_increase",
+    "market": "0xYourGmxMarketToken",
+    "initial_collateral_token": "0xYourCollateralToken",
+    "initial_collateral_delta_amount_raw": "1000000",
+    "size_delta_usd_raw": "50000000000000000000000000000000000",
+    "acceptable_price_raw": "30000000000000000000000000000000000000000",
+    "execution_fee_raw": "1000000000000000",
+    "is_long": true
+  }'
+```
+
+CLI equivalent:
+
+```bash
+ardent gmx-create-order-simulate \
+  --agent-id my-agent-001 \
+  --order-type market_increase \
+  --market 0xYourGmxMarketToken \
+  --initial-collateral-token 0xYourCollateralToken \
+  --initial-collateral-delta-amount-raw 1000000 \
+  --size-delta-usd-raw 50000000000000000000000000000000000 \
+  --acceptable-price-raw 30000000000000000000000000000000000000000 \
+  --execution-fee-raw 1000000000000000 \
+  --long
+
+ardent gmx-create-order --agent-id my-agent-001 --body-file ./gmx-order.json
+```
+
+Cancel-order CLI equivalent:
+
+```bash
+ardent gmx-cancel-order-simulate \
+  --agent-id my-agent-001 \
+  --order-key 0xYourBytes32OrderKey
+
+ardent gmx-cancel-order \
+  --agent-id my-agent-001 \
+  --order-key 0xYourBytes32OrderKey
+```
+
+The adapter compiles create-order requests into an atomic
+`approve -> ExchangeRouter.multicall(sendWnt, sendTokens, createOrder)` bundle
+for the agent's ERC-4337 smart wallet. `execution_fee_raw` is paid as ETH value
+to the GMX router call, so the smart wallet must hold enough Arbitrum Sepolia
+ETH for the GMX keeper fee.
+
 ## Notes by payment mode
 
 1. Manual mode often requires two calls if proof is absent on the first call.

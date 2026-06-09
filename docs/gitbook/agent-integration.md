@@ -218,5 +218,6 @@ Full skills file:
 | `ardent_cli.py` | Zero-dependency CLI | Developers, scripts, CI |
 | `mcp_server.py` | stdio MCP server | Codex, Claude, ChatGPT, Cursor, Windsurf |
 | `mcp-tools.json` | MCP tool definitions | `mcp_server.py` |
-| `openapi.yaml` | OpenAPI 3.1 spec | ChatGPT custom actions, code generators, framework builders |
+| `openapi.yaml` | Generated bundled OpenAPI 3.1 spec | ChatGPT custom actions, code generators, framework builders |
+| `openapi/` | Split OpenAPI source + bundler | Maintainers |
 | `skills.md` | Setup guide and agent playbook | Humans and LLM system prompts |
