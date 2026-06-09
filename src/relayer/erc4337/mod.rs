@@ -897,10 +897,79 @@ fn format_json_rpc_error(err: &JsonRpcError) -> String {
         parts.push(format!("code={code}"));
     }
     parts.push(format!("message={}", err.message));
+    if let Some(revert_data) = python_bytes_literal_to_hex(&err.message) {
+        if let Some(description) = describe_known_revert_data(&revert_data) {
+            parts.push(format!("decoded_error={description}"));
+        }
+        parts.push(format!("revert_data={revert_data}"));
+    }
     if let Some(data) = &err.data {
         parts.push(format!("data={data}"));
     }
     parts.join(", ")
+}
+
+fn python_bytes_literal_to_hex(message: &str) -> Option<String> {
+    let start = message.find("b'")? + 2;
+    let rest = &message[start..];
+    let end = rest.find('\'')?;
+    let literal = &rest[..end];
+    let mut bytes = Vec::new();
+    let chars = literal.as_bytes();
+    let mut i = 0;
+
+    while i < chars.len() {
+        if chars[i] == b'\\' {
+            match chars.get(i + 1).copied() {
+                Some(b'x') if i + 3 < chars.len() => {
+                    let hex = std::str::from_utf8(&chars[i + 2..i + 4]).ok()?;
+                    bytes.push(u8::from_str_radix(hex, 16).ok()?);
+                    i += 4;
+                }
+                Some(b'\\') => {
+                    bytes.push(b'\\');
+                    i += 2;
+                }
+                Some(b'\'') => {
+                    bytes.push(b'\'');
+                    i += 2;
+                }
+                Some(b'n') => {
+                    bytes.push(b'\n');
+                    i += 2;
+                }
+                Some(b'r') => {
+                    bytes.push(b'\r');
+                    i += 2;
+                }
+                Some(b't') => {
+                    bytes.push(b'\t');
+                    i += 2;
+                }
+                Some(other) => {
+                    bytes.push(other);
+                    i += 2;
+                }
+                None => return None,
+            }
+        } else {
+            bytes.push(chars[i]);
+            i += 1;
+        }
+    }
+
+    if bytes.is_empty() {
+        None
+    } else {
+        Some(format!("0x{}", hex::encode(bytes)))
+    }
+}
+
+fn describe_known_revert_data(revert_data: &str) -> Option<&'static str> {
+    match revert_data.get(..10) {
+        Some("0x5a154675") => Some("ExecuteError(uint256,bytes)"),
+        _ => None,
+    }
 }
 
 #[derive(Debug, Deserialize)]
@@ -1181,6 +1250,20 @@ mod tests {
         let (unpacked_high, unpacked_low) = unpack_two_uint128_from_hex(&packed).expect("unpack");
         assert_eq!(unpacked_high, high);
         assert_eq!(unpacked_low, low);
+    }
+
+    #[test]
+    fn formats_python_byte_revert_data_as_hex() {
+        let err = JsonRpcError {
+            code: Some(-32521),
+            message: "gas estimation failed: b'Z\\x15Fu\\x01@'".to_string(),
+            data: None,
+        };
+
+        let formatted = format_json_rpc_error(&err);
+        assert!(formatted.contains("code=-32521"));
+        assert!(formatted.contains("decoded_error=ExecuteError(uint256,bytes)"));
+        assert!(formatted.contains("revert_data=0x5a1546750140"));
     }
 
     #[test]

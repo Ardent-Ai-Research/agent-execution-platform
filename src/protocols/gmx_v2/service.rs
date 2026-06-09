@@ -82,6 +82,133 @@ async fn call_erc20_decimals(
     Some(value.as_u32().min(u8::MAX as u32) as u8)
 }
 
+async fn ensure_token_balance(
+    engine: &ExecutionEngine,
+    chain: &Chain,
+    smart_wallet: Address,
+    token: Address,
+    required: U256,
+    field: &str,
+) -> Result<()> {
+    if required.is_zero() {
+        return Ok(());
+    }
+
+    let balance = call_u256(
+        engine,
+        chain,
+        token,
+        gmx_v2::encode_balance_of(smart_wallet),
+    )
+    .await?;
+
+    if balance < required {
+        let symbol = call_erc20_symbol(engine, chain, token)
+            .await
+            .unwrap_or_else(|| format!("{token:?}"));
+        anyhow::bail!(
+            "GMX V2 request rejected before simulation: smart wallet {smart_wallet:?} has {balance} raw {symbol} ({token:?}) but {field} requires {required}. Fund the smart wallet with the required GMX asset or lower the requested amount."
+        );
+    }
+
+    Ok(())
+}
+
+fn parse_preflight_u256(raw: &str, field: &str) -> Result<U256> {
+    U256::from_dec_str(raw.trim()).map_err(|_| anyhow::anyhow!("invalid {field}: {raw}"))
+}
+
+fn parse_optional_preflight_u256(raw: Option<&str>, field: &str) -> Result<U256> {
+    match raw {
+        Some(value) if !value.trim().is_empty() => parse_preflight_u256(value, field),
+        _ => Ok(U256::zero()),
+    }
+}
+
+async fn guard_create_order_balances(
+    engine: &ExecutionEngine,
+    chain: &Chain,
+    smart_wallet: Address,
+    req: &GmxCreateOrderRequest,
+) -> Result<()> {
+    let token: Address = req.initial_collateral_token.parse()?;
+    let amount = parse_preflight_u256(
+        &req.initial_collateral_delta_amount_raw,
+        "initial_collateral_delta_amount_raw",
+    )?;
+    ensure_token_balance(
+        engine,
+        chain,
+        smart_wallet,
+        token,
+        amount,
+        "initial_collateral_delta_amount_raw",
+    )
+    .await
+}
+
+async fn guard_create_deposit_balances(
+    engine: &ExecutionEngine,
+    chain: &Chain,
+    smart_wallet: Address,
+    req: &GmxCreateDepositRequest,
+) -> Result<()> {
+    let long_amount = parse_optional_preflight_u256(
+        req.initial_long_token_amount_raw.as_deref(),
+        "initial_long_token_amount_raw",
+    )?;
+    if !long_amount.is_zero() {
+        let token: Address = req.initial_long_token.parse()?;
+        ensure_token_balance(
+            engine,
+            chain,
+            smart_wallet,
+            token,
+            long_amount,
+            "initial_long_token_amount_raw",
+        )
+        .await?;
+    }
+
+    let short_amount = parse_optional_preflight_u256(
+        req.initial_short_token_amount_raw.as_deref(),
+        "initial_short_token_amount_raw",
+    )?;
+    if !short_amount.is_zero() {
+        let token: Address = req.initial_short_token.parse()?;
+        ensure_token_balance(
+            engine,
+            chain,
+            smart_wallet,
+            token,
+            short_amount,
+            "initial_short_token_amount_raw",
+        )
+        .await?;
+    }
+
+    Ok(())
+}
+
+async fn guard_create_withdrawal_balances(
+    engine: &ExecutionEngine,
+    chain: &Chain,
+    smart_wallet: Address,
+    req: &GmxCreateWithdrawalRequest,
+) -> Result<()> {
+    let market_token: Address = req.market.parse()?;
+    let amount = parse_preflight_u256(&req.market_token_amount_raw, "market_token_amount_raw")?;
+    ensure_token_balance(
+        engine,
+        chain,
+        smart_wallet,
+        market_token,
+        amount,
+        "market_token_amount_raw",
+    )
+    .await
+}
+
 fn decode_erc20_symbol(raw: &[u8]) -> Option<String> {
     if let Ok(decoded) = ethers::abi::decode(&[ethers::abi::ParamType::String], raw) {
         if let ethers::abi::Token::String(symbol) = &decoded[0] {
@@ -440,6 +567,7 @@ pub async fn handle_create_order(
         .await?;
     let smart_wallet_address =
         resolve_chain_smart_wallet_address(engine, &chain, &agent_wallet).await?;
+    guard_create_order_balances(engine, &chain, smart_wallet_address, req).await?;
     let execution_req = gmx_v2::compile_create_order(req, smart_wallet_address)?;
 
     handle_execute(
@@ -476,6 +604,7 @@ pub async fn handle_create_order_simulate(
         .await?;
     let smart_wallet_address =
         resolve_chain_smart_wallet_address(engine, &chain, &agent_wallet).await?;
+    guard_create_order_balances(engine, &chain, smart_wallet_address, req).await?;
     let execution_req = gmx_v2::compile_create_order(req, smart_wallet_address)?;
 
     handle_simulate(
@@ -639,6 +768,7 @@ pub async fn handle_create_deposit(
         .await?;
     let smart_wallet_address =
         resolve_chain_smart_wallet_address(engine, &chain, &agent_wallet).await?;
+    guard_create_deposit_balances(engine, &chain, smart_wallet_address, req).await?;
     let execution_req = gmx_v2::compile_create_deposit(req, smart_wallet_address)?;
     handle_execute(
         engine,
@@ -674,6 +804,7 @@ pub async fn handle_create_deposit_simulate(
         .await?;
     let smart_wallet_address =
         resolve_chain_smart_wallet_address(engine, &chain, &agent_wallet).await?;
+    guard_create_deposit_balances(engine, &chain, smart_wallet_address, req).await?;
     let execution_req = gmx_v2::compile_create_deposit(req, smart_wallet_address)?;
     handle_simulate(
         engine,
@@ -708,6 +839,7 @@ pub async fn handle_create_withdrawal(
         .await?;
     let smart_wallet_address =
         resolve_chain_smart_wallet_address(engine, &chain, &agent_wallet).await?;
+    guard_create_withdrawal_balances(engine, &chain, smart_wallet_address, req).await?;
     let execution_req = gmx_v2::compile_create_withdrawal(req, smart_wallet_address)?;
     handle_execute(
         engine,
@@ -743,6 +875,7 @@ pub async fn handle_create_withdrawal_simulate(
         .await?;
     let smart_wallet_address =
         resolve_chain_smart_wallet_address(engine, &chain, &agent_wallet).await?;
+    guard_create_withdrawal_balances(engine, &chain, smart_wallet_address, req).await?;
     let execution_req = gmx_v2::compile_create_withdrawal(req, smart_wallet_address)?;
     handle_simulate(
         engine,
