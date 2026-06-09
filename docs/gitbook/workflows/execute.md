@@ -406,10 +406,10 @@ ardent gmx-cancel-order \
 ```
 
 The adapter compiles create-order requests into an atomic
-`approvePlugin -> approve -> ExchangeRouter.multicall(sendWnt, sendTokens, createOrder)`
-bundle for the agent's ERC-4337 smart wallet. `execution_fee_raw` is paid as ETH
-value to the GMX router call, so the smart wallet must hold enough Arbitrum
-Sepolia ETH for the GMX keeper fee.
+`approve -> ExchangeRouter.multicall(sendWnt, sendTokens, createOrder)` bundle
+for the agent's ERC-4337 smart wallet. `execution_fee_raw` is paid as ETH value
+to the GMX router call, so the smart wallet must hold enough Arbitrum Sepolia
+ETH for the GMX keeper fee.
 
 ## Notes by payment mode
 

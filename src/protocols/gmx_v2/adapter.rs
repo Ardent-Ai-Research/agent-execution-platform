@@ -435,11 +435,6 @@ pub fn compile_create_order(
         }),
         batch_calls: Some(vec![
             crate::types::BatchCall {
-                target_contract: format!("{router:?}"),
-                calldata: encode_approve_plugin(exchange_router),
-                value: "0".to_string(),
-            },
-            crate::types::BatchCall {
                 target_contract: format!("{collateral_token:?}"),
                 calldata: encode_erc20_approve(router, collateral_amount),
                 value: "0".to_string(),
@@ -518,11 +513,6 @@ pub fn compile_create_deposit(
 
     let mut batch_calls = Vec::new();
     let mut multicall = vec![encode_send_wnt(deposit_vault, execution_fee)];
-    batch_calls.push(crate::types::BatchCall {
-        target_contract: format!("{router:?}"),
-        calldata: encode_approve_plugin(exchange_router),
-        value: "0".to_string(),
-    });
 
     if !long_amount.is_zero() {
         let token = parse_address(&req.initial_long_token, "initial_long_token")?;
@@ -587,11 +577,6 @@ pub fn compile_create_withdrawal(
             .clone()
             .or_else(|| Some("gmx-v2-arbitrum-sepolia-create-withdrawal".to_string())),
         batch_calls: Some(vec![
-            crate::types::BatchCall {
-                target_contract: format!("{router:?}"),
-                calldata: encode_approve_plugin(exchange_router),
-                value: "0".to_string(),
-            },
             crate::types::BatchCall {
                 target_contract: format!("{market:?}"),
                 calldata: encode_erc20_approve(router, market_token_amount),
@@ -1400,10 +1385,6 @@ fn encode_erc20_approve(spender: Address, amount: U256) -> String {
     )
 }
 
-fn encode_approve_plugin(plugin: Address) -> String {
-    encode_call("approvePlugin(address)", &[Token::Address(plugin)])
-}
-
 fn encode_exchange_router_multicall(calls: Vec<String>) -> String {
     let call_tokens = calls
         .into_iter()
@@ -1502,42 +1483,25 @@ fn encode_create_deposit(
             "short_token_swap_path",
         )?),
     ]);
-    let numbers = Token::Tuple(vec![
-        Token::Uint(
-            parse_optional_u256(
-                req.initial_long_token_amount_raw.as_deref(),
-                "initial_long_token_amount_raw",
-            )?
-            .unwrap_or_else(U256::zero),
-        ),
-        Token::Uint(
-            parse_optional_u256(
-                req.initial_short_token_amount_raw.as_deref(),
-                "initial_short_token_amount_raw",
-            )?
-            .unwrap_or_else(U256::zero),
-        ),
-        Token::Uint(parse_u256(
-            &req.min_market_tokens_raw,
-            "min_market_tokens_raw",
-        )?),
-        Token::Uint(U256::zero()),
-        Token::Uint(parse_u256(&req.execution_fee_raw, "execution_fee_raw")?),
-        Token::Uint(
-            parse_optional_u256(
-                req.callback_gas_limit_raw.as_deref(),
-                "callback_gas_limit_raw",
-            )?
-            .unwrap_or_else(U256::zero),
-        ),
-    ]);
     Ok(encode_call(
-        "createDeposit(((address,address,address,address,address,address,address[],address[]),(uint256,uint256,uint256,uint256,uint256,uint256),bool))",
+        "createDeposit(((address,address,address,address,address,address,address[],address[]),uint256,bool,uint256,uint256,bytes32[]))",
         &[
             Token::Tuple(vec![
                 addresses,
-                numbers,
+                Token::Uint(parse_u256(
+                    &req.min_market_tokens_raw,
+                    "min_market_tokens_raw",
+                )?),
                 Token::Bool(req.should_unwrap_native_token.unwrap_or(false)),
+                Token::Uint(parse_u256(&req.execution_fee_raw, "execution_fee_raw")?),
+                Token::Uint(
+                    parse_optional_u256(
+                        req.callback_gas_limit_raw.as_deref(),
+                        "callback_gas_limit_raw",
+                    )?
+                    .unwrap_or_else(U256::zero),
+                ),
+                Token::Array(Vec::new()),
             ])
         ],
     ))
@@ -1575,36 +1539,29 @@ fn encode_create_withdrawal(
             "short_token_swap_path",
         )?),
     ]);
-    let numbers = Token::Tuple(vec![
-        Token::Uint(parse_u256(
-            &req.market_token_amount_raw,
-            "market_token_amount_raw",
-        )?),
-        Token::Uint(parse_u256(
-            &req.min_long_token_amount_raw,
-            "min_long_token_amount_raw",
-        )?),
-        Token::Uint(parse_u256(
-            &req.min_short_token_amount_raw,
-            "min_short_token_amount_raw",
-        )?),
-        Token::Uint(U256::zero()),
-        Token::Uint(parse_u256(&req.execution_fee_raw, "execution_fee_raw")?),
-        Token::Uint(
-            parse_optional_u256(
-                req.callback_gas_limit_raw.as_deref(),
-                "callback_gas_limit_raw",
-            )?
-            .unwrap_or_else(U256::zero),
-        ),
-    ]);
     Ok(encode_call(
-        "createWithdrawal(((address,address,address,address,address[],address[]),(uint256,uint256,uint256,uint256,uint256,uint256),bool))",
+        "createWithdrawal(((address,address,address,address,address[],address[]),uint256,uint256,bool,uint256,uint256,bytes32[]))",
         &[
             Token::Tuple(vec![
                 addresses,
-                numbers,
+                Token::Uint(parse_u256(
+                    &req.min_long_token_amount_raw,
+                    "min_long_token_amount_raw",
+                )?),
+                Token::Uint(parse_u256(
+                    &req.min_short_token_amount_raw,
+                    "min_short_token_amount_raw",
+                )?),
                 Token::Bool(req.should_unwrap_native_token.unwrap_or(false)),
+                Token::Uint(parse_u256(&req.execution_fee_raw, "execution_fee_raw")?),
+                Token::Uint(
+                    parse_optional_u256(
+                        req.callback_gas_limit_raw.as_deref(),
+                        "callback_gas_limit_raw",
+                    )?
+                    .unwrap_or_else(U256::zero),
+                ),
+                Token::Array(Vec::new()),
             ])
         ],
     ))
@@ -1771,7 +1728,7 @@ mod tests {
     }
 
     #[test]
-    fn create_order_compiles_to_plugin_approval_token_approval_and_exchange_router_multicall() {
+    fn create_order_compiles_to_approve_and_exchange_router_multicall() {
         let wallet: Address = "0x3333333333333333333333333333333333333333"
             .parse()
             .unwrap();
@@ -1780,27 +1737,22 @@ mod tests {
         let calls = compiled.batch_calls.unwrap();
 
         assert_eq!(compiled.chain, "arbitrum");
-        assert_eq!(calls.len(), 3);
+        assert_eq!(calls.len(), 2);
         assert_eq!(
             calls[0].target_contract,
-            "0x72f13a44c8ba16a678cad549f17bc9e06d2b8bd2"
-        );
-        assert_eq!(
-            calls[1].target_contract,
             "0x2222222222222222222222222222222222222222"
         );
         assert_eq!(
-            calls[2].target_contract,
+            calls[1].target_contract,
             "0xed50b2a1ef0c35daaf08da6486971180237909c3"
         );
-        assert!(calls[0].calldata.starts_with("0x38c74dd9"));
-        assert!(calls[1].calldata.starts_with("0x095ea7b3"));
-        assert!(calls[2].calldata.starts_with("0xac9650d8"));
-        assert_eq!(calls[2].value, "1000000000000000");
+        assert!(calls[0].calldata.starts_with("0x095ea7b3"));
+        assert!(calls[1].calldata.starts_with("0xac9650d8"));
+        assert_eq!(calls[1].value, "1000000000000000");
 
         let decoded_multicall = abi::decode(
             &[ParamType::Array(Box::new(ParamType::Bytes))],
-            &hex::decode(calls[2].calldata.trim_start_matches("0x").get(8..).unwrap()).unwrap(),
+            &hex::decode(calls[1].calldata.trim_start_matches("0x").get(8..).unwrap()).unwrap(),
         )
         .unwrap();
         let inner_calls = match &decoded_multicall[0] {
@@ -1918,10 +1870,34 @@ mod tests {
             .unwrap();
         let deposit = compile_create_deposit(&sample_deposit_req(), wallet).unwrap();
         let deposit_calls = deposit.batch_calls.unwrap();
-        assert_eq!(deposit_calls.len(), 3);
-        assert!(deposit_calls[0].calldata.starts_with("0x38c74dd9"));
-        assert!(deposit_calls[2].calldata.starts_with("0xac9650d8"));
-        assert_eq!(deposit_calls[2].value, "1000000000000000");
+        assert_eq!(deposit_calls.len(), 2);
+        assert!(deposit_calls[1].calldata.starts_with("0xac9650d8"));
+        assert_eq!(deposit_calls[1].value, "1000000000000000");
+
+        let decoded_deposit_multicall = abi::decode(
+            &[ParamType::Array(Box::new(ParamType::Bytes))],
+            &hex::decode(
+                deposit_calls[1]
+                    .calldata
+                    .trim_start_matches("0x")
+                    .get(8..)
+                    .unwrap(),
+            )
+            .unwrap(),
+        )
+        .unwrap();
+        let deposit_inner_calls = match &decoded_deposit_multicall[0] {
+            Token::Array(items) => items,
+            other => panic!("expected deposit multicall bytes array, got {other:?}"),
+        };
+        let create_deposit_bytes = match &deposit_inner_calls[2] {
+            Token::Bytes(bytes) => bytes,
+            other => panic!("expected createDeposit bytes, got {other:?}"),
+        };
+        assert_eq!(
+            &create_deposit_bytes[..4],
+            &selector("createDeposit(((address,address,address,address,address,address,address[],address[]),uint256,bool,uint256,uint256,bytes32[]))")
+        );
 
         let withdrawal_req = GmxCreateWithdrawalRequest {
             agent_id: "agent-1".to_string(),
@@ -1943,9 +1919,33 @@ mod tests {
         };
         let withdrawal = compile_create_withdrawal(&withdrawal_req, wallet).unwrap();
         let withdrawal_calls = withdrawal.batch_calls.unwrap();
-        assert_eq!(withdrawal_calls.len(), 3);
-        assert!(withdrawal_calls[0].calldata.starts_with("0x38c74dd9"));
-        assert!(withdrawal_calls[2].calldata.starts_with("0xac9650d8"));
+        assert_eq!(withdrawal_calls.len(), 2);
+        assert!(withdrawal_calls[1].calldata.starts_with("0xac9650d8"));
+
+        let decoded_withdrawal_multicall = abi::decode(
+            &[ParamType::Array(Box::new(ParamType::Bytes))],
+            &hex::decode(
+                withdrawal_calls[1]
+                    .calldata
+                    .trim_start_matches("0x")
+                    .get(8..)
+                    .unwrap(),
+            )
+            .unwrap(),
+        )
+        .unwrap();
+        let withdrawal_inner_calls = match &decoded_withdrawal_multicall[0] {
+            Token::Array(items) => items,
+            other => panic!("expected withdrawal multicall bytes array, got {other:?}"),
+        };
+        let create_withdrawal_bytes = match &withdrawal_inner_calls[2] {
+            Token::Bytes(bytes) => bytes,
+            other => panic!("expected createWithdrawal bytes, got {other:?}"),
+        };
+        assert_eq!(
+            &create_withdrawal_bytes[..4],
+            &selector("createWithdrawal(((address,address,address,address,address[],address[]),uint256,uint256,bool,uint256,uint256,bytes32[]))")
+        );
     }
 
     #[test]
