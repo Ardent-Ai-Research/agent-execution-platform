@@ -7,6 +7,7 @@
 
 use anyhow::Result;
 use chrono::Utc;
+use ethers::abi::{self, ParamType, Token};
 use ethers::prelude::Middleware;
 use ethers::types::{Address, Bytes, TransactionRequest, U256};
 use redis::aio::ConnectionManager;
@@ -194,12 +195,153 @@ async fn simulate_batch_user_op(
                 error: None,
             })
         }
-        Err(e) => Ok(SimulationResult {
-            success: false,
-            gas_estimate: 0,
-            return_data: None,
-            error: Some(format!("UserOperation simulation failed: {e:#}")),
-        }),
+        Err(e) => {
+            let mut error = format!("UserOperation simulation failed: {e:#}");
+            if let Some(diagnostic) =
+                diagnose_execute_batch_revert(bundler_client, req, smart_wallet).await?
+            {
+                error.push_str("; ");
+                error.push_str(&diagnostic);
+            }
+
+            Ok(SimulationResult {
+                success: false,
+                gas_estimate: 0,
+                return_data: None,
+                error: Some(error),
+            })
+        }
+    }
+}
+
+async fn diagnose_execute_batch_revert(
+    bundler_client: &BundlerClient,
+    req: &ExecutionRequest,
+    smart_wallet: Address,
+) -> Result<Option<String>> {
+    let Some(batch_calls) = req.batch_calls.as_ref() else {
+        return Ok(None);
+    };
+
+    let provider = bundler_client.provider();
+    let code = provider.get_code(smart_wallet, None).await?;
+    if code.0.is_empty() {
+        return Ok(Some(
+            "direct executeBatch diagnostic skipped: smart wallet is not deployed yet".to_string(),
+        ));
+    }
+
+    let calldata = bundler_client.encode_execute_batch_call(batch_calls)?;
+    let tx = TransactionRequest::new()
+        .from(bundler_client.entry_point())
+        .to(smart_wallet)
+        .data(Bytes::from(calldata));
+
+    match provider.call(&tx.into(), None).await {
+        Ok(_) => Ok(Some(
+            "direct executeBatch diagnostic succeeded; failure may be specific to UserOperation validation, paymaster validation, or bundler gas estimation".to_string(),
+        )),
+        Err(error) => {
+            let error_text = format!("{error:#}");
+            let revert_hex = extract_revert_hex(&error_text);
+            let decoded = revert_hex
+                .as_deref()
+                .and_then(decode_execute_error)
+                .or_else(|| decode_truncated_execute_error(revert_hex.as_deref()));
+            let call_summary = summarize_batch_calls(batch_calls);
+
+            Ok(Some(match (revert_hex, decoded) {
+                (Some(raw), Some(decoded)) => {
+                    format!("direct executeBatch diagnostic: {decoded}; raw_revert={raw}; {call_summary}")
+                }
+                (Some(raw), None) => {
+                    format!("direct executeBatch diagnostic reverted; raw_revert={raw}; {call_summary}")
+                }
+                (None, _) => {
+                    format!("direct executeBatch diagnostic reverted: {error_text}; {call_summary}")
+                }
+            }))
+        }
+    }
+}
+
+fn summarize_batch_calls(batch_calls: &[BatchCall]) -> String {
+    let calls = batch_calls
+        .iter()
+        .enumerate()
+        .map(|(index, call)| {
+            let selector = call
+                .calldata
+                .trim_start_matches("0x")
+                .get(..8)
+                .map(|raw| format!("0x{raw}"))
+                .unwrap_or_else(|| "0x".to_string());
+            format!(
+                "batch_calls[{index}] target={} selector={} value={}",
+                call.target_contract, selector, call.value
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("; ");
+    format!("batch_call_summary=[{calls}]")
+}
+
+fn extract_revert_hex(error_text: &str) -> Option<String> {
+    error_text
+        .split(|c: char| c == '"' || c == '\'' || c == ',' || c.is_whitespace())
+        .filter_map(|part| {
+            let raw = part.strip_prefix("0x")?;
+            if raw.len() >= 8 && raw.len() % 2 == 0 && raw.chars().all(|c| c.is_ascii_hexdigit()) {
+                Some(format!("0x{raw}"))
+            } else {
+                None
+            }
+        })
+        .max_by_key(|value| value.len())
+}
+
+fn decode_execute_error(raw: &str) -> Option<String> {
+    let bytes = hex::decode(raw.trim_start_matches("0x")).ok()?;
+    if bytes.len() < 4 || &bytes[..4] != [0x5a, 0x15, 0x46, 0x75] {
+        return decode_known_revert_selector(&bytes).map(str::to_string);
+    }
+
+    let decoded = abi::decode(&[ParamType::Uint(256), ParamType::Bytes], bytes.get(4..)?).ok()?;
+    let index = match &decoded[0] {
+        Token::Uint(value) => value.to_string(),
+        _ => return None,
+    };
+    let inner = match &decoded[1] {
+        Token::Bytes(value) => value.as_slice(),
+        _ => return None,
+    };
+    let inner_label = decode_known_revert_selector(inner).unwrap_or("unknown inner error");
+    let inner_hex = format!("0x{}", hex::encode(inner));
+    Some(format!(
+        "smart account ExecuteError at batch_calls[{index}], inner={inner_label}, inner_revert={inner_hex}"
+    ))
+}
+
+fn decode_truncated_execute_error(raw: Option<&str>) -> Option<String> {
+    let bytes = hex::decode(raw?.trim_start_matches("0x")).ok()?;
+    if bytes.len() >= 10 && &bytes[..4] == [0x5a, 0x15, 0x46, 0x75] {
+        if bytes
+            .windows(4)
+            .any(|window| window == [0xcc, 0x34, 0x59, 0xff])
+        {
+            return Some(
+                "smart account ExecuteError with truncated inner=UnexpectedMarket()".to_string(),
+            );
+        }
+    }
+    None
+}
+
+fn decode_known_revert_selector(bytes: &[u8]) -> Option<&'static str> {
+    match bytes.get(..4)? {
+        [0x5a, 0x15, 0x46, 0x75] => Some("ExecuteError(uint256,bytes)"),
+        [0xcc, 0x34, 0x59, 0xff] => Some("UnexpectedMarket()"),
+        _ => None,
     }
 }
 
@@ -1246,5 +1388,26 @@ mod tests {
         let err = batch_native_value_required(&req).expect_err("invalid value");
 
         assert!(format!("{err:#}").contains("invalid batch call value"));
+    }
+
+    #[test]
+    fn decode_execute_error_reports_batch_index_and_inner_selector() {
+        let inner = hex::decode("cc3459ff").expect("inner selector");
+        let encoded = abi::encode(&[Token::Uint(U256::from(1u64)), Token::Bytes(inner)]);
+        let raw = format!("0x5a154675{}", hex::encode(encoded));
+
+        let decoded = decode_execute_error(&raw).expect("decode execute error");
+
+        assert!(decoded.contains("batch_calls[1]"));
+        assert!(decoded.contains("inner=UnexpectedMarket()"));
+        assert!(decoded.contains("inner_revert=0xcc3459ff"));
+    }
+
+    #[test]
+    fn decode_truncated_execute_error_reports_unexpected_market() {
+        let decoded = decode_truncated_execute_error(Some("0x5a154675014004cc3459ff"))
+            .expect("decode truncated execute error");
+
+        assert!(decoded.contains("UnexpectedMarket()"));
     }
 }

@@ -135,7 +135,9 @@ ardent gmx-create-order \
 ## Create a market swap
 
 For `market_swap`, provide `min_output_amount_raw` instead of size/price
-fields.
+fields. The `market` argument is treated as the single GMX swap-path market for
+this order type; the on-chain GMX order `market` field is encoded as
+`address(0)` as required by GMX swap orders.
 
 ```bash
 ardent gmx-create-order-simulate \

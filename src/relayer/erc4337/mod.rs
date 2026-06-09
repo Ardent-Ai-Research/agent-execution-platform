@@ -581,7 +581,7 @@ use a v0.9-compatible bundler URL for this chain",
     ///
     /// Each `Call` is a tuple `(address target, uint256 value, bytes data)`.
     /// v0.9 supports per-call ETH values natively via the `Call` struct.
-    fn encode_execute_batch_call(
+    pub(crate) fn encode_execute_batch_call(
         &self,
         batch_calls: &[crate::types::BatchCall],
     ) -> Result<Vec<u8>> {
@@ -966,9 +966,21 @@ fn python_bytes_literal_to_hex(message: &str) -> Option<String> {
 }
 
 fn describe_known_revert_data(revert_data: &str) -> Option<&'static str> {
-    match revert_data.get(..10) {
+    let outer = match revert_data.get(..10) {
         Some("0x5a154675") => Some("ExecuteError(uint256,bytes)"),
+        Some("0xcc3459ff") => Some("UnexpectedMarket()"),
         _ => None,
+    };
+
+    if revert_data.contains("cc3459ff") {
+        match outer {
+            Some("ExecuteError(uint256,bytes)") => {
+                Some("ExecuteError(uint256,bytes); inner=UnexpectedMarket()")
+            }
+            other => other,
+        }
+    } else {
+        outer
     }
 }
 
@@ -1264,6 +1276,20 @@ mod tests {
         assert!(formatted.contains("code=-32521"));
         assert!(formatted.contains("decoded_error=ExecuteError(uint256,bytes)"));
         assert!(formatted.contains("revert_data=0x5a1546750140"));
+    }
+
+    #[test]
+    fn labels_wrapped_gmx_unexpected_market_revert() {
+        let err = JsonRpcError {
+            code: Some(-32521),
+            message: "gas estimation failed: b'Z\\x15Fu\\x01@\\x04\\xcc4Y\\xff'".to_string(),
+            data: None,
+        };
+
+        let formatted = format_json_rpc_error(&err);
+        assert!(formatted
+            .contains("decoded_error=ExecuteError(uint256,bytes); inner=UnexpectedMarket()"));
+        assert!(formatted.contains("revert_data=0x5a154675014004cc3459ff"));
     }
 
     #[test]

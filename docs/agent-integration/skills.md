@@ -231,6 +231,10 @@ curl -X POST "$BASE_URL/protocols/gmx-v2/orders/simulate" \
 
 Create a market swap simulation:
 
+For `market_swap`, `market` is treated as the single GMX swap-path market. The
+platform encodes the on-chain GMX order `market` field as `address(0)`, which is
+required for GMX swap orders.
+
 ```bash
 curl -X POST "$BASE_URL/protocols/gmx-v2/orders/simulate" \
   -H "Content-Type: application/json" \

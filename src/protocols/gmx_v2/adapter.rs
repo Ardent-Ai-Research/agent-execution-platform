@@ -710,7 +710,7 @@ pub fn validate_create_order_request(req: &GmxCreateOrderRequest) -> Result<()> 
     require_non_empty(&req.agent_id, "agent_id")?;
     let order_type = parse_order_type(&req.order_type)?;
 
-    parse_address(&req.market, "market")?;
+    let market = parse_address(&req.market, "market")?;
     parse_address(&req.initial_collateral_token, "initial_collateral_token")?;
     parse_optional_address(req.receiver.as_deref(), "receiver")?;
     parse_optional_address(
@@ -778,6 +778,16 @@ pub fn validate_create_order_request(req: &GmxCreateOrderRequest) -> Result<()> 
             }
         }
         ORDER_TYPE_MARKET_SWAP | ORDER_TYPE_LIMIT_SWAP => {
+            if market == Address::zero() && req.swap_path.is_empty() {
+                return Err(anyhow!(
+                    "market or swap_path is required for swap orders; provide a GMX swap-path market"
+                ));
+            }
+            if market != Address::zero() && !req.swap_path.is_empty() {
+                return Err(anyhow!(
+                    "provide either market as a single swap-path market or swap_path for swap orders, not both"
+                ));
+            }
             let min_output = parse_optional_u256(
                 req.min_output_amount_raw.as_deref(),
                 "min_output_amount_raw",
@@ -1367,6 +1377,31 @@ fn parse_referral_code(raw: &str) -> Result<[u8; 32]> {
     Ok(out)
 }
 
+fn is_swap_order_type(order_type: u8) -> bool {
+    order_type == ORDER_TYPE_MARKET_SWAP || order_type == ORDER_TYPE_LIMIT_SWAP
+}
+
+fn normalized_order_market(req: &GmxCreateOrderRequest, order_type: u8) -> Result<Address> {
+    if is_swap_order_type(order_type) {
+        Ok(Address::zero())
+    } else {
+        parse_address(&req.market, "market")
+    }
+}
+
+fn normalized_order_swap_path(req: &GmxCreateOrderRequest, order_type: u8) -> Result<Vec<Token>> {
+    let route = if is_swap_order_type(order_type) && req.swap_path.is_empty() {
+        vec![parse_address(&req.market, "market")?]
+    } else {
+        req.swap_path
+            .iter()
+            .map(|raw| parse_address(raw, "swap_path item"))
+            .collect::<Result<Vec<_>>>()?
+    };
+
+    Ok(route.into_iter().map(Token::Address).collect())
+}
+
 fn selector(signature: &str) -> [u8; 4] {
     let hash = id(signature);
     [hash[0], hash[1], hash[2], hash[3]]
@@ -1596,17 +1631,12 @@ fn encode_create_order(
             zero,
             "ui_fee_receiver",
         )?),
-        Token::Address(parse_address(&req.market, "market")?),
+        Token::Address(normalized_order_market(req, order_type)?),
         Token::Address(parse_address(
             &req.initial_collateral_token,
             "initial_collateral_token",
         )?),
-        Token::Array(
-            req.swap_path
-                .iter()
-                .map(|raw| parse_address(raw, "swap_path item").map(Token::Address))
-                .collect::<Result<Vec<_>>>()?,
-        ),
+        Token::Array(normalized_order_swap_path(req, order_type)?),
     ]);
 
     let numbers = Token::Tuple(vec![
@@ -1821,6 +1851,80 @@ mod tests {
         req.min_output_amount_raw = None;
         let err = validate_create_order_request(&req).unwrap_err().to_string();
         assert!(err.contains("min_output_amount_raw is required"));
+    }
+
+    #[test]
+    fn market_swap_uses_market_as_single_swap_path_and_zeroes_order_market() {
+        let wallet: Address = "0x3333333333333333333333333333333333333333"
+            .parse()
+            .unwrap();
+        let mut req = sample_req("market_swap");
+        req.swap_path = Vec::new();
+
+        let compiled = compile_create_order(&req, wallet).unwrap();
+        let calls = compiled.batch_calls.unwrap();
+        let decoded_multicall = abi::decode(
+            &[ParamType::Array(Box::new(ParamType::Bytes))],
+            &hex::decode(calls[1].calldata.trim_start_matches("0x").get(8..).unwrap()).unwrap(),
+        )
+        .unwrap();
+        let inner_calls = match &decoded_multicall[0] {
+            Token::Array(items) => items,
+            other => panic!("expected multicall bytes array, got {other:?}"),
+        };
+        let create_order_bytes = match &inner_calls[2] {
+            Token::Bytes(bytes) => bytes,
+            other => panic!("expected createOrder bytes, got {other:?}"),
+        };
+        let create_params = abi::decode(
+            &[ParamType::Tuple(vec![
+                ParamType::Tuple(vec![
+                    ParamType::Address,
+                    ParamType::Address,
+                    ParamType::Address,
+                    ParamType::Address,
+                    ParamType::Address,
+                    ParamType::Address,
+                    ParamType::Array(Box::new(ParamType::Address)),
+                ]),
+                ParamType::Tuple(vec![
+                    ParamType::Uint(256),
+                    ParamType::Uint(256),
+                    ParamType::Uint(256),
+                    ParamType::Uint(256),
+                    ParamType::Uint(256),
+                    ParamType::Uint(256),
+                    ParamType::Uint(256),
+                    ParamType::Uint(256),
+                ]),
+                ParamType::Uint(8),
+                ParamType::Uint(8),
+                ParamType::Bool,
+                ParamType::Bool,
+                ParamType::Bool,
+                ParamType::FixedBytes(32),
+                ParamType::Array(Box::new(ParamType::FixedBytes(32))),
+            ])],
+            &create_order_bytes[4..],
+        )
+        .unwrap();
+        let params = match &create_params[0] {
+            Token::Tuple(items) => items,
+            other => panic!("expected createOrder tuple, got {other:?}"),
+        };
+        let addresses = match &params[0] {
+            Token::Tuple(items) => items,
+            other => panic!("expected addresses tuple, got {other:?}"),
+        };
+        assert_eq!(addresses[4], Token::Address(Address::zero()));
+        assert_eq!(
+            addresses[6],
+            Token::Array(vec![Token::Address(
+                "0x1111111111111111111111111111111111111111"
+                    .parse()
+                    .unwrap()
+            )])
+        );
     }
 
     #[test]
