@@ -69,6 +69,17 @@ const DUMMY_USER_OP_SIGNATURE: [u8; 65] = [
     0x1b,
 ];
 
+/// Estimation-time gas placeholders.
+///
+/// Some bundlers execute `callData` using the supplied draft `callGasLimit`
+/// while computing the real estimate. These values must therefore be high
+/// enough not to make complex protocol batches, such as GMX order creation,
+/// fail during estimation. Final gas limits are still replaced with the
+/// bundler's returned estimate before submission.
+const ESTIMATION_VERIFICATION_GAS_LIMIT: u64 = 1_000_000;
+const ESTIMATION_CALL_GAS_LIMIT: u64 = 5_000_000;
+const ESTIMATION_PRE_VERIFICATION_GAS: u64 = 300_000;
+
 // ──────────────────────── EIP-712 Constants (EntryPoint v0.9) ────────
 
 /// `keccak256("PackedUserOperation(address sender,uint256 nonce,bytes initCode,bytes callData,bytes32 accountGasLimits,uint256 preVerificationGas,bytes32 gasFees,bytes paymasterAndData)")`
@@ -267,8 +278,8 @@ impl BundlerClient {
         let dummy_account_gas_limits = format!(
             "0x{}",
             hex::encode(pack_two_uint128(
-                U256::from(300_000u64),
-                U256::from(300_000u64),
+                U256::from(ESTIMATION_VERIFICATION_GAS_LIMIT),
+                U256::from(ESTIMATION_CALL_GAS_LIMIT),
             ))
         );
         let dummy_gas_fees = format!(
@@ -285,7 +296,7 @@ impl BundlerClient {
             init_code: format!("0x{}", hex::encode(&init_code)),
             call_data: format!("0x{}", hex::encode(&call_data)),
             account_gas_limits: dummy_account_gas_limits,
-            pre_verification_gas: "0x186a0".into(),
+            pre_verification_gas: format!("{ESTIMATION_PRE_VERIFICATION_GAS:#x}"),
             gas_fees: dummy_gas_fees,
             paymaster_and_data: format!("0x{}", hex::encode(&paymaster_and_data)),
             signature: format!("0x{}", hex::encode(DUMMY_USER_OP_SIGNATURE)),
@@ -1262,6 +1273,13 @@ mod tests {
         let (unpacked_high, unpacked_low) = unpack_two_uint128_from_hex(&packed).expect("unpack");
         assert_eq!(unpacked_high, high);
         assert_eq!(unpacked_low, low);
+    }
+
+    #[test]
+    fn estimation_placeholders_allow_complex_protocol_batches() {
+        assert!(ESTIMATION_CALL_GAS_LIMIT >= 5_000_000);
+        assert!(ESTIMATION_VERIFICATION_GAS_LIMIT >= 1_000_000);
+        assert!(ESTIMATION_PRE_VERIFICATION_GAS >= 300_000);
     }
 
     #[test]

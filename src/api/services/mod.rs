@@ -239,7 +239,7 @@ async fn diagnose_execute_batch_revert(
 
     match provider.call(&tx.into(), None).await {
         Ok(_) => Ok(Some(
-            "direct executeBatch diagnostic succeeded; failure may be specific to UserOperation validation, paymaster validation, or bundler gas estimation".to_string(),
+            "direct executeBatch diagnostic succeeded; protocol batch calldata is valid, so the remaining failure is specific to UserOperation validation, paymaster validation, or bundler gas estimation".to_string(),
         )),
         Err(error) => {
             let error_text = format!("{error:#}");
