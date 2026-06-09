@@ -36,6 +36,12 @@ async fn simulate_request(
     smart_wallet_str: &str,
 ) -> Result<SimulationResult> {
     if req.batch_calls.is_some() {
+        if let Some(insufficient) =
+            check_batch_native_value_balance(engine, req, chain, smart_wallet_address).await?
+        {
+            return Ok(insufficient);
+        }
+
         simulate_batch_user_op(
             bundler_client,
             paymaster_signer,
@@ -50,6 +56,57 @@ async fn simulate_request(
     } else {
         engine.simulate(req, chain, smart_wallet_address).await
     }
+}
+
+async fn check_batch_native_value_balance(
+    engine: &ExecutionEngine,
+    req: &ExecutionRequest,
+    chain: &Chain,
+    smart_wallet_address: Address,
+) -> Result<Option<SimulationResult>> {
+    let required = batch_native_value_required(req)?;
+    if required.is_zero() {
+        return Ok(None);
+    }
+
+    let provider = engine.provider_for_chain(chain)?;
+    let balance = provider.get_balance(smart_wallet_address, None).await?;
+    if balance >= required {
+        return Ok(None);
+    }
+
+    Ok(Some(SimulationResult {
+        success: false,
+        gas_estimate: 0,
+        return_data: None,
+        error: Some(format!(
+            "insufficient native token balance for batched call value on {chain}: smart wallet {smart_wallet_address:?} has {balance} wei, requires {required} wei. Paymaster sponsorship covers gas only; GMX execution_fee_raw and other call values must be funded in the smart wallet."
+        )),
+    }))
+}
+
+fn batch_native_value_required(req: &ExecutionRequest) -> Result<U256> {
+    let mut required = U256::zero();
+
+    if let Some(batch_calls) = &req.batch_calls {
+        for call in batch_calls {
+            let value = parse_native_value(&call.value)?;
+            required = required
+                .checked_add(value)
+                .ok_or_else(|| anyhow::anyhow!("batch call value overflow"))?;
+        }
+    }
+
+    Ok(required)
+}
+
+fn parse_native_value(raw: &str) -> Result<U256> {
+    let trimmed = raw.trim();
+    if trimmed.is_empty() || trimmed == "0" {
+        return Ok(U256::zero());
+    }
+
+    U256::from_dec_str(trimmed).map_err(|_| anyhow::anyhow!("invalid batch call value: {raw}"))
 }
 
 /// Simulate a batch as the exact ERC-4337 `executeBatch` UserOperation shape.
@@ -1144,5 +1201,50 @@ fn validate_callback_url(url: Option<&str>) -> Result<Option<String>> {
             }
             Ok(Some(trimmed.to_string()))
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn sample_batch_request(values: &[&str]) -> ExecutionRequest {
+        ExecutionRequest {
+            agent_id: "agent-1".to_string(),
+            chain: "arbitrum".to_string(),
+            target_contract: String::new(),
+            calldata: String::new(),
+            value: "0".to_string(),
+            strategy_id: None,
+            batch_calls: Some(
+                values
+                    .iter()
+                    .map(|value| BatchCall {
+                        target_contract: "0x1111111111111111111111111111111111111111".to_string(),
+                        calldata: "0xabcdef12".to_string(),
+                        value: (*value).to_string(),
+                    })
+                    .collect(),
+            ),
+            callback_url: None,
+        }
+    }
+
+    #[test]
+    fn batch_native_value_required_sums_batch_call_values() {
+        let req = sample_batch_request(&["0", "100", " 200 "]);
+
+        let required = batch_native_value_required(&req).expect("sum batch values");
+
+        assert_eq!(required, U256::from(300u64));
+    }
+
+    #[test]
+    fn batch_native_value_required_rejects_invalid_value() {
+        let req = sample_batch_request(&["1", "not-a-number"]);
+
+        let err = batch_native_value_required(&req).expect_err("invalid value");
+
+        assert!(format!("{err:#}").contains("invalid batch call value"));
     }
 }

@@ -226,7 +226,8 @@ ardent gmx-claim-simulate \
 
 - Always call the `/simulate` endpoint before execution.
 - The smart wallet needs enough Arbitrum Sepolia ETH for the GMX execution fee,
-  even when gas sponsorship is enabled.
+  even when gas sponsorship is enabled. Paymasters cover UserOperation gas only;
+  they do not cover `execution_fee_raw` or any other native value forwarded to GMX.
 - The collateral/input token must already be in the agent smart wallet.
 - Use raw integer values only. Human-readable GMX sizing is intentionally not
   guessed by the API because GMX uses token decimals and 30-decimal USD/price
