@@ -435,6 +435,11 @@ pub fn compile_create_order(
         }),
         batch_calls: Some(vec![
             crate::types::BatchCall {
+                target_contract: format!("{router:?}"),
+                calldata: encode_approve_plugin(exchange_router),
+                value: "0".to_string(),
+            },
+            crate::types::BatchCall {
                 target_contract: format!("{collateral_token:?}"),
                 calldata: encode_erc20_approve(router, collateral_amount),
                 value: "0".to_string(),
@@ -513,6 +518,11 @@ pub fn compile_create_deposit(
 
     let mut batch_calls = Vec::new();
     let mut multicall = vec![encode_send_wnt(deposit_vault, execution_fee)];
+    batch_calls.push(crate::types::BatchCall {
+        target_contract: format!("{router:?}"),
+        calldata: encode_approve_plugin(exchange_router),
+        value: "0".to_string(),
+    });
 
     if !long_amount.is_zero() {
         let token = parse_address(&req.initial_long_token, "initial_long_token")?;
@@ -577,6 +587,11 @@ pub fn compile_create_withdrawal(
             .clone()
             .or_else(|| Some("gmx-v2-arbitrum-sepolia-create-withdrawal".to_string())),
         batch_calls: Some(vec![
+            crate::types::BatchCall {
+                target_contract: format!("{router:?}"),
+                calldata: encode_approve_plugin(exchange_router),
+                value: "0".to_string(),
+            },
             crate::types::BatchCall {
                 target_contract: format!("{market:?}"),
                 calldata: encode_erc20_approve(router, market_token_amount),
@@ -1385,6 +1400,10 @@ fn encode_erc20_approve(spender: Address, amount: U256) -> String {
     )
 }
 
+fn encode_approve_plugin(plugin: Address) -> String {
+    encode_call("approvePlugin(address)", &[Token::Address(plugin)])
+}
+
 fn encode_exchange_router_multicall(calls: Vec<String>) -> String {
     let call_tokens = calls
         .into_iter()
@@ -1752,7 +1771,7 @@ mod tests {
     }
 
     #[test]
-    fn create_order_compiles_to_approve_and_exchange_router_multicall() {
+    fn create_order_compiles_to_plugin_approval_token_approval_and_exchange_router_multicall() {
         let wallet: Address = "0x3333333333333333333333333333333333333333"
             .parse()
             .unwrap();
@@ -1761,22 +1780,27 @@ mod tests {
         let calls = compiled.batch_calls.unwrap();
 
         assert_eq!(compiled.chain, "arbitrum");
-        assert_eq!(calls.len(), 2);
+        assert_eq!(calls.len(), 3);
         assert_eq!(
             calls[0].target_contract,
-            "0x2222222222222222222222222222222222222222"
+            "0x72f13a44c8ba16a678cad549f17bc9e06d2b8bd2"
         );
         assert_eq!(
             calls[1].target_contract,
+            "0x2222222222222222222222222222222222222222"
+        );
+        assert_eq!(
+            calls[2].target_contract,
             "0xed50b2a1ef0c35daaf08da6486971180237909c3"
         );
-        assert!(calls[0].calldata.starts_with("0x095ea7b3"));
-        assert!(calls[1].calldata.starts_with("0xac9650d8"));
-        assert_eq!(calls[1].value, "1000000000000000");
+        assert!(calls[0].calldata.starts_with("0x38c74dd9"));
+        assert!(calls[1].calldata.starts_with("0x095ea7b3"));
+        assert!(calls[2].calldata.starts_with("0xac9650d8"));
+        assert_eq!(calls[2].value, "1000000000000000");
 
         let decoded_multicall = abi::decode(
             &[ParamType::Array(Box::new(ParamType::Bytes))],
-            &hex::decode(calls[1].calldata.trim_start_matches("0x").get(8..).unwrap()).unwrap(),
+            &hex::decode(calls[2].calldata.trim_start_matches("0x").get(8..).unwrap()).unwrap(),
         )
         .unwrap();
         let inner_calls = match &decoded_multicall[0] {
@@ -1894,9 +1918,10 @@ mod tests {
             .unwrap();
         let deposit = compile_create_deposit(&sample_deposit_req(), wallet).unwrap();
         let deposit_calls = deposit.batch_calls.unwrap();
-        assert_eq!(deposit_calls.len(), 2);
-        assert!(deposit_calls[1].calldata.starts_with("0xac9650d8"));
-        assert_eq!(deposit_calls[1].value, "1000000000000000");
+        assert_eq!(deposit_calls.len(), 3);
+        assert!(deposit_calls[0].calldata.starts_with("0x38c74dd9"));
+        assert!(deposit_calls[2].calldata.starts_with("0xac9650d8"));
+        assert_eq!(deposit_calls[2].value, "1000000000000000");
 
         let withdrawal_req = GmxCreateWithdrawalRequest {
             agent_id: "agent-1".to_string(),
@@ -1918,8 +1943,9 @@ mod tests {
         };
         let withdrawal = compile_create_withdrawal(&withdrawal_req, wallet).unwrap();
         let withdrawal_calls = withdrawal.batch_calls.unwrap();
-        assert_eq!(withdrawal_calls.len(), 2);
-        assert!(withdrawal_calls[1].calldata.starts_with("0xac9650d8"));
+        assert_eq!(withdrawal_calls.len(), 3);
+        assert!(withdrawal_calls[0].calldata.starts_with("0x38c74dd9"));
+        assert!(withdrawal_calls[2].calldata.starts_with("0xac9650d8"));
     }
 
     #[test]

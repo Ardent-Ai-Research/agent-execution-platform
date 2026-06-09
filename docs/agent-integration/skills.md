@@ -206,8 +206,8 @@ floor.
 
 Use typed protocol tools for GMX V2 Arbitrum Sepolia orders instead of manually
 encoding `ExchangeRouter` calldata. For create-order actions, the API compiles
-`approve -> ExchangeRouter.multicall(sendWnt, sendTokens, createOrder)` and
-runs full UserOperation simulation.
+`approvePlugin -> approve -> ExchangeRouter.multicall(sendWnt, sendTokens, createOrder)`
+and runs full UserOperation simulation.
 
 Create a market increase simulation:
 

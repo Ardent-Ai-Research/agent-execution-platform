@@ -40,11 +40,14 @@ The create-order surface supports:
 
 For create order, Ardent builds:
 
-1. `ERC20.approve(GMX Router, collateralAmount)`
-2. `ExchangeRouter.multicall([sendWnt, sendTokens, createOrder])`
+1. `GMX Router.approvePlugin(ExchangeRouter)`
+2. `ERC20.approve(GMX Router, collateralAmount)`
+3. `ExchangeRouter.multicall([sendWnt, sendTokens, createOrder])`
 
 That means the GMX execution fee, collateral/input transfer, and `createOrder`
-call are bundled atomically in one smart-account operation.
+call are bundled atomically in one smart-account operation. The plugin approval
+is included so newly deployed smart wallets can use GMX token-transfer routing
+without a separate setup transaction.
 
 ## Arbitrum Sepolia contracts
 
