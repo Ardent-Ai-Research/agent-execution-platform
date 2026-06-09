@@ -429,7 +429,8 @@
         type: string
 "/protocols/gmx-v2/balances":
   get:
-    summary: Read GMX V2 Arbitrum Sepolia GM market token balances for an agent wallet
+    summary: Read GMX V2 Arbitrum Sepolia GM market and underlying token balances for an agent wallet
+    description: Returns GM/market LP token balances in `balances` and the wallet's underlying GMX market asset balances in `token_balances`.
     parameters: *4
     responses:
       '200':

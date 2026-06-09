@@ -89,6 +89,10 @@ ardent gmx-cancel-simulate --agent-id my-agent-001 --request-type deposit --key 
 ardent gmx-claim-simulate --agent-id my-agent-001 --claim-type funding_fees --market 0xYourGmxMarketToken --token 0xClaimToken
 ```
 
+`gmx-markets` includes token symbols when ERC-20 metadata is available.
+`gmx-balances` returns GM/market LP token balances plus underlying GMX market
+asset token balances for the smart wallet.
+
 Manual payment re-submit (after a `402` response):
 
 ```bash

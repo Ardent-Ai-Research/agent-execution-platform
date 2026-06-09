@@ -11,7 +11,7 @@ same UserOperation simulation path before execution.
 | Read markets | `GET /protocols/gmx-v2/markets` | `ardent gmx-markets` |
 | Read positions | `GET /protocols/gmx-v2/positions` | `ardent gmx-positions` |
 | Read orders | `GET /protocols/gmx-v2/orders` | `ardent gmx-orders` |
-| Read GM balances | `GET /protocols/gmx-v2/balances` | `ardent gmx-balances` |
+| Read GM + token balances | `GET /protocols/gmx-v2/balances` | `ardent gmx-balances` |
 | Simulate create order | `POST /protocols/gmx-v2/orders/simulate` | `ardent gmx-create-order-simulate` |
 | Execute create order | `POST /protocols/gmx-v2/orders` | `ardent gmx-create-order` |
 | Simulate cancel order | `POST /protocols/gmx-v2/orders/cancel/simulate` | `ardent gmx-cancel-order-simulate` |
@@ -71,6 +71,9 @@ ardent gmx-balances --agent-id my-agent-001 --start 0 --end 50
 
 The read endpoints use GMX `Reader` against the Arbitrum Sepolia `DataStore`.
 Ranges are capped at 100 items per request.
+Market responses include token symbols where ERC-20 metadata is available.
+The balances response keeps GM/market LP token balances in `balances` and adds
+underlying market asset balances in `token_balances`.
 
 ## Create a market increase
 

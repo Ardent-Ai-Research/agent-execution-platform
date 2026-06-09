@@ -1107,7 +1107,10 @@ def build_parser() -> argparse.ArgumentParser:
     add_gmx_range_flags(p_gmx_orders)
     p_gmx_orders.set_defaults(func=run_gmx_orders)
 
-    p_gmx_balances = subparsers.add_parser("gmx-balances", help="GET /protocols/gmx-v2/balances")
+    p_gmx_balances = subparsers.add_parser(
+        "gmx-balances",
+        help="GET /protocols/gmx-v2/balances (GM market tokens + underlying market assets)",
+    )
     add_global_flags(p_gmx_balances)
     add_gmx_range_flags(p_gmx_balances)
     p_gmx_balances.set_defaults(func=run_gmx_balances)

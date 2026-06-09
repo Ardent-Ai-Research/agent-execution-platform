@@ -4,14 +4,14 @@ use ethers::types::{Address, Bytes, TransactionRequest, U256};
 use ethers::utils::format_units;
 use redis::aio::ConnectionManager;
 use sqlx::PgPool;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use uuid::Uuid;
 
 use super::adapter as gmx_v2;
 use super::adapter::{
     GmxAccountQuery, GmxBalancesResponse, GmxCancelOrderRequest, GmxCancelRequest, GmxClaimRequest,
     GmxCreateDepositRequest, GmxCreateOrderRequest, GmxCreateWithdrawalRequest, GmxMarketBalance,
-    GmxMarketsQuery, GmxMarketsResponse, GmxOrdersResponse, GmxPositionsResponse,
+    GmxMarketsQuery, GmxMarketsResponse, GmxOrdersResponse, GmxPositionsResponse, GmxTokenBalance,
     GmxUpdateOrderRequest,
 };
 use crate::agent_wallet::AgentWalletRegistry;
@@ -46,6 +46,85 @@ async fn call_u256(
     }
 }
 
+async fn call_erc20_symbol(
+    engine: &ExecutionEngine,
+    chain: &Chain,
+    token: Address,
+) -> Option<String> {
+    let provider = engine.provider_for_chain(chain).ok()?;
+    let data: Bytes = hex::decode(gmx_v2::encode_symbol().trim_start_matches("0x"))
+        .ok()?
+        .into();
+    let tx = TransactionRequest::new().to(token).data(data);
+    let raw = provider.call(&tx.into(), None).await.ok()?;
+    decode_erc20_symbol(&raw.0)
+}
+
+fn decode_erc20_symbol(raw: &[u8]) -> Option<String> {
+    if let Ok(decoded) = ethers::abi::decode(&[ethers::abi::ParamType::String], raw) {
+        if let ethers::abi::Token::String(symbol) = &decoded[0] {
+            let trimmed = symbol.trim();
+            if !trimmed.is_empty() {
+                return Some(trimmed.to_string());
+            }
+        }
+    }
+
+    if raw.len() >= 32 {
+        let bytes = &raw[raw.len() - 32..];
+        let end = bytes.iter().position(|b| *b == 0).unwrap_or(bytes.len());
+        let trimmed = &bytes[..end];
+        if !trimmed.is_empty() {
+            if let Ok(symbol) = std::str::from_utf8(trimmed) {
+                let symbol = symbol.trim();
+                if !symbol.is_empty() {
+                    return Some(symbol.to_string());
+                }
+            }
+        }
+    }
+
+    None
+}
+
+async fn enrich_market_symbols(
+    engine: &ExecutionEngine,
+    chain: &Chain,
+    markets: &mut [gmx_v2::GmxMarket],
+) {
+    let mut cache: HashMap<String, Option<String>> = HashMap::new();
+
+    for market in markets {
+        market.market_token_symbol =
+            cached_symbol(engine, chain, &mut cache, &market.market_token).await;
+        market.index_token_symbol =
+            cached_symbol(engine, chain, &mut cache, &market.index_token).await;
+        market.long_token_symbol =
+            cached_symbol(engine, chain, &mut cache, &market.long_token).await;
+        market.short_token_symbol =
+            cached_symbol(engine, chain, &mut cache, &market.short_token).await;
+    }
+}
+
+async fn cached_symbol(
+    engine: &ExecutionEngine,
+    chain: &Chain,
+    cache: &mut HashMap<String, Option<String>>,
+    token: &str,
+) -> Option<String> {
+    let key = token.to_ascii_lowercase();
+    if let Some(symbol) = cache.get(&key) {
+        return symbol.clone();
+    }
+
+    let symbol = match token.parse::<Address>() {
+        Ok(address) => call_erc20_symbol(engine, chain, address).await,
+        Err(_) => None,
+    };
+    cache.insert(key, symbol.clone());
+    symbol
+}
+
 pub async fn handle_markets(
     engine: &ExecutionEngine,
     query: &GmxMarketsQuery,
@@ -60,7 +139,8 @@ pub async fn handle_markets(
         gmx_v2::encode_get_markets(data_store, U256::from(start), U256::from(end)),
     )
     .await?;
-    let markets = gmx_v2::decode_markets(&raw.0)?;
+    let mut markets = gmx_v2::decode_markets(&raw.0)?;
+    enrich_market_symbols(engine, &chain, &mut markets).await;
     Ok(GmxMarketsResponse {
         chain: query.chain.clone(),
         reader_address: gmx_v2::reader_address().to_string(),
@@ -170,7 +250,30 @@ pub async fn handle_balances(
     let smart_wallet_address =
         resolve_chain_smart_wallet_address(engine, &chain, &agent_wallet).await?;
     let mut balances = Vec::new();
-    for market in markets {
+    let mut asset_roles: HashMap<Address, (HashSet<String>, HashSet<String>)> = HashMap::new();
+
+    for market in &markets {
+        collect_market_asset_role(
+            &mut asset_roles,
+            &market.index_token,
+            "index",
+            &market.market_token,
+        )?;
+        collect_market_asset_role(
+            &mut asset_roles,
+            &market.long_token,
+            "long",
+            &market.market_token,
+        )?;
+        collect_market_asset_role(
+            &mut asset_roles,
+            &market.short_token,
+            "short",
+            &market.market_token,
+        )?;
+    }
+
+    for market in &markets {
         let token: Address = market.market_token.parse()?;
         let (balance, decimals_u256) = tokio::try_join!(
             call_u256(
@@ -183,18 +286,69 @@ pub async fn handle_balances(
         )?;
         let decimals = decimals_u256.as_u32().min(u8::MAX as u32) as u8;
         balances.push(GmxMarketBalance {
-            market_token: market.market_token,
+            market_token: market.market_token.clone(),
+            market_token_symbol: market.market_token_symbol.clone(),
             balance_raw: balance.to_string(),
             balance_formatted: format_units(balance, decimals as usize)?,
             decimals,
         });
     }
+
+    let mut token_balances = Vec::new();
+    let mut assets = asset_roles.into_iter().collect::<Vec<_>>();
+    assets.sort_by_key(|(address, _)| format!("{address:?}"));
+    for (token, (roles, market_tokens)) in assets {
+        let (balance, decimals_u256) = tokio::try_join!(
+            call_u256(
+                engine,
+                &chain,
+                token,
+                gmx_v2::encode_balance_of(smart_wallet_address)
+            ),
+            call_u256(engine, &chain, token, gmx_v2::encode_decimals())
+        )?;
+        let decimals = decimals_u256.as_u32().min(u8::MAX as u32) as u8;
+        let mut roles = roles.into_iter().collect::<Vec<_>>();
+        roles.sort();
+        let mut markets = market_tokens.into_iter().collect::<Vec<_>>();
+        markets.sort();
+        let symbol = call_erc20_symbol(engine, &chain, token)
+            .await
+            .unwrap_or_else(|| format!("{token:?}"));
+        token_balances.push(GmxTokenBalance {
+            token_address: format!("{token:?}"),
+            symbol,
+            balance_raw: balance.to_string(),
+            balance_formatted: format_units(balance, decimals as usize)?,
+            decimals,
+            roles,
+            markets,
+        });
+    }
+
     Ok(GmxBalancesResponse {
         agent_id: query.agent_id.clone(),
         chain: query.chain.clone(),
         smart_wallet_address: format!("{:?}", smart_wallet_address),
         balances,
+        token_balances,
     })
+}
+
+fn collect_market_asset_role(
+    assets: &mut HashMap<Address, (HashSet<String>, HashSet<String>)>,
+    token: &str,
+    role: &str,
+    market_token: &str,
+) -> Result<()> {
+    let address: Address = token.parse()?;
+    if address == Address::zero() {
+        return Ok(());
+    }
+    let entry = assets.entry(address).or_default();
+    entry.0.insert(role.to_string());
+    entry.1.insert(market_token.to_string());
+    Ok(())
 }
 
 pub async fn handle_create_order(

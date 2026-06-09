@@ -258,9 +258,17 @@ pub struct GmxMarketsResponse {
 #[derive(Debug, Clone, Serialize)]
 pub struct GmxMarket {
     pub market_token: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub market_token_symbol: Option<String>,
     pub index_token: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub index_token_symbol: Option<String>,
     pub long_token: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub long_token_symbol: Option<String>,
     pub short_token: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub short_token_symbol: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -334,15 +342,31 @@ pub struct GmxBalancesResponse {
     pub agent_id: String,
     pub chain: String,
     pub smart_wallet_address: String,
+    /// GM/market LP token balances held by the wallet.
     pub balances: Vec<GmxMarketBalance>,
+    /// Underlying GMX market asset balances held by the wallet.
+    pub token_balances: Vec<GmxTokenBalance>,
 }
 
 #[derive(Debug, Clone, Serialize)]
 pub struct GmxMarketBalance {
     pub market_token: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub market_token_symbol: Option<String>,
     pub balance_raw: String,
     pub balance_formatted: String,
     pub decimals: u8,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct GmxTokenBalance {
+    pub token_address: String,
+    pub symbol: String,
+    pub balance_raw: String,
+    pub balance_formatted: String,
+    pub decimals: u8,
+    pub roles: Vec<String>,
+    pub markets: Vec<String>,
 }
 
 fn default_chain() -> String {
@@ -1055,6 +1079,10 @@ pub fn encode_decimals() -> String {
     encode_call("decimals()", &[])
 }
 
+pub fn encode_symbol() -> String {
+    encode_call("symbol()", &[])
+}
+
 pub fn decode_markets(raw: &[u8]) -> Result<Vec<GmxMarket>> {
     let decoded = abi::decode(&[market_array_param()], raw)?;
     let markets = token_array(&decoded[0], "markets")?
@@ -1200,9 +1228,13 @@ fn decode_market(token: &Token) -> Result<GmxMarket> {
     let market = token_tuple(token, "market")?;
     Ok(GmxMarket {
         market_token: token_address(&market[0], "market.market_token")?,
+        market_token_symbol: None,
         index_token: token_address(&market[1], "market.index_token")?,
+        index_token_symbol: None,
         long_token: token_address(&market[2], "market.long_token")?,
+        long_token_symbol: None,
         short_token: token_address(&market[3], "market.short_token")?,
+        short_token_symbol: None,
     })
 }
 

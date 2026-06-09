@@ -1720,7 +1720,7 @@
     },
     {
       "name": "ardent_gmx_balances",
-      "description": "Read GMX V2 GM market token balances for an agent wallet",
+      "description": "Read GMX V2 GM market token balances plus underlying market asset token balances for an agent wallet",
       "method": "GET",
       "path": "/protocols/gmx-v2/balances",
       "authRequired": true,
