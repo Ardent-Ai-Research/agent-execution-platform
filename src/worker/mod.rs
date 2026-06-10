@@ -11,20 +11,23 @@
 //!   so a panic in one job doesn't kill the worker loop.
 //! * **Single status write**: Queued → Broadcasting.
 
+use anyhow::{Context, Result};
 use redis::aio::ConnectionManager;
 use sqlx::PgPool;
 use std::collections::HashMap;
 use tracing::{error, info, warn};
 
-use crate::agent_wallet::AgentWalletRegistry;
+use crate::agent_wallet::{AgentWallet, AgentWalletRegistry};
 use crate::db;
 use crate::queue::{self, MAX_JOB_ATTEMPTS};
 use crate::relayer::erc4337::BundlerClient;
 use crate::relayer::paymaster::PaymasterSigner;
-use crate::types::{Chain, ExecutionJob, ExecutionStatus, RelayerResult};
+use crate::types::{
+    Chain, ExecutionJob, ExecutionStatus, RelayerResult, UserOpResult, UserOperation,
+};
 use crate::webhook;
 
-use ethers::prelude::Middleware;
+use ethers::prelude::{Middleware, U256};
 
 // ──────────────────────── Worker Context ─────────────────────────────
 
@@ -524,60 +527,19 @@ async fn execute_erc4337(ctx: &WorkerContext, job: &ExecutionJob) -> RelayerResu
         priority_fee,
     );
 
-    // 4. Sign paymaster data over the built op and splice it in.
-    //    The gas fields in user_op are now final — the paymaster signature
-    //    will cover the exact same values the EntryPoint sees on-chain.
-    if let Some(signer) = paymaster_signer {
-        let signed_pm_data = match signer.sign_paymaster_data(&user_op, chain_id).await {
-            Ok(data) => data,
-            Err(e) => {
-                return RelayerResult {
-                    tx_hash: String::new(),
-                    success: false,
-                    error: Some(format!("paymaster signing failed: {e:#}")),
-                    block_number: None,
-                    gas_used: None,
-                };
-            }
-        };
-
-        // Replace the dummy paymasterAndData with the real signed version.
-        // The byte length is identical (181 bytes) so gas estimation remains valid.
-        user_op.paymaster_and_data = format!("0x{}", hex::encode(&signed_pm_data));
-    }
-
-    // 5. Sign the UserOperation with the agent's EOA key
-    //    The signing key is decrypted only for this operation and zeroized immediately.
-    let op_hash = match bundler_client.user_op_hash(&user_op).await {
-        Ok(h) => h,
-        Err(e) => {
-            return RelayerResult {
-                tx_hash: String::new(),
-                success: false,
-                error: Some(format!("failed to compute UserOp hash: {e:#}")),
-                block_number: None,
-                gas_used: None,
-            };
-        }
-    };
-
-    let signature = match ctx.wallet_registry.decrypt_and_sign(&agent_wallet, op_hash) {
-        Ok(sig) => sig,
-        Err(e) => {
-            return RelayerResult {
-                tx_hash: String::new(),
-                success: false,
-                error: Some(format!("failed to sign UserOperation: {e:#}")),
-                block_number: None,
-                gas_used: None,
-            };
-        }
-    };
-
-    let signed_op = bundler_client.apply_signature(user_op, signature);
-
-    // 6. Submit to bundler and wait for receipt
-    match bundler_client.submit_and_wait(&signed_op).await {
+    // 4. Sign, submit, and wait for receipt. If the bundler rejects final
+    //    submission because preVerificationGas is below its computed minimum,
+    //    bump that field, re-sign paymaster data and the UserOp, and retry once.
+    match submit_user_operation_with_pre_verification_retry(
+        ctx,
+        bundler_client,
+        paymaster_signer,
+        chain_id,
+        &agent_wallet,
+        user_op,
+    )
+    .await
+    {
         Ok(result) => {
             let tx_hash = result.tx_hash.clone().unwrap_or_default();
             RelayerResult {
@@ -591,7 +553,7 @@ async fn execute_erc4337(ctx: &WorkerContext, job: &ExecutionJob) -> RelayerResu
         Err(e) => RelayerResult {
             tx_hash: String::new(),
             success: false,
-            error: Some(format!("bundler submission failed: {e:#}")),
+            error: Some(format!("UserOperation submission failed: {e:#}")),
             block_number: None,
             gas_used: None,
         },
@@ -604,6 +566,150 @@ async fn execute_erc4337(ctx: &WorkerContext, job: &ExecutionJob) -> RelayerResu
 /// (for example, internal auto-payment) before enqueueing the primary job.
 pub async fn execute_erc4337_now(ctx: &WorkerContext, job: &ExecutionJob) -> RelayerResult {
     execute_erc4337(ctx, job).await
+}
+
+async fn submit_user_operation_with_pre_verification_retry(
+    ctx: &WorkerContext,
+    bundler_client: &BundlerClient,
+    paymaster_signer: Option<&PaymasterSigner>,
+    chain_id: u64,
+    agent_wallet: &AgentWallet,
+    mut user_op: UserOperation,
+) -> Result<UserOpResult> {
+    let signed_op = sign_user_operation_for_submission(
+        ctx,
+        bundler_client,
+        paymaster_signer,
+        chain_id,
+        agent_wallet,
+        user_op.clone(),
+    )
+    .await?;
+
+    match bundler_client.send_user_operation(&signed_op).await {
+        Ok(user_op_hash) => {
+            info!(user_op_hash = %user_op_hash, "UserOperation submitted to bundler");
+            return bundler_client.wait_for_receipt(&user_op_hash).await;
+        }
+        Err(first_error) => {
+            let error_text = format!("{first_error:#}");
+            let Some(minimum) = parse_required_pre_verification_gas(&error_text) else {
+                return Err(first_error);
+            };
+
+            let current = parse_user_op_pre_verification_gas(&user_op)?;
+            if current >= minimum {
+                return Err(first_error);
+            }
+
+            let bumped = buffered_pre_verification_gas(minimum);
+            user_op.pre_verification_gas = format!("{bumped:#x}");
+            info!(
+                current_pre_verification_gas = %current,
+                required_pre_verification_gas = %minimum,
+                retried_pre_verification_gas = %bumped,
+                "retrying UserOperation submission with bumped preVerificationGas"
+            );
+        }
+    }
+
+    let signed_retry = sign_user_operation_for_submission(
+        ctx,
+        bundler_client,
+        paymaster_signer,
+        chain_id,
+        agent_wallet,
+        user_op,
+    )
+    .await?;
+    let user_op_hash = bundler_client
+        .send_user_operation(&signed_retry)
+        .await
+        .context("bundler submission retry failed after preVerificationGas bump")?;
+    info!(user_op_hash = %user_op_hash, "UserOperation submitted to bundler after preVerificationGas bump");
+    bundler_client.wait_for_receipt(&user_op_hash).await
+}
+
+async fn sign_user_operation_for_submission(
+    ctx: &WorkerContext,
+    bundler_client: &BundlerClient,
+    paymaster_signer: Option<&PaymasterSigner>,
+    chain_id: u64,
+    agent_wallet: &AgentWallet,
+    mut user_op: UserOperation,
+) -> Result<UserOperation> {
+    if let Some(signer) = paymaster_signer {
+        let signed_pm_data = signer
+            .sign_paymaster_data(&user_op, chain_id)
+            .await
+            .context("paymaster signing failed")?;
+        user_op.paymaster_and_data = format!("0x{}", hex::encode(&signed_pm_data));
+    }
+
+    let op_hash = bundler_client
+        .user_op_hash(&user_op)
+        .await
+        .context("failed to compute UserOp hash")?;
+    let signature = ctx
+        .wallet_registry
+        .decrypt_and_sign(agent_wallet, op_hash)
+        .context("failed to sign UserOperation")?;
+    Ok(bundler_client.apply_signature(user_op, signature))
+}
+
+fn parse_required_pre_verification_gas(error: &str) -> Option<U256> {
+    let lower = error.to_ascii_lowercase();
+    if !lower.contains("preverificationgas is too low") {
+        return None;
+    }
+
+    if let Some(minimum_idx) = lower.rfind("minimum") {
+        if let Some(value) = error[minimum_idx..]
+            .split(|c: char| c == ':' || c == ',' || c == ';' || c.is_whitespace())
+            .filter_map(parse_u256_token)
+            .next()
+        {
+            return Some(value);
+        }
+    }
+
+    error
+        .split(|c: char| c == ':' || c == ',' || c == ';' || c.is_whitespace())
+        .filter_map(parse_u256_token)
+        .last()
+}
+
+fn parse_u256_token(token: &str) -> Option<U256> {
+    let trimmed = token.trim_matches(|c: char| c == '"' || c == '\'' || c == '.' || c == ')');
+    if trimmed.is_empty() {
+        return None;
+    }
+
+    if let Some(hex) = trimmed
+        .strip_prefix("0x")
+        .or_else(|| trimmed.strip_prefix("0X"))
+    {
+        U256::from_str_radix(hex, 16).ok()
+    } else if trimmed.chars().all(|c| c.is_ascii_digit()) {
+        U256::from_dec_str(trimmed).ok()
+    } else {
+        None
+    }
+}
+
+fn parse_user_op_pre_verification_gas(user_op: &UserOperation) -> Result<U256> {
+    parse_u256_token(&user_op.pre_verification_gas).ok_or_else(|| {
+        anyhow::anyhow!(
+            "invalid preVerificationGas: {}",
+            user_op.pre_verification_gas
+        )
+    })
+}
+
+fn buffered_pre_verification_gas(minimum: U256) -> U256 {
+    minimum
+        .saturating_add(minimum / U256::from(10u64))
+        .saturating_add(U256::from(1_000u64))
 }
 
 /// Load an agent wallet by its EOA address from the database.
@@ -849,6 +955,35 @@ mod tests {
             callback_url: None,
             api_key_hash: None,
         }
+    }
+
+    #[test]
+    fn parses_required_pre_verification_gas_from_bundler_error() {
+        let gas = parse_required_pre_verification_gas(
+            "bundler submission failed: preVerificationGas is too low. it should be minimum : 0xd9b90",
+        )
+        .expect("required gas");
+
+        assert_eq!(gas, U256::from(891_792u64));
+    }
+
+    #[test]
+    fn parses_required_pre_verification_gas_near_minimum_keyword() {
+        let gas = parse_required_pre_verification_gas(
+            "code=-32521, attempt=1, message=preVerificationGas is too low. it should be minimum : 0xd9b90, retry 2",
+        )
+        .expect("required gas");
+
+        assert_eq!(gas, U256::from(891_792u64));
+    }
+
+    #[test]
+    fn buffers_required_pre_verification_gas() {
+        let minimum = U256::from(891_792u64);
+        let buffered = buffered_pre_verification_gas(minimum);
+
+        assert!(buffered > minimum);
+        assert_eq!(buffered, U256::from(981_971u64));
     }
 
     #[tokio::test]

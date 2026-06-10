@@ -336,7 +336,7 @@ impl BundlerClient {
     // ──────────────────── JSON-RPC calls ─────────────────────────────
 
     /// `eth_sendUserOperation(userOp, entryPoint)` → userOpHash
-    async fn send_user_operation(&self, user_op: &UserOperation) -> Result<String> {
+    pub async fn send_user_operation(&self, user_op: &UserOperation) -> Result<String> {
         let payload = self
             .rpc_user_operation_payload(user_op)
             .context("failed to convert UserOperation to bundler RPC format")?;
@@ -777,7 +777,7 @@ use a v0.9-compatible bundler URL for this chain",
     }
 
     /// Poll the bundler for a UserOperation receipt until it appears or timeout.
-    async fn wait_for_receipt(&self, user_op_hash: &str) -> Result<UserOpResult> {
+    pub async fn wait_for_receipt(&self, user_op_hash: &str) -> Result<UserOpResult> {
         let deadline = tokio::time::Instant::now() + USER_OP_CONFIRMATION_TIMEOUT;
 
         loop {
