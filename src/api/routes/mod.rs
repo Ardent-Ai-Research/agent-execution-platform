@@ -23,6 +23,10 @@ use crate::protocols::aave_v3::{
     service as aave_v3_service, AaveBalancesQuery, AaveBorrowRequest, AavePositionQuery,
     AaveRepayRequest, AaveSupplyRequest, AaveWithdrawRequest,
 };
+use crate::protocols::compound_v3::{
+    service as compound_v3_service, CompoundBalancesQuery, CompoundBorrowRequest,
+    CompoundPositionQuery, CompoundRepayRequest, CompoundSupplyRequest, CompoundWithdrawRequest,
+};
 use crate::protocols::gmx_v2::{
     service as gmx_v2_service, GmxAccountQuery, GmxCancelOrderRequest, GmxCancelRequest,
     GmxClaimRequest, GmxCreateDepositRequest, GmxCreateOrderRequest, GmxCreateWithdrawalRequest,
@@ -485,6 +489,152 @@ pub async fn aave_balances_handler(
     info!(agent_id = %query.agent_id, chain = %query.chain, "GET /protocols/aave-v3/balances");
 
     match aave_v3_service::handle_balances(
+        &state.engine,
+        &state.wallet_registry,
+        api_ctx.api_key_id,
+        &query,
+    )
+    .await
+    {
+        Ok(resp) => (StatusCode::OK, Json(serde_json::to_value(resp).unwrap())).into_response(),
+        Err(e) => protocol_error_to_http(e),
+    }
+}
+
+macro_rules! compound_execute_handler {
+    ($fn_name:ident, $req_ty:ty, $service_fn:path, $log_name:literal) => {
+        pub async fn $fn_name(
+            State(state): State<AppState>,
+            Extension(api_ctx): Extension<ApiKeyContext>,
+            payment_proof: Option<Extension<PaymentProof>>,
+            Json(req): Json<$req_ty>,
+        ) -> impl IntoResponse {
+            info!(agent_id = %req.agent_id, chain = %req.chain, asset = %req.asset, $log_name);
+            let proof_ref = payment_proof.as_ref().map(|p| &p.0);
+            let mut redis = state.redis_conn.clone();
+            match $service_fn(
+                &state.engine,
+                &state.db_pool,
+                &mut redis,
+                &state.wallet_registry,
+                &state.bundler_clients,
+                &state.paymaster_signers,
+                api_ctx.api_key_id,
+                api_ctx.payment_mode.clone(),
+                &req,
+                proof_ref,
+            )
+            .await
+            {
+                Ok(resp) => execution_response_to_http(&state, &req.chain, resp),
+                Err(e) => protocol_error_to_http(e),
+            }
+        }
+    };
+}
+
+macro_rules! compound_simulate_handler {
+    ($fn_name:ident, $req_ty:ty, $service_fn:path, $log_name:literal) => {
+        pub async fn $fn_name(
+            State(state): State<AppState>,
+            Extension(api_ctx): Extension<ApiKeyContext>,
+            Json(req): Json<$req_ty>,
+        ) -> impl IntoResponse {
+            info!(agent_id = %req.agent_id, chain = %req.chain, asset = %req.asset, $log_name);
+            match $service_fn(
+                &state.engine,
+                &state.db_pool,
+                &state.wallet_registry,
+                &state.bundler_clients,
+                &state.paymaster_signers,
+                api_ctx.api_key_id,
+                api_ctx.payment_mode.clone(),
+                &req,
+            )
+            .await
+            {
+                Ok(resp) => (StatusCode::OK, Json(serde_json::to_value(resp).unwrap())).into_response(),
+                Err(e) => protocol_error_to_http(e),
+            }
+        }
+    };
+}
+
+compound_execute_handler!(
+    compound_supply_handler,
+    CompoundSupplyRequest,
+    compound_v3_service::handle_supply,
+    "POST /protocols/compound-v3/supply"
+);
+compound_simulate_handler!(
+    compound_supply_simulate_handler,
+    CompoundSupplyRequest,
+    compound_v3_service::handle_supply_simulate,
+    "POST /protocols/compound-v3/supply/simulate"
+);
+compound_execute_handler!(
+    compound_withdraw_handler,
+    CompoundWithdrawRequest,
+    compound_v3_service::handle_withdraw,
+    "POST /protocols/compound-v3/withdraw"
+);
+compound_simulate_handler!(
+    compound_withdraw_simulate_handler,
+    CompoundWithdrawRequest,
+    compound_v3_service::handle_withdraw_simulate,
+    "POST /protocols/compound-v3/withdraw/simulate"
+);
+compound_execute_handler!(
+    compound_repay_handler,
+    CompoundRepayRequest,
+    compound_v3_service::handle_repay,
+    "POST /protocols/compound-v3/repay"
+);
+compound_simulate_handler!(
+    compound_repay_simulate_handler,
+    CompoundRepayRequest,
+    compound_v3_service::handle_repay_simulate,
+    "POST /protocols/compound-v3/repay/simulate"
+);
+compound_execute_handler!(
+    compound_borrow_handler,
+    CompoundBorrowRequest,
+    compound_v3_service::handle_borrow,
+    "POST /protocols/compound-v3/borrow"
+);
+compound_simulate_handler!(
+    compound_borrow_simulate_handler,
+    CompoundBorrowRequest,
+    compound_v3_service::handle_borrow_simulate,
+    "POST /protocols/compound-v3/borrow/simulate"
+);
+
+pub async fn compound_position_handler(
+    State(state): State<AppState>,
+    Extension(api_ctx): Extension<ApiKeyContext>,
+    Query(query): Query<CompoundPositionQuery>,
+) -> impl IntoResponse {
+    info!(agent_id = %query.agent_id, chain = %query.chain, "GET /protocols/compound-v3/position");
+    match compound_v3_service::handle_position(
+        &state.engine,
+        &state.wallet_registry,
+        api_ctx.api_key_id,
+        &query,
+    )
+    .await
+    {
+        Ok(resp) => (StatusCode::OK, Json(serde_json::to_value(resp).unwrap())).into_response(),
+        Err(e) => protocol_error_to_http(e),
+    }
+}
+
+pub async fn compound_balances_handler(
+    State(state): State<AppState>,
+    Extension(api_ctx): Extension<ApiKeyContext>,
+    Query(query): Query<CompoundBalancesQuery>,
+) -> impl IntoResponse {
+    info!(agent_id = %query.agent_id, chain = %query.chain, "GET /protocols/compound-v3/balances");
+    match compound_v3_service::handle_balances(
         &state.engine,
         &state.wallet_registry,
         api_ctx.api_key_id,

@@ -37,8 +37,9 @@ curl -X GET "$BASE_URL/feed/recent?limit=12"
 3. `POST /simulate`
 4. `POST /execute`
 5. Aave V3 typed protocol endpoints
-6. GMX V2 typed protocol endpoints
-7. `GET /status/:id`
+6. Compound III typed protocol endpoints
+7. GMX V2 typed protocol endpoints
+8. `GET /status/:id`
 
 Authentication:
 
@@ -135,6 +136,21 @@ curl -X GET "$BASE_URL/status/your_request_id" \
 10. `POST /protocols/aave-v3/borrow`
 
 See [Aave V3 Sepolia](aave-v3.md).
+
+### Compound III Base Sepolia
+
+1. `GET /protocols/compound-v3/position`
+2. `GET /protocols/compound-v3/balances`
+3. `POST /protocols/compound-v3/supply/simulate`
+4. `POST /protocols/compound-v3/supply`
+5. `POST /protocols/compound-v3/withdraw/simulate`
+6. `POST /protocols/compound-v3/withdraw`
+7. `POST /protocols/compound-v3/repay/simulate`
+8. `POST /protocols/compound-v3/repay`
+9. `POST /protocols/compound-v3/borrow/simulate`
+10. `POST /protocols/compound-v3/borrow`
+
+See [Compound III Base Sepolia](compound-v3.md).
 
 ### GMX V2 Arbitrum Sepolia
 

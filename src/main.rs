@@ -516,6 +516,46 @@ async fn main() -> anyhow::Result<()> {
             get(routes::aave_balances_handler),
         )
         .route(
+            "/protocols/compound-v3/supply",
+            post(routes::compound_supply_handler),
+        )
+        .route(
+            "/protocols/compound-v3/supply/simulate",
+            post(routes::compound_supply_simulate_handler),
+        )
+        .route(
+            "/protocols/compound-v3/withdraw",
+            post(routes::compound_withdraw_handler),
+        )
+        .route(
+            "/protocols/compound-v3/withdraw/simulate",
+            post(routes::compound_withdraw_simulate_handler),
+        )
+        .route(
+            "/protocols/compound-v3/repay",
+            post(routes::compound_repay_handler),
+        )
+        .route(
+            "/protocols/compound-v3/repay/simulate",
+            post(routes::compound_repay_simulate_handler),
+        )
+        .route(
+            "/protocols/compound-v3/borrow",
+            post(routes::compound_borrow_handler),
+        )
+        .route(
+            "/protocols/compound-v3/borrow/simulate",
+            post(routes::compound_borrow_simulate_handler),
+        )
+        .route(
+            "/protocols/compound-v3/position",
+            get(routes::compound_position_handler),
+        )
+        .route(
+            "/protocols/compound-v3/balances",
+            get(routes::compound_balances_handler),
+        )
+        .route(
             "/protocols/gmx-v2/orders/simulate",
             post(routes::gmx_create_order_simulate_handler),
         )

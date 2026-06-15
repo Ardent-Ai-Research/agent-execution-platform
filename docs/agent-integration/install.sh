@@ -3,8 +3,8 @@ set -euo pipefail
 
 REPO_RAW_BASE="https://raw.githubusercontent.com/Ardent-Ai-Research/agent-execution-platform/master/docs/agent-integration"
 
-INSTALL_DIR="${HOME}/.local/bin"
-RUNTIME_DIR="${HOME}/.ardent"
+INSTALL_DIR="${ARDENT_INSTALL_DIR:-${HOME}/.local/bin}"
+RUNTIME_DIR="${ARDENT_RUNTIME_DIR:-${HOME}/.ardent}"
 
 # Require Python 3.8+
 if ! command -v python3 &>/dev/null; then
@@ -24,46 +24,71 @@ curl -fsSL "${REPO_RAW_BASE}/ardent_cli.py" -o "${INSTALL_DIR}/ardent"
 chmod +x "${INSTALL_DIR}/ardent"
 
 ensure_path_persisted() {
-  local line='export PATH="${HOME}/.local/bin:${PATH}"'
+  local line
+  local display_dir
+  if [[ "${INSTALL_DIR}" == "${HOME}/"* ]]; then
+    display_dir="\${HOME}/${INSTALL_DIR#"${HOME}/"}"
+  else
+    display_dir="${INSTALL_DIR}"
+  fi
+  line="export PATH=\"${display_dir}:\${PATH}\""
   local updated=0
   local candidates=()
-  local primary_profile="${HOME}/.zshrc"
 
   case "${SHELL:-}" in
     */zsh)
-      primary_profile="${HOME}/.zshrc"
-      candidates+=("${HOME}/.zshrc")
+      candidates+=("${HOME}/.zshrc" "${HOME}/.zprofile")
       ;;
     */bash)
-      primary_profile="${HOME}/.bashrc"
-      candidates+=("${HOME}/.bashrc" "${HOME}/.bash_profile")
+      candidates+=("${HOME}/.bashrc" "${HOME}/.bash_profile" "${HOME}/.profile")
+      ;;
+    */fish)
+      candidates+=("${HOME}/.profile" "${HOME}/.zprofile" "${HOME}/.zshrc" "${HOME}/.bashrc")
+      ;;
+    *)
+      candidates+=("${HOME}/.profile" "${HOME}/.zprofile" "${HOME}/.zshrc" "${HOME}/.bashrc")
       ;;
   esac
 
-  # macOS defaults to zsh; include common shell files so a missing SHELL env
-  # does not leave the CLI invisible in the next terminal session.
-  candidates+=("${HOME}/.zshrc" "${HOME}/.bashrc" "${HOME}/.bash_profile")
+  # Include common shell files so login shells, interactive shells, and a missing
+  # SHELL env all keep the CLI available after a terminal restart.
+  candidates+=("${HOME}/.zshrc" "${HOME}/.zprofile" "${HOME}/.bashrc" "${HOME}/.bash_profile" "${HOME}/.profile")
 
   local seen=":"
   local profile
   for profile in "${candidates[@]}"; do
     [[ "${seen}" == *":${profile}:"* ]] && continue
     seen="${seen}${profile}:"
-    [[ -e "${profile}" || "${profile}" == "${primary_profile}" ]] || continue
+    [[ -e "${profile}" || "${profile}" == "${HOME}/.zshrc" || "${profile}" == "${HOME}/.zprofile" || "${profile}" == "${HOME}/.profile" ]] || continue
     touch "${profile}"
-    if ! grep -Fq '.local/bin' "${profile}"; then
+    if ! grep -Fq "${INSTALL_DIR}" "${profile}" && ! grep -Fq "${display_dir}" "${profile}"; then
       {
         echo
         echo "# Ardent CLI"
         echo "${line}"
       } >> "${profile}"
-      echo "  ✅ Added ~/.local/bin to PATH in ${profile}"
+      echo "  ✅ Added ${display_dir} to PATH in ${profile}"
       updated=1
     fi
   done
 
+  local fish_config="${HOME}/.config/fish/config.fish"
+  if [[ "${SHELL:-}" == */fish || -e "${fish_config}" ]]; then
+    mkdir -p "$(dirname "${fish_config}")"
+    touch "${fish_config}"
+    if ! grep -Fq "${INSTALL_DIR}" "${fish_config}" && ! grep -Fq "${display_dir}" "${fish_config}"; then
+      {
+        echo
+        echo "# Ardent CLI"
+        echo "fish_add_path -g \"${INSTALL_DIR}\""
+      } >> "${fish_config}"
+      echo "  ✅ Added ${display_dir} to PATH in ${fish_config}"
+      updated=1
+    fi
+  fi
+
   if [[ "${updated}" -eq 0 ]]; then
-    echo "  ✅ ~/.local/bin already appears in your shell PATH config."
+    echo "  ✅ ${display_dir} already appears in your shell PATH config."
   fi
 }
 
@@ -138,13 +163,13 @@ EOF
 }
 
 CODEX_HOME_DIR="${CODEX_HOME:-${HOME}/.codex}"
-if [[ -d "${CODEX_HOME_DIR}" || -d "/Applications/Codex.app" || -n "$(command -v codex || true)" ]]; then
-  echo "Detected Codex — patching MCP config..."
+if [[ "${ARDENT_SKIP_CODEX_MCP:-}" == "1" ]]; then
+  echo "Codex MCP config skipped because ARDENT_SKIP_CODEX_MCP=1."
+else
+  echo "Configuring Codex MCP..."
   patch_codex_config \
     "${CODEX_HOME_DIR}/config.toml" \
     "${RUNTIME_DIR}/mcp_server.py"
-else
-  echo "Codex not detected — skipping."
 fi
 
 # ── Claude Desktop ───────────────────────────────────────────────────────────
@@ -228,12 +253,12 @@ echo
 echo "Next steps:"
 echo "  1. Replace 'your_api_key_here' with your real key in any config files updated above"
 echo "  2. Fully quit and reopen any patched apps (Cmd+Q) — Codex, Claude, ChatGPT, Cursor, Windsurf"
-echo "  3. Restart your terminal, or run: export PATH=\"${HOME}/.local/bin:\${PATH}\""
+echo "  3. Restart your terminal, or run: export PATH=\"${INSTALL_DIR}:\${PATH}\""
 echo "  4. Look for the tools icon/list in your AI app to confirm Ardent is loaded"
 echo
 echo "Or use the CLI directly:"
 echo "  export ARDENT_API_KEY=\"your_api_key\""
 echo "  ${INSTALL_DIR}/ardent health"
 echo
-echo "If 'ardent' is not found, add ~/.local/bin to PATH:"
-echo "  export PATH=\"${HOME}/.local/bin:${PATH}\""
+echo "If 'ardent' is not found, add ${INSTALL_DIR} to PATH:"
+echo "  export PATH=\"${INSTALL_DIR}:${PATH}\""

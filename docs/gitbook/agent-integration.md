@@ -16,7 +16,7 @@ Then set your key:
 export ARDENT_API_KEY="your_api_key"
 ```
 
-The installer adds `~/.local/bin` to your shell profile when needed. Open a new terminal after install. If `ardent` is still not found, run:
+The installer adds `~/.local/bin` to common shell startup files when needed, including zsh login and interactive profiles. Open a new terminal after install. If `ardent` is still not found, run:
 >
 > ```bash
 > export PATH="${HOME}/.local/bin:${PATH}"
@@ -91,6 +91,8 @@ ardent simulate --agent-id <id> --chain <chain> --target-contract <addr> --calld
 ardent execute  --agent-id <id> --chain <chain> --target-contract <addr> --calldata <hex> --value <wei>
 ardent aave-balances --agent-id <id>                   # Aave reserve wallet/aToken/debt balances
 ardent aave-position --agent-id <id>                   # Aave account data and health factor
+ardent compound-balances --agent-id <id>               # Compound wallet/protocol balances
+ardent compound-position --agent-id <id>               # Compound base supply, debt, and collateral
 ardent status   --request-id <id>
 ardent self-update
 ardent self-update --with-runtime       # also refreshes ~/.ardent files
@@ -104,7 +106,7 @@ ardent self-update --with-runtime       # also refreshes ~/.ardent files
 
 The MCP server (`~/.ardent/mcp_server.py`) speaks the Model Context Protocol over stdio. Once registered, the AI assistant can invoke Ardent tools in response to natural language without you writing any code or curl commands.
 
-The installer automatically patches the config file for any supported app it detects.
+The installer configures Codex by default and automatically patches the config file for other supported apps it detects.
 
 | App | Config file patched |
 | --- | --- |
@@ -134,6 +136,8 @@ The installer automatically patches the config file for any supported app it det
 
 > *"Show my Aave wallet, supplied, and debt balances for agent-001."*
 
+> *"Show my Compound III supplied balances and debt for agent-001 on Base."*
+
 > *"Simulate a transfer of 100 USDC from my agent wallet on Base and tell me the gas cost."*
 
 > *"Execute the approve and swap sequence for agent-001 on Ethereum. Use the calldata I just generated."*
@@ -160,6 +164,8 @@ python3 ~/.ardent/mcp_server.py
 | `ardent_wallet_balance` | Get native + ERC-20 token balances for an agent wallet |
 | `ardent_aave_balances` | Read Aave reserve wallet, supplied aToken, and debt balances |
 | `ardent_aave_position` | Read Aave account data, borrowing capacity, and health factor |
+| `ardent_compound_balances` | Read Compound wallet and protocol balances |
+| `ardent_compound_position` | Read Compound base supply, base debt, and collateral balances |
 | `ardent_simulate` | Simulate a transaction and return estimated cost |
 | `ardent_execute` | Submit a transaction for execution |
 | `ardent_status` | Poll execution request status |

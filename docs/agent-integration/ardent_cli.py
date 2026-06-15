@@ -9,6 +9,12 @@ Commands:
 - simulate
 - execute
 - aave-balances
+- compound-supply
+- compound-withdraw
+- compound-repay
+- compound-borrow
+- compound-position
+- compound-balances
 - gmx-create-order
 - gmx-cancel-order
 - gmx-markets
@@ -363,6 +369,125 @@ def run_aave_balances(args: argparse.Namespace) -> int:
     api_key = require_api_key(args)
     qs = parse.urlencode({"agent_id": args.agent_id, "chain": args.chain})
     url = f"{build_base_url(args)}/protocols/aave-v3/balances?{qs}"
+    status, payload = call_api("GET", url, api_key=api_key)
+    output({"status": status, "data": payload})
+    return 0 if 200 <= status < 300 else 1
+
+
+def resolve_compound_action_body(args: argparse.Namespace) -> dict[str, Any]:
+    if args.body_file:
+        body = parse_json_file(args.body_file)
+        if not isinstance(body, dict):
+            raise ValueError("body file must contain a JSON object")
+        return body
+
+    body: dict[str, Any] = {
+        "agent_id": args.agent_id,
+        "chain": args.chain,
+        "asset": args.asset,
+    }
+    if getattr(args, "market", None):
+        body["market"] = args.market
+    if args.amount is not None:
+        body["amount"] = args.amount
+    if args.amount_raw is not None:
+        body["amount_raw"] = args.amount_raw
+    if args.strategy_id:
+        body["strategy_id"] = args.strategy_id
+    if args.callback_url:
+        body["callback_url"] = args.callback_url
+    return body
+
+
+def run_compound_supply_simulate(args: argparse.Namespace) -> int:
+    api_key = require_api_key(args)
+    body = resolve_compound_action_body(args)
+    url = f"{build_base_url(args)}/protocols/compound-v3/supply/simulate"
+    status, payload = call_api("POST", url, body=body, api_key=api_key)
+    output({"status": status, "data": payload})
+    return 0 if 200 <= status < 300 else 1
+
+
+def run_compound_supply(args: argparse.Namespace) -> int:
+    api_key = require_api_key(args)
+    body = resolve_compound_action_body(args)
+    payment_proof = resolve_payment_proof(args)
+    url = f"{build_base_url(args)}/protocols/compound-v3/supply"
+    status, payload = call_api("POST", url, body=body, api_key=api_key, payment_proof=payment_proof)
+    output({"status": status, "data": payload})
+    return 0 if 200 <= status < 300 else 1
+
+
+def run_compound_withdraw_simulate(args: argparse.Namespace) -> int:
+    api_key = require_api_key(args)
+    body = resolve_compound_action_body(args)
+    url = f"{build_base_url(args)}/protocols/compound-v3/withdraw/simulate"
+    status, payload = call_api("POST", url, body=body, api_key=api_key)
+    output({"status": status, "data": payload})
+    return 0 if 200 <= status < 300 else 1
+
+
+def run_compound_withdraw(args: argparse.Namespace) -> int:
+    api_key = require_api_key(args)
+    body = resolve_compound_action_body(args)
+    payment_proof = resolve_payment_proof(args)
+    url = f"{build_base_url(args)}/protocols/compound-v3/withdraw"
+    status, payload = call_api("POST", url, body=body, api_key=api_key, payment_proof=payment_proof)
+    output({"status": status, "data": payload})
+    return 0 if 200 <= status < 300 else 1
+
+
+def run_compound_repay_simulate(args: argparse.Namespace) -> int:
+    api_key = require_api_key(args)
+    body = resolve_compound_action_body(args)
+    url = f"{build_base_url(args)}/protocols/compound-v3/repay/simulate"
+    status, payload = call_api("POST", url, body=body, api_key=api_key)
+    output({"status": status, "data": payload})
+    return 0 if 200 <= status < 300 else 1
+
+
+def run_compound_repay(args: argparse.Namespace) -> int:
+    api_key = require_api_key(args)
+    body = resolve_compound_action_body(args)
+    payment_proof = resolve_payment_proof(args)
+    url = f"{build_base_url(args)}/protocols/compound-v3/repay"
+    status, payload = call_api("POST", url, body=body, api_key=api_key, payment_proof=payment_proof)
+    output({"status": status, "data": payload})
+    return 0 if 200 <= status < 300 else 1
+
+
+def run_compound_borrow_simulate(args: argparse.Namespace) -> int:
+    api_key = require_api_key(args)
+    body = resolve_compound_action_body(args)
+    url = f"{build_base_url(args)}/protocols/compound-v3/borrow/simulate"
+    status, payload = call_api("POST", url, body=body, api_key=api_key)
+    output({"status": status, "data": payload})
+    return 0 if 200 <= status < 300 else 1
+
+
+def run_compound_borrow(args: argparse.Namespace) -> int:
+    api_key = require_api_key(args)
+    body = resolve_compound_action_body(args)
+    payment_proof = resolve_payment_proof(args)
+    url = f"{build_base_url(args)}/protocols/compound-v3/borrow"
+    status, payload = call_api("POST", url, body=body, api_key=api_key, payment_proof=payment_proof)
+    output({"status": status, "data": payload})
+    return 0 if 200 <= status < 300 else 1
+
+
+def run_compound_position(args: argparse.Namespace) -> int:
+    api_key = require_api_key(args)
+    qs = parse.urlencode({"agent_id": args.agent_id, "chain": args.chain, "market": args.market})
+    url = f"{build_base_url(args)}/protocols/compound-v3/position?{qs}"
+    status, payload = call_api("GET", url, api_key=api_key)
+    output({"status": status, "data": payload})
+    return 0 if 200 <= status < 300 else 1
+
+
+def run_compound_balances(args: argparse.Namespace) -> int:
+    api_key = require_api_key(args)
+    qs = parse.urlencode({"agent_id": args.agent_id, "chain": args.chain, "market": args.market})
+    url = f"{build_base_url(args)}/protocols/compound-v3/balances?{qs}"
     status, payload = call_api("GET", url, api_key=api_key)
     output({"status": status, "data": payload})
     return 0 if 200 <= status < 300 else 1
@@ -807,6 +932,26 @@ def add_aave_amount_action_flags(parser: argparse.ArgumentParser, *, allow_max: 
     parser.add_argument("--body-file", help="Path to full request JSON object (overrides payload flags)")
 
 
+def add_compound_amount_action_flags(parser: argparse.ArgumentParser, *, allow_max: bool = False, base_only: bool = False) -> None:
+    parser.add_argument("--agent-id", required=True, help="Agent identifier")
+    parser.add_argument("--chain", default="base", choices=["base"], help="Compound III Base Sepolia chain label")
+    parser.add_argument("--market", choices=["usdc", "weth"], help="Compound III market; defaults from asset")
+    if base_only:
+        parser.add_argument("--asset", default="base", choices=["base", "USDC", "WETH"], help="Compound III base asset")
+    else:
+        parser.add_argument("--asset", required=True, help="USDC/base, WETH, or token address supported by Comet")
+    amount_help = "Human-readable token amount"
+    raw_help = "Raw token base-unit amount"
+    if allow_max:
+        amount_help += "; also supports max"
+        raw_help += "; also supports max"
+    parser.add_argument("--amount", help=amount_help)
+    parser.add_argument("--amount-raw", help=raw_help)
+    parser.add_argument("--strategy-id", help="Optional strategy ID")
+    parser.add_argument("--callback-url", help="Optional callback webhook URL")
+    parser.add_argument("--body-file", help="Path to full request JSON object (overrides payload flags)")
+
+
 def add_payment_proof_flags(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--payment-proof-json", help="Inline JSON object for X-Payment-Proof")
     parser.add_argument("--payment-proof-file", help="Path to JSON object for X-Payment-Proof")
@@ -1069,6 +1214,64 @@ def build_parser() -> argparse.ArgumentParser:
     p_aave_balances.add_argument("--agent-id", required=True, help="Agent identifier")
     p_aave_balances.add_argument("--chain", default="ethereum", choices=["ethereum"], help="Aave V3 Sepolia chain label")
     p_aave_balances.set_defaults(func=run_aave_balances)
+
+    p_compound_supply_sim = subparsers.add_parser("compound-supply-simulate", help="POST /protocols/compound-v3/supply/simulate")
+    add_global_flags(p_compound_supply_sim)
+    add_compound_amount_action_flags(p_compound_supply_sim, allow_max=True)
+    p_compound_supply_sim.set_defaults(func=run_compound_supply_simulate)
+
+    p_compound_supply = subparsers.add_parser("compound-supply", help="POST /protocols/compound-v3/supply")
+    add_global_flags(p_compound_supply)
+    add_compound_amount_action_flags(p_compound_supply, allow_max=True)
+    add_payment_proof_flags(p_compound_supply)
+    p_compound_supply.set_defaults(func=run_compound_supply)
+
+    p_compound_withdraw_sim = subparsers.add_parser("compound-withdraw-simulate", help="POST /protocols/compound-v3/withdraw/simulate")
+    add_global_flags(p_compound_withdraw_sim)
+    add_compound_amount_action_flags(p_compound_withdraw_sim, allow_max=True)
+    p_compound_withdraw_sim.set_defaults(func=run_compound_withdraw_simulate)
+
+    p_compound_withdraw = subparsers.add_parser("compound-withdraw", help="POST /protocols/compound-v3/withdraw")
+    add_global_flags(p_compound_withdraw)
+    add_compound_amount_action_flags(p_compound_withdraw, allow_max=True)
+    add_payment_proof_flags(p_compound_withdraw)
+    p_compound_withdraw.set_defaults(func=run_compound_withdraw)
+
+    p_compound_repay_sim = subparsers.add_parser("compound-repay-simulate", help="POST /protocols/compound-v3/repay/simulate")
+    add_global_flags(p_compound_repay_sim)
+    add_compound_amount_action_flags(p_compound_repay_sim, allow_max=True, base_only=True)
+    p_compound_repay_sim.set_defaults(func=run_compound_repay_simulate)
+
+    p_compound_repay = subparsers.add_parser("compound-repay", help="POST /protocols/compound-v3/repay")
+    add_global_flags(p_compound_repay)
+    add_compound_amount_action_flags(p_compound_repay, allow_max=True, base_only=True)
+    add_payment_proof_flags(p_compound_repay)
+    p_compound_repay.set_defaults(func=run_compound_repay)
+
+    p_compound_borrow_sim = subparsers.add_parser("compound-borrow-simulate", help="POST /protocols/compound-v3/borrow/simulate")
+    add_global_flags(p_compound_borrow_sim)
+    add_compound_amount_action_flags(p_compound_borrow_sim, base_only=True)
+    p_compound_borrow_sim.set_defaults(func=run_compound_borrow_simulate)
+
+    p_compound_borrow = subparsers.add_parser("compound-borrow", help="POST /protocols/compound-v3/borrow")
+    add_global_flags(p_compound_borrow)
+    add_compound_amount_action_flags(p_compound_borrow, base_only=True)
+    add_payment_proof_flags(p_compound_borrow)
+    p_compound_borrow.set_defaults(func=run_compound_borrow)
+
+    p_compound_position = subparsers.add_parser("compound-position", help="GET /protocols/compound-v3/position")
+    add_global_flags(p_compound_position)
+    p_compound_position.add_argument("--agent-id", required=True, help="Agent identifier")
+    p_compound_position.add_argument("--chain", default="base", choices=["base"], help="Compound III Base Sepolia chain label")
+    p_compound_position.add_argument("--market", default="usdc", choices=["usdc", "weth"], help="Compound III market")
+    p_compound_position.set_defaults(func=run_compound_position)
+
+    p_compound_balances = subparsers.add_parser("compound-balances", help="GET /protocols/compound-v3/balances")
+    add_global_flags(p_compound_balances)
+    p_compound_balances.add_argument("--agent-id", required=True, help="Agent identifier")
+    p_compound_balances.add_argument("--chain", default="base", choices=["base"], help="Compound III Base Sepolia chain label")
+    p_compound_balances.add_argument("--market", default="usdc", choices=["usdc", "weth"], help="Compound III market")
+    p_compound_balances.set_defaults(func=run_compound_balances)
 
     p_gmx_create_order_sim = subparsers.add_parser("gmx-create-order-simulate", help="POST /protocols/gmx-v2/orders/simulate")
     add_global_flags(p_gmx_create_order_sim)

@@ -449,6 +449,290 @@ paths:
           "$ref": "#/components/responses/ErrorResponse"
         '401':
           "$ref": "#/components/responses/ErrorResponse"
+  "/protocols/compound-v3/supply/simulate":
+    post:
+      summary: Simulate Compound III Base Sepolia supply action
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              "$ref": "#/components/schemas/CompoundSupplyRequest"
+      responses:
+        '200':
+          description: Simulation result
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/ExecutionResponse"
+        '400':
+          "$ref": "#/components/responses/ErrorResponse"
+        '401':
+          "$ref": "#/components/responses/ErrorResponse"
+  "/protocols/compound-v3/supply":
+    post:
+      summary: Execute Compound III Base Sepolia supply action
+      parameters:
+      - in: header
+        name: X-Payment-Proof
+        required: false
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              "$ref": "#/components/schemas/CompoundSupplyRequest"
+      responses:
+        '200':
+          description: Execution accepted/queued
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/ExecutionResponse"
+        '402':
+          description: Payment required for manual mode
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/PaymentRequiredBody"
+        '400':
+          "$ref": "#/components/responses/ErrorResponse"
+        '401':
+          "$ref": "#/components/responses/ErrorResponse"
+  "/protocols/compound-v3/withdraw/simulate":
+    post:
+      summary: Simulate Compound III Base Sepolia withdraw action
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              "$ref": "#/components/schemas/CompoundWithdrawRequest"
+      responses:
+        '200':
+          description: Simulation result
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/ExecutionResponse"
+        '400':
+          "$ref": "#/components/responses/ErrorResponse"
+        '401':
+          "$ref": "#/components/responses/ErrorResponse"
+  "/protocols/compound-v3/withdraw":
+    post:
+      summary: Execute Compound III Base Sepolia withdraw action
+      parameters:
+      - in: header
+        name: X-Payment-Proof
+        required: false
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              "$ref": "#/components/schemas/CompoundWithdrawRequest"
+      responses:
+        '200':
+          description: Execution accepted/queued
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/ExecutionResponse"
+        '402':
+          description: Payment required for manual mode
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/PaymentRequiredBody"
+        '400':
+          "$ref": "#/components/responses/ErrorResponse"
+        '401':
+          "$ref": "#/components/responses/ErrorResponse"
+  "/protocols/compound-v3/repay/simulate":
+    post:
+      summary: Simulate Compound III Base Sepolia repay action
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              "$ref": "#/components/schemas/CompoundRepayRequest"
+      responses:
+        '200':
+          description: Simulation result
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/ExecutionResponse"
+        '400':
+          "$ref": "#/components/responses/ErrorResponse"
+        '401':
+          "$ref": "#/components/responses/ErrorResponse"
+  "/protocols/compound-v3/repay":
+    post:
+      summary: Execute Compound III Base Sepolia repay action
+      parameters:
+      - in: header
+        name: X-Payment-Proof
+        required: false
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              "$ref": "#/components/schemas/CompoundRepayRequest"
+      responses:
+        '200':
+          description: Execution accepted/queued
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/ExecutionResponse"
+        '402':
+          description: Payment required for manual mode
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/PaymentRequiredBody"
+        '400':
+          "$ref": "#/components/responses/ErrorResponse"
+        '401':
+          "$ref": "#/components/responses/ErrorResponse"
+  "/protocols/compound-v3/borrow/simulate":
+    post:
+      summary: Simulate Compound III Base Sepolia borrow action
+      description: Compound III borrows are base-asset withdrawals from Comet.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              "$ref": "#/components/schemas/CompoundBorrowRequest"
+      responses:
+        '200':
+          description: Simulation result
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/ExecutionResponse"
+        '400':
+          "$ref": "#/components/responses/ErrorResponse"
+        '401':
+          "$ref": "#/components/responses/ErrorResponse"
+  "/protocols/compound-v3/borrow":
+    post:
+      summary: Execute Compound III Base Sepolia borrow action
+      description: Compound III borrows are base-asset withdrawals from Comet.
+      parameters:
+      - in: header
+        name: X-Payment-Proof
+        required: false
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              "$ref": "#/components/schemas/CompoundBorrowRequest"
+      responses:
+        '200':
+          description: Execution accepted/queued
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/ExecutionResponse"
+        '402':
+          description: Payment required for manual mode
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/PaymentRequiredBody"
+        '400':
+          "$ref": "#/components/responses/ErrorResponse"
+        '401':
+          "$ref": "#/components/responses/ErrorResponse"
+  "/protocols/compound-v3/position":
+    get:
+      summary: Read Compound III Base Sepolia position for an agent wallet
+      parameters:
+      - in: query
+        name: agent_id
+        required: true
+        schema:
+          type: string
+      - in: query
+        name: chain
+        required: false
+        schema:
+          type: string
+          enum:
+          - base
+          default: base
+      - in: query
+        name: market
+        required: false
+        schema:
+          type: string
+          enum:
+          - usdc
+          - weth
+          default: usdc
+      responses:
+        '200':
+          description: Compound position response
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/CompoundPositionResponse"
+        '400':
+          "$ref": "#/components/responses/ErrorResponse"
+        '401':
+          "$ref": "#/components/responses/ErrorResponse"
+  "/protocols/compound-v3/balances":
+    get:
+      summary: Read Compound III Base Sepolia wallet and protocol balances
+      parameters:
+      - in: query
+        name: agent_id
+        required: true
+        schema:
+          type: string
+      - in: query
+        name: chain
+        required: false
+        schema:
+          type: string
+          enum:
+          - base
+          default: base
+      - in: query
+        name: market
+        required: false
+        schema:
+          type: string
+          enum:
+          - usdc
+          - weth
+          default: usdc
+      responses:
+        '200':
+          description: Compound balances response
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/CompoundBalancesResponse"
+        '400':
+          "$ref": "#/components/responses/ErrorResponse"
+        '401':
+          "$ref": "#/components/responses/ErrorResponse"
   "/protocols/gmx-v2/markets":
     get:
       summary: Read GMX V2 Arbitrum Sepolia markets
@@ -879,8 +1163,10 @@ paths:
           type: string
   "/protocols/gmx-v2/balances":
     get:
-      summary: Read GMX V2 Arbitrum Sepolia GM market and underlying token balances for an agent wallet
-      description: Returns GM/market LP token balances in `balances` and the wallet's underlying GMX market asset balances in `token_balances`.
+      summary: Read GMX V2 Arbitrum Sepolia GM market and underlying token balances
+        for an agent wallet
+      description: Returns GM/market LP token balances in `balances` and the wallet's
+        underlying GMX market asset balances in `token_balances`.
       parameters: *4
       responses:
         '200':
@@ -1452,6 +1738,254 @@ components:
       - smart_wallet_address
       - pool_address
       - assets
+    CompoundSupplyRequest:
+      type: object
+      properties:
+        agent_id:
+          type: string
+        chain:
+          type: string
+          enum:
+          - base
+          default: base
+        asset:
+          type: string
+          description: USDC/base, WETH, or a token address supported by the selected
+            Comet market.
+        market:
+          type:
+          - string
+          - 'null'
+          enum:
+          - usdc
+          - weth
+          description: Compound III Base Sepolia market. Defaults from asset.
+        amount:
+          type:
+          - string
+          - 'null'
+          description: Human-readable token amount. Use amount_raw for raw token addresses.
+        amount_raw:
+          type:
+          - string
+          - 'null'
+          description: Raw token base-unit amount, or "max" for wallet balance.
+        strategy_id:
+          type:
+          - string
+          - 'null'
+        callback_url:
+          type:
+          - string
+          - 'null'
+          format: uri
+      required:
+      - agent_id
+      - asset
+    CompoundWithdrawRequest:
+      type: object
+      properties:
+        agent_id:
+          type: string
+        chain:
+          type: string
+          enum:
+          - base
+          default: base
+        asset:
+          type: string
+        market:
+          type:
+          - string
+          - 'null'
+          enum:
+          - usdc
+          - weth
+          description: Compound III Base Sepolia market. Defaults from asset.
+        amount:
+          type:
+          - string
+          - 'null'
+          description: Human-readable token amount, or "max".
+        amount_raw:
+          type:
+          - string
+          - 'null'
+          description: Raw token base-unit amount, or "max".
+        strategy_id:
+          type:
+          - string
+          - 'null'
+        callback_url:
+          type:
+          - string
+          - 'null'
+          format: uri
+      required:
+      - agent_id
+      - asset
+    CompoundRepayRequest:
+      type: object
+      properties:
+        agent_id:
+          type: string
+        chain:
+          type: string
+          enum:
+          - base
+          default: base
+        asset:
+          type: string
+          default: base
+          description: 'Selected market base asset only: USDC/base or WETH/base.'
+        market:
+          type:
+          - string
+          - 'null'
+          enum:
+          - usdc
+          - weth
+          description: Compound III Base Sepolia market. Defaults from asset.
+        amount:
+          type:
+          - string
+          - 'null'
+          description: Human-readable base asset amount, or "max".
+        amount_raw:
+          type:
+          - string
+          - 'null'
+          description: Raw base asset amount, or "max".
+        strategy_id:
+          type:
+          - string
+          - 'null'
+        callback_url:
+          type:
+          - string
+          - 'null'
+          format: uri
+      required:
+      - agent_id
+    CompoundBorrowRequest:
+      type: object
+      properties:
+        agent_id:
+          type: string
+        chain:
+          type: string
+          enum:
+          - base
+          default: base
+        asset:
+          type: string
+          default: base
+          description: 'Selected market base asset only: USDC/base or WETH/base.'
+        market:
+          type:
+          - string
+          - 'null'
+          enum:
+          - usdc
+          - weth
+          description: Compound III Base Sepolia market. Defaults from asset.
+        amount:
+          type:
+          - string
+          - 'null'
+          description: Human-readable base asset amount.
+        amount_raw:
+          type:
+          - string
+          - 'null'
+          description: Raw base asset amount.
+        strategy_id:
+          type:
+          - string
+          - 'null'
+        callback_url:
+          type:
+          - string
+          - 'null'
+          format: uri
+      required:
+      - agent_id
+    CompoundCollateralBalance:
+      type: object
+      properties:
+        symbol:
+          type: string
+        token_address:
+          type: string
+        decimals:
+          type: integer
+        collateral_balance_raw:
+          type: string
+        collateral_balance_formatted:
+          type: string
+    CompoundAssetBalance:
+      type: object
+      properties:
+        symbol:
+          type: string
+        token_address:
+          type: string
+        decimals:
+          type: integer
+        wallet_balance_raw:
+          type: string
+        wallet_balance_formatted:
+          type: string
+        compound_balance_raw:
+          type: string
+        compound_balance_formatted:
+          type: string
+        is_base_asset:
+          type: boolean
+    CompoundPositionResponse:
+      type: object
+      properties:
+        agent_id:
+          type: string
+        chain:
+          type: string
+        smart_wallet_address:
+          type: string
+        comet_address:
+          type: string
+        base_token_address:
+          type: string
+        base_token_symbol:
+          type: string
+        base_token_decimals:
+          type: integer
+        base_supply_balance_raw:
+          type: string
+        base_supply_balance_formatted:
+          type: string
+        base_borrow_balance_raw:
+          type: string
+        base_borrow_balance_formatted:
+          type: string
+        collateral_assets:
+          type: array
+          items:
+            "$ref": "#/components/schemas/CompoundCollateralBalance"
+    CompoundBalancesResponse:
+      type: object
+      properties:
+        agent_id:
+          type: string
+        chain:
+          type: string
+        smart_wallet_address:
+          type: string
+        comet_address:
+          type: string
+        assets:
+          type: array
+          items:
+            "$ref": "#/components/schemas/CompoundAssetBalance"
     GmxCreateOrderRequest:
       type: object
       properties:

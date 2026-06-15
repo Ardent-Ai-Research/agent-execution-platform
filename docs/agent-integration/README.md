@@ -11,9 +11,9 @@ curl -fsSL https://raw.githubusercontent.com/Ardent-Ai-Research/agent-execution-
 The installer:
 
 - Places the `ardent` CLI in `~/.local/bin`
-- Adds `~/.local/bin` to your shell profile when needed so new terminals can find `ardent`
+- Adds `~/.local/bin` to common shell startup files (`.zshrc`, `.zprofile`, `.bashrc`, `.bash_profile`, `.profile`, and fish config when relevant) so new terminals can find `ardent`
 - Downloads MCP server + runtime files into `~/.ardent/`
-- Auto-patches MCP configs for **Codex, Claude Desktop, ChatGPT Desktop, Cursor, and Windsurf** if any are detected
+- Configures **Codex** MCP by default, and auto-patches MCP configs for **Claude Desktop, ChatGPT Desktop, Cursor, and Windsurf** when detected
 - Preserves any existing `ARDENT_API_KEY` already set in those configs
 
 ## Set credentials
@@ -56,6 +56,24 @@ ardent aave-borrow-simulate --agent-id my-agent-001 --asset USDC --amount max --
 ardent aave-borrow --agent-id my-agent-001 --asset USDC --amount max --min-health-factor 1.10
 ardent aave-position --agent-id my-agent-001
 ardent aave-balances --agent-id my-agent-001
+```
+
+### Compound III Base Sepolia
+
+Base Sepolia supports the `usdc` market at `0x571621Ce60Cebb0c1D442B5afb38B1663C6Bf017` and the `weth` market at `0x61490650AbaA31393464C3f34E8B29cd1C44118E`.
+
+```bash
+ardent compound-supply-simulate --agent-id my-agent-001 --asset USDC --amount 1.25
+ardent compound-supply --agent-id my-agent-001 --asset USDC --amount 1.25
+ardent compound-withdraw-simulate --agent-id my-agent-001 --asset USDC --amount max
+ardent compound-withdraw --agent-id my-agent-001 --asset USDC --amount max
+ardent compound-repay-simulate --agent-id my-agent-001 --amount max
+ardent compound-repay --agent-id my-agent-001 --amount max
+ardent compound-borrow-simulate --agent-id my-agent-001 --amount 1
+ardent compound-borrow --agent-id my-agent-001 --amount 1
+ardent compound-position --agent-id my-agent-001
+ardent compound-position --agent-id my-agent-001 --market weth
+ardent compound-balances --agent-id my-agent-001
 ```
 
 ### GMX V2 Arbitrum Sepolia
@@ -144,4 +162,4 @@ ruby docs/agent-integration/openapi/bundle.rb
 
 ## Notes
 
-- MCP tools available: `ardent_health`, `ardent_feed_recent`, `ardent_get_wallet`, `ardent_wallet_balance`, `ardent_simulate`, `ardent_execute`, Aave tools (`ardent_aave_supply_simulate`, `ardent_aave_supply_execute`, `ardent_aave_withdraw_simulate`, `ardent_aave_withdraw_execute`, `ardent_aave_repay_simulate`, `ardent_aave_repay_execute`, `ardent_aave_borrow_simulate`, `ardent_aave_borrow_execute`, `ardent_aave_position`, `ardent_aave_balances`), GMX tools (`ardent_gmx_create_order_simulate`, `ardent_gmx_create_order_execute`, `ardent_gmx_cancel_order_simulate`, `ardent_gmx_cancel_order_execute`), and `ardent_status`
+- MCP tools available: `ardent_health`, `ardent_feed_recent`, `ardent_get_wallet`, `ardent_wallet_balance`, `ardent_simulate`, `ardent_execute`, Aave tools (`ardent_aave_supply_simulate`, `ardent_aave_supply_execute`, `ardent_aave_withdraw_simulate`, `ardent_aave_withdraw_execute`, `ardent_aave_repay_simulate`, `ardent_aave_repay_execute`, `ardent_aave_borrow_simulate`, `ardent_aave_borrow_execute`, `ardent_aave_position`, `ardent_aave_balances`), Compound tools (`ardent_compound_supply_simulate`, `ardent_compound_supply_execute`, `ardent_compound_withdraw_simulate`, `ardent_compound_withdraw_execute`, `ardent_compound_repay_simulate`, `ardent_compound_repay_execute`, `ardent_compound_borrow_simulate`, `ardent_compound_borrow_execute`, `ardent_compound_position`, `ardent_compound_balances`), GMX tools (`ardent_gmx_create_order_simulate`, `ardent_gmx_create_order_execute`, `ardent_gmx_cancel_order_simulate`, `ardent_gmx_cancel_order_execute`), and `ardent_status`

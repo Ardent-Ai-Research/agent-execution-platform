@@ -1879,6 +1879,164 @@
       }
     },
     {
+      "name": "ardent_compound_supply_simulate",
+      "description": "Simulate supplying base or collateral into Compound III on Base Sepolia. The server compiles approve -> Comet.supply as an ERC-4337 batch.",
+      "method": "POST",
+      "path": "/protocols/compound-v3/supply/simulate",
+      "authRequired": true,
+      "inputSchema": {
+        "type": "object",
+        "description": "Same request body as CompoundSupplyRequest in openapi.yaml",
+        "additionalProperties": true
+      }
+    },
+    {
+      "name": "ardent_compound_supply_execute",
+      "description": "Execute supplying base or collateral into Compound III on Base Sepolia. In manual mode may return payment_required (402).",
+      "method": "POST",
+      "path": "/protocols/compound-v3/supply",
+      "authRequired": true,
+      "inputSchema": {
+        "type": "object",
+        "description": "Same request body as CompoundSupplyRequest in openapi.yaml",
+        "additionalProperties": true
+      }
+    },
+    {
+      "name": "ardent_compound_withdraw_simulate",
+      "description": "Simulate withdrawing base or collateral from Compound III on Base Sepolia. Amount may be a number string or max.",
+      "method": "POST",
+      "path": "/protocols/compound-v3/withdraw/simulate",
+      "authRequired": true,
+      "inputSchema": {
+        "type": "object",
+        "description": "Same request body as CompoundWithdrawRequest in openapi.yaml",
+        "additionalProperties": true
+      }
+    },
+    {
+      "name": "ardent_compound_withdraw_execute",
+      "description": "Execute withdrawing base or collateral from Compound III on Base Sepolia. In manual mode may return payment_required (402).",
+      "method": "POST",
+      "path": "/protocols/compound-v3/withdraw",
+      "authRequired": true,
+      "inputSchema": {
+        "type": "object",
+        "description": "Same request body as CompoundWithdrawRequest in openapi.yaml",
+        "additionalProperties": true
+      }
+    },
+    {
+      "name": "ardent_compound_repay_simulate",
+      "description": "Simulate repaying Compound III base debt on Base Sepolia. The server compiles approve -> Comet.supply(base, amount).",
+      "method": "POST",
+      "path": "/protocols/compound-v3/repay/simulate",
+      "authRequired": true,
+      "inputSchema": {
+        "type": "object",
+        "description": "Same request body as CompoundRepayRequest in openapi.yaml",
+        "additionalProperties": true
+      }
+    },
+    {
+      "name": "ardent_compound_repay_execute",
+      "description": "Execute repaying Compound III base debt on Base Sepolia. In manual mode may return payment_required (402).",
+      "method": "POST",
+      "path": "/protocols/compound-v3/repay",
+      "authRequired": true,
+      "inputSchema": {
+        "type": "object",
+        "description": "Same request body as CompoundRepayRequest in openapi.yaml",
+        "additionalProperties": true
+      }
+    },
+    {
+      "name": "ardent_compound_borrow_simulate",
+      "description": "Simulate borrowing the Compound III base asset on Base Sepolia. Compound III borrows compile to Comet.withdraw(base, amount).",
+      "method": "POST",
+      "path": "/protocols/compound-v3/borrow/simulate",
+      "authRequired": true,
+      "inputSchema": {
+        "type": "object",
+        "description": "Same request body as CompoundBorrowRequest in openapi.yaml",
+        "additionalProperties": true
+      }
+    },
+    {
+      "name": "ardent_compound_borrow_execute",
+      "description": "Execute borrowing the Compound III base asset on Base Sepolia. In manual mode may return payment_required (402).",
+      "method": "POST",
+      "path": "/protocols/compound-v3/borrow",
+      "authRequired": true,
+      "inputSchema": {
+        "type": "object",
+        "description": "Same request body as CompoundBorrowRequest in openapi.yaml",
+        "additionalProperties": true
+      }
+    },
+    {
+      "name": "ardent_compound_position",
+      "description": "Read Compound III Base Sepolia base supply, base debt, and collateral balances for an agent wallet.",
+      "method": "GET",
+      "path": "/protocols/compound-v3/position",
+      "authRequired": true,
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "agent_id": {
+            "type": "string"
+          },
+          "chain": {
+            "type": "string",
+            "default": "base"
+          },
+          "market": {
+            "type": "string",
+            "enum": [
+              "usdc",
+              "weth"
+            ],
+            "default": "usdc"
+          }
+        },
+        "required": [
+          "agent_id"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "ardent_compound_balances",
+      "description": "Read wallet and protocol balances for the Compound III Base Sepolia base asset and Comet collateral assets.",
+      "method": "GET",
+      "path": "/protocols/compound-v3/balances",
+      "authRequired": true,
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "agent_id": {
+            "type": "string"
+          },
+          "chain": {
+            "type": "string",
+            "default": "base"
+          },
+          "market": {
+            "type": "string",
+            "enum": [
+              "usdc",
+              "weth"
+            ],
+            "default": "usdc"
+          }
+        },
+        "required": [
+          "agent_id"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
       "name": "ardent_status",
       "description": "Get execution request status by request_id",
       "method": "GET",

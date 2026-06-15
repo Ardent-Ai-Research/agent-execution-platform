@@ -60,7 +60,7 @@ ardent self-update --with-runtime # also refreshes ~/.ardent files
 
 ### Optional: MCP server for AI tool runtimes
 
-The installer automatically registers Ardent in Codex, Claude Desktop, ChatGPT Desktop, Cursor, and Windsurf if any are detected. Just restart the app after install.
+The installer registers Ardent in Codex by default and automatically patches Claude Desktop, ChatGPT Desktop, Cursor, and Windsurf when detected. Just restart the app after install.
 
 > **After install, open the patched config file and replace the `ARDENT_API_KEY` placeholder with your real key before restarting the app.**
 > The installer prints the exact path of every file it patches.
@@ -201,6 +201,61 @@ Withdraw, repay, and borrow support `amount: "max"`. Repay max resolves to the
 smaller of selected-rate debt and wallet token balance. Borrow max resolves to
 the largest amount allowed by available borrows and the projected health-factor
 floor.
+
+### Typed Compound III Base Sepolia Flow
+
+Use typed Compound III tools for Base Sepolia Comet actions instead of manually
+encoding Comet calldata. Base Sepolia supports the `usdc` market at
+`0x571621Ce60Cebb0c1D442B5afb38B1663C6Bf017` and the `weth` market at
+`0x61490650AbaA31393464C3f34E8B29cd1C44118E`.
+
+Read balances and position before planning an action:
+
+```bash
+curl -X GET "$BASE_URL/protocols/compound-v3/balances?agent_id=$AGENT_ID&chain=base" \
+  -H "X-API-Key: $API_KEY"
+```
+
+```bash
+curl -X GET "$BASE_URL/protocols/compound-v3/position?agent_id=$AGENT_ID&chain=base" \
+  -H "X-API-Key: $API_KEY"
+```
+
+Supply compiles to an atomic `approve -> Comet.supply` ERC-4337 batch and runs
+full UserOperation simulation.
+
+```bash
+curl -X POST "$BASE_URL/protocols/compound-v3/supply/simulate" \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: $API_KEY" \
+  -d '{
+    "agent_id": "my-agent-001",
+    "chain": "base",
+    "asset": "USDC",
+    "amount": "1.25"
+  }'
+```
+
+Withdraw and borrow compile to `Comet.withdraw(asset, amount)`. Repay compiles
+to `approve -> Comet.supply(base, amount)`.
+
+```bash
+curl -X POST "$BASE_URL/protocols/compound-v3/repay/simulate" \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: $API_KEY" \
+  -d '{
+    "agent_id": "my-agent-001",
+    "chain": "base",
+    "asset": "USDC",
+    "amount": "max"
+  }'
+```
+
+Use `USDC`, `base`, `WETH`, or a Comet-supported token address as `asset`.
+For raw token addresses, use `amount_raw`. Supply, withdraw, and repay support
+`amount: "max"`; borrow requires an explicit `amount` or `amount_raw`. Include
+`market: "usdc"` or `market: "weth"` when the asset alone does not identify the
+intended market.
 
 ### Typed GMX V2 Arbitrum Sepolia Flow
 

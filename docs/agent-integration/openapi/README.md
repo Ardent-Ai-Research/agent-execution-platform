@@ -31,7 +31,9 @@ When editing the API spec:
 - `root.yaml` contains top-level OpenAPI metadata and the bundle manifest.
 - `paths/core.yaml` contains public, wallet, generic simulation/execution, and status endpoints.
 - `paths/aave-v3.yaml` contains Aave V3 protocol endpoints.
+- `paths/compound-v3.yaml` contains Compound III protocol endpoints.
 - `paths/gmx-v2.yaml` contains GMX V2 protocol endpoints.
 - `components/common.yaml` contains shared auth, responses, and generic schemas.
 - `components/aave-v3.yaml` contains Aave protocol schemas.
+- `components/compound-v3.yaml` contains Compound protocol schemas.
 - `components/gmx-v2.yaml` contains GMX protocol schemas.

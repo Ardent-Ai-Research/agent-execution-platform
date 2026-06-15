@@ -151,6 +151,10 @@ class ArdentMcpServer:
             "ardent_aave_withdraw_execute",
             "ardent_aave_repay_execute",
             "ardent_aave_borrow_execute",
+            "ardent_compound_supply_execute",
+            "ardent_compound_withdraw_execute",
+            "ardent_compound_repay_execute",
+            "ardent_compound_borrow_execute",
         }:
             payment_proof = body.pop("payment_proof", None)
             if payment_proof is not None:
