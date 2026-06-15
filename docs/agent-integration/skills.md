@@ -29,6 +29,7 @@ ardent feed                             # public activity feed
 ardent wallet         --agent-id my-agent-001 --chain ethereum
 ardent wallet-balance --agent-id my-agent-001 --chain ethereum
 ardent aave-balances --agent-id my-agent-001
+ardent compound-borrow-capacity --agent-id my-agent-001
 ardent gmx-create-order-simulate --agent-id my-agent-001 --body-file ./gmx-order.json
 ardent simulate --agent-id my-agent-001 --chain ethereum --target-contract 0xTargetContract --calldata 0xCalldata --value 0
 ardent execute --agent-id my-agent-001 --chain ethereum --target-contract 0xTargetContract --calldata 0xCalldata --value 0

@@ -283,3 +283,41 @@
         "$ref": "#/components/responses/ErrorResponse"
       '401':
         "$ref": "#/components/responses/ErrorResponse"
+"/protocols/compound-v3/borrow-capacity":
+  get:
+    summary: Read Compound III Base Sepolia borrow capacity and market rates
+    description: Returns collateral-based borrow capacity in the selected market base asset, current borrow balance, available borrow, market utilization, and supply/borrow APR.
+    parameters:
+    - in: query
+      name: agent_id
+      required: true
+      schema:
+        type: string
+    - in: query
+      name: chain
+      required: false
+      schema:
+        type: string
+        enum:
+        - base
+        default: base
+    - in: query
+      name: market
+      required: false
+      schema:
+        type: string
+        enum:
+        - usdc
+        - weth
+        default: usdc
+    responses:
+      '200':
+        description: Compound borrow capacity response
+        content:
+          application/json:
+            schema:
+              "$ref": "#/components/schemas/CompoundBorrowCapacityResponse"
+      '400':
+        "$ref": "#/components/responses/ErrorResponse"
+      '401':
+        "$ref": "#/components/responses/ErrorResponse"

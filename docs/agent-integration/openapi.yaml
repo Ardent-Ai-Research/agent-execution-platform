@@ -733,6 +733,46 @@ paths:
           "$ref": "#/components/responses/ErrorResponse"
         '401':
           "$ref": "#/components/responses/ErrorResponse"
+  "/protocols/compound-v3/borrow-capacity":
+    get:
+      summary: Read Compound III Base Sepolia borrow capacity and market rates
+      description: Returns collateral-based borrow capacity in the selected market
+        base asset, current borrow balance, available borrow, market utilization,
+        and supply/borrow APR.
+      parameters:
+      - in: query
+        name: agent_id
+        required: true
+        schema:
+          type: string
+      - in: query
+        name: chain
+        required: false
+        schema:
+          type: string
+          enum:
+          - base
+          default: base
+      - in: query
+        name: market
+        required: false
+        schema:
+          type: string
+          enum:
+          - usdc
+          - weth
+          default: usdc
+      responses:
+        '200':
+          description: Compound borrow capacity response
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/CompoundBorrowCapacityResponse"
+        '400':
+          "$ref": "#/components/responses/ErrorResponse"
+        '401':
+          "$ref": "#/components/responses/ErrorResponse"
   "/protocols/gmx-v2/markets":
     get:
       summary: Read GMX V2 Arbitrum Sepolia markets
@@ -1923,6 +1963,31 @@ components:
           type: string
         collateral_balance_formatted:
           type: string
+    CompoundBorrowCapacityCollateral:
+      type: object
+      properties:
+        symbol:
+          type: string
+        token_address:
+          type: string
+        decimals:
+          type: integer
+        price_feed_address:
+          type: string
+        price_raw:
+          type: string
+        borrow_collateral_factor_raw:
+          type: string
+        borrow_collateral_factor_percent:
+          type: string
+        collateral_balance_raw:
+          type: string
+        collateral_balance_formatted:
+          type: string
+        borrow_capacity_raw:
+          type: string
+        borrow_capacity_formatted:
+          type: string
     CompoundAssetBalance:
       type: object
       properties:
@@ -1986,6 +2051,57 @@ components:
           type: array
           items:
             "$ref": "#/components/schemas/CompoundAssetBalance"
+    CompoundBorrowCapacityResponse:
+      type: object
+      properties:
+        agent_id:
+          type: string
+        chain:
+          type: string
+        smart_wallet_address:
+          type: string
+        comet_address:
+          type: string
+        base_token_address:
+          type: string
+        base_token_symbol:
+          type: string
+        base_token_decimals:
+          type: integer
+        base_price_feed_address:
+          type: string
+        base_price_raw:
+          type: string
+        utilization_raw:
+          type: string
+        utilization_percent:
+          type: string
+        supply_rate_per_second_raw:
+          type: string
+        supply_apr_percent:
+          type: string
+        borrow_rate_per_second_raw:
+          type: string
+        borrow_apr_percent:
+          type: string
+        current_borrow_raw:
+          type: string
+        current_borrow_formatted:
+          type: string
+        total_borrow_capacity_raw:
+          type: string
+        total_borrow_capacity_formatted:
+          type: string
+        available_borrow_raw:
+          type: string
+        available_borrow_formatted:
+          type: string
+        is_borrow_collateralized:
+          type: boolean
+        collateral_assets:
+          type: array
+          items:
+            "$ref": "#/components/schemas/CompoundBorrowCapacityCollateral"
     GmxCreateOrderRequest:
       type: object
       properties:

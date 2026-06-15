@@ -556,6 +556,10 @@ async fn main() -> anyhow::Result<()> {
             get(routes::compound_balances_handler),
         )
         .route(
+            "/protocols/compound-v3/borrow-capacity",
+            get(routes::compound_borrow_capacity_handler),
+        )
+        .route(
             "/protocols/gmx-v2/orders/simulate",
             post(routes::gmx_create_order_simulate_handler),
         )

@@ -15,6 +15,7 @@ Compound III deployments are Comet markets. Base Sepolia currently supports two 
 | --- | --- | --- |
 | Read position | `GET /protocols/compound-v3/position` | `ardent compound-position` |
 | Read balances | `GET /protocols/compound-v3/balances` | `ardent compound-balances` |
+| Read borrow capacity and rates | `GET /protocols/compound-v3/borrow-capacity` | `ardent compound-borrow-capacity` |
 | Supply base or collateral | `POST /protocols/compound-v3/supply` | `ardent compound-supply` |
 | Withdraw base or collateral | `POST /protocols/compound-v3/withdraw` | `ardent compound-withdraw` |
 | Repay base debt | `POST /protocols/compound-v3/repay` | `ardent compound-repay` |
@@ -28,6 +29,7 @@ ardent compound-withdraw-simulate --agent-id my-agent-001 --asset USDC --amount 
 ardent compound-repay-simulate --agent-id my-agent-001 --amount max
 ardent compound-borrow-simulate --agent-id my-agent-001 --amount 1
 ardent compound-position --agent-id my-agent-001 --market weth
+ardent compound-borrow-capacity --agent-id my-agent-001
 ```
 
 ## Read State
@@ -35,11 +37,14 @@ ardent compound-position --agent-id my-agent-001 --market weth
 ```bash
 ardent compound-position --agent-id my-agent-001
 ardent compound-balances --agent-id my-agent-001
+ardent compound-borrow-capacity --agent-id my-agent-001
 ```
 
 `compound-position` returns base supplied balance, base borrow balance, and all collateral balances discovered from `Comet.numAssets()` and `Comet.getAssetInfo(index)` for the selected market.
 
 `compound-balances` returns wallet balances and Compound balances for the base asset plus Comet collateral assets in the selected market.
+
+`compound-borrow-capacity` returns current base debt, total collateral-backed borrow capacity, currently available borrow amount, market utilization, supply APR, borrow APR, and each collateral asset's contribution to borrow capacity.
 
 ## Supply
 
@@ -79,7 +84,9 @@ ardent compound-borrow --agent-id my-agent-001 --amount 1
 
 Borrow is base-asset only and compiles to `Comet.withdraw(base, amount)`. The platform still runs the normal ERC-4337 simulation path before execution, so undercollateralized borrows should fail before submission.
 
-`amount max` is intentionally not enabled for borrow yet because Compound max borrow requires exact market collateral/risk math. Use an explicit `amount` or `amount_raw`.
+Check `ardent compound-borrow-capacity --agent-id my-agent-001` before borrowing to see the wallet's collateral-backed available borrow amount and the market borrow APR.
+
+`amount max` is intentionally not enabled for borrow. Use an explicit `amount` or `amount_raw`.
 
 ## Base Sepolia Assets
 

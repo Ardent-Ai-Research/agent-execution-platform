@@ -2037,6 +2037,37 @@
       }
     },
     {
+      "name": "ardent_compound_borrow_capacity",
+      "description": "Read Compound III Base Sepolia borrow capacity, current debt, collateral capacity, utilization, and supply/borrow APR for an agent wallet.",
+      "method": "GET",
+      "path": "/protocols/compound-v3/borrow-capacity",
+      "authRequired": true,
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "agent_id": {
+            "type": "string"
+          },
+          "chain": {
+            "type": "string",
+            "default": "base"
+          },
+          "market": {
+            "type": "string",
+            "enum": [
+              "usdc",
+              "weth"
+            ],
+            "default": "usdc"
+          }
+        },
+        "required": [
+          "agent_id"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
       "name": "ardent_status",
       "description": "Get execution request status by request_id",
       "method": "GET",

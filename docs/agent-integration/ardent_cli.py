@@ -15,6 +15,7 @@ Commands:
 - compound-borrow
 - compound-position
 - compound-balances
+- compound-borrow-capacity
 - gmx-create-order
 - gmx-cancel-order
 - gmx-markets
@@ -488,6 +489,15 @@ def run_compound_balances(args: argparse.Namespace) -> int:
     api_key = require_api_key(args)
     qs = parse.urlencode({"agent_id": args.agent_id, "chain": args.chain, "market": args.market})
     url = f"{build_base_url(args)}/protocols/compound-v3/balances?{qs}"
+    status, payload = call_api("GET", url, api_key=api_key)
+    output({"status": status, "data": payload})
+    return 0 if 200 <= status < 300 else 1
+
+
+def run_compound_borrow_capacity(args: argparse.Namespace) -> int:
+    api_key = require_api_key(args)
+    qs = parse.urlencode({"agent_id": args.agent_id, "chain": args.chain, "market": args.market})
+    url = f"{build_base_url(args)}/protocols/compound-v3/borrow-capacity?{qs}"
     status, payload = call_api("GET", url, api_key=api_key)
     output({"status": status, "data": payload})
     return 0 if 200 <= status < 300 else 1
@@ -1272,6 +1282,13 @@ def build_parser() -> argparse.ArgumentParser:
     p_compound_balances.add_argument("--chain", default="base", choices=["base"], help="Compound III Base Sepolia chain label")
     p_compound_balances.add_argument("--market", default="usdc", choices=["usdc", "weth"], help="Compound III market")
     p_compound_balances.set_defaults(func=run_compound_balances)
+
+    p_compound_borrow_capacity = subparsers.add_parser("compound-borrow-capacity", help="GET /protocols/compound-v3/borrow-capacity")
+    add_global_flags(p_compound_borrow_capacity)
+    p_compound_borrow_capacity.add_argument("--agent-id", required=True, help="Agent identifier")
+    p_compound_borrow_capacity.add_argument("--chain", default="base", choices=["base"], help="Compound III Base Sepolia chain label")
+    p_compound_borrow_capacity.add_argument("--market", default="usdc", choices=["usdc", "weth"], help="Compound III market")
+    p_compound_borrow_capacity.set_defaults(func=run_compound_borrow_capacity)
 
     p_gmx_create_order_sim = subparsers.add_parser("gmx-create-order-simulate", help="POST /protocols/gmx-v2/orders/simulate")
     add_global_flags(p_gmx_create_order_sim)

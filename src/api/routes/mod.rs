@@ -24,8 +24,9 @@ use crate::protocols::aave_v3::{
     AaveRepayRequest, AaveSupplyRequest, AaveWithdrawRequest,
 };
 use crate::protocols::compound_v3::{
-    service as compound_v3_service, CompoundBalancesQuery, CompoundBorrowRequest,
-    CompoundPositionQuery, CompoundRepayRequest, CompoundSupplyRequest, CompoundWithdrawRequest,
+    service as compound_v3_service, CompoundBalancesQuery, CompoundBorrowCapacityQuery,
+    CompoundBorrowRequest, CompoundPositionQuery, CompoundRepayRequest, CompoundSupplyRequest,
+    CompoundWithdrawRequest,
 };
 use crate::protocols::gmx_v2::{
     service as gmx_v2_service, GmxAccountQuery, GmxCancelOrderRequest, GmxCancelRequest,
@@ -635,6 +636,25 @@ pub async fn compound_balances_handler(
 ) -> impl IntoResponse {
     info!(agent_id = %query.agent_id, chain = %query.chain, "GET /protocols/compound-v3/balances");
     match compound_v3_service::handle_balances(
+        &state.engine,
+        &state.wallet_registry,
+        api_ctx.api_key_id,
+        &query,
+    )
+    .await
+    {
+        Ok(resp) => (StatusCode::OK, Json(serde_json::to_value(resp).unwrap())).into_response(),
+        Err(e) => protocol_error_to_http(e),
+    }
+}
+
+pub async fn compound_borrow_capacity_handler(
+    State(state): State<AppState>,
+    Extension(api_ctx): Extension<ApiKeyContext>,
+    Query(query): Query<CompoundBorrowCapacityQuery>,
+) -> impl IntoResponse {
+    info!(agent_id = %query.agent_id, chain = %query.chain, "GET /protocols/compound-v3/borrow-capacity");
+    match compound_v3_service::handle_borrow_capacity(
         &state.engine,
         &state.wallet_registry,
         api_ctx.api_key_id,

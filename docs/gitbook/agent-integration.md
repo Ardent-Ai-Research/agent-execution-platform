@@ -93,6 +93,7 @@ ardent aave-balances --agent-id <id>                   # Aave reserve wallet/aTo
 ardent aave-position --agent-id <id>                   # Aave account data and health factor
 ardent compound-balances --agent-id <id>               # Compound wallet/protocol balances
 ardent compound-position --agent-id <id>               # Compound base supply, debt, and collateral
+ardent compound-borrow-capacity --agent-id <id>        # Compound available borrow and rates
 ardent status   --request-id <id>
 ardent self-update
 ardent self-update --with-runtime       # also refreshes ~/.ardent files

@@ -141,14 +141,15 @@ See [Aave V3 Sepolia](aave-v3.md).
 
 1. `GET /protocols/compound-v3/position`
 2. `GET /protocols/compound-v3/balances`
-3. `POST /protocols/compound-v3/supply/simulate`
-4. `POST /protocols/compound-v3/supply`
-5. `POST /protocols/compound-v3/withdraw/simulate`
-6. `POST /protocols/compound-v3/withdraw`
-7. `POST /protocols/compound-v3/repay/simulate`
-8. `POST /protocols/compound-v3/repay`
-9. `POST /protocols/compound-v3/borrow/simulate`
-10. `POST /protocols/compound-v3/borrow`
+3. `GET /protocols/compound-v3/borrow-capacity`
+4. `POST /protocols/compound-v3/supply/simulate`
+5. `POST /protocols/compound-v3/supply`
+6. `POST /protocols/compound-v3/withdraw/simulate`
+7. `POST /protocols/compound-v3/withdraw`
+8. `POST /protocols/compound-v3/repay/simulate`
+9. `POST /protocols/compound-v3/repay`
+10. `POST /protocols/compound-v3/borrow/simulate`
+11. `POST /protocols/compound-v3/borrow`
 
 See [Compound III Base Sepolia](compound-v3.md).
 

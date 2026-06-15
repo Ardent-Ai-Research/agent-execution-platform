@@ -74,6 +74,7 @@ ardent compound-borrow --agent-id my-agent-001 --amount 1
 ardent compound-position --agent-id my-agent-001
 ardent compound-position --agent-id my-agent-001 --market weth
 ardent compound-balances --agent-id my-agent-001
+ardent compound-borrow-capacity --agent-id my-agent-001
 ```
 
 ### GMX V2 Arbitrum Sepolia
@@ -162,4 +163,4 @@ ruby docs/agent-integration/openapi/bundle.rb
 
 ## Notes
 
-- MCP tools available: `ardent_health`, `ardent_feed_recent`, `ardent_get_wallet`, `ardent_wallet_balance`, `ardent_simulate`, `ardent_execute`, Aave tools (`ardent_aave_supply_simulate`, `ardent_aave_supply_execute`, `ardent_aave_withdraw_simulate`, `ardent_aave_withdraw_execute`, `ardent_aave_repay_simulate`, `ardent_aave_repay_execute`, `ardent_aave_borrow_simulate`, `ardent_aave_borrow_execute`, `ardent_aave_position`, `ardent_aave_balances`), Compound tools (`ardent_compound_supply_simulate`, `ardent_compound_supply_execute`, `ardent_compound_withdraw_simulate`, `ardent_compound_withdraw_execute`, `ardent_compound_repay_simulate`, `ardent_compound_repay_execute`, `ardent_compound_borrow_simulate`, `ardent_compound_borrow_execute`, `ardent_compound_position`, `ardent_compound_balances`), GMX tools (`ardent_gmx_create_order_simulate`, `ardent_gmx_create_order_execute`, `ardent_gmx_cancel_order_simulate`, `ardent_gmx_cancel_order_execute`), and `ardent_status`
+- MCP tools available: `ardent_health`, `ardent_feed_recent`, `ardent_get_wallet`, `ardent_wallet_balance`, `ardent_simulate`, `ardent_execute`, Aave tools (`ardent_aave_supply_simulate`, `ardent_aave_supply_execute`, `ardent_aave_withdraw_simulate`, `ardent_aave_withdraw_execute`, `ardent_aave_repay_simulate`, `ardent_aave_repay_execute`, `ardent_aave_borrow_simulate`, `ardent_aave_borrow_execute`, `ardent_aave_position`, `ardent_aave_balances`), Compound tools (`ardent_compound_supply_simulate`, `ardent_compound_supply_execute`, `ardent_compound_withdraw_simulate`, `ardent_compound_withdraw_execute`, `ardent_compound_repay_simulate`, `ardent_compound_repay_execute`, `ardent_compound_borrow_simulate`, `ardent_compound_borrow_execute`, `ardent_compound_position`, `ardent_compound_balances`, `ardent_compound_borrow_capacity`), GMX tools (`ardent_gmx_create_order_simulate`, `ardent_gmx_create_order_execute`, `ardent_gmx_cancel_order_simulate`, `ardent_gmx_cancel_order_execute`), and `ardent_status`

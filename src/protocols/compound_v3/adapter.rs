@@ -115,6 +115,16 @@ pub struct CompoundBalancesQuery {
     pub market: Option<String>,
 }
 
+#[derive(Debug, Clone, Deserialize)]
+pub struct CompoundBorrowCapacityQuery {
+    pub agent_id: String,
+    #[serde(default = "default_chain")]
+    pub chain: String,
+    /// Compound III Base Sepolia market: `usdc` or `weth`.
+    #[serde(default)]
+    pub market: Option<String>,
+}
+
 #[derive(Debug, Clone, Serialize)]
 pub struct CompoundPositionResponse {
     pub agent_id: String,
@@ -159,6 +169,48 @@ pub struct CompoundCollateralBalance {
     pub decimals: u8,
     pub collateral_balance_raw: String,
     pub collateral_balance_formatted: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct CompoundBorrowCapacityCollateral {
+    pub symbol: String,
+    pub token_address: String,
+    pub decimals: u8,
+    pub price_feed_address: String,
+    pub price_raw: String,
+    pub borrow_collateral_factor_raw: String,
+    pub borrow_collateral_factor_percent: String,
+    pub collateral_balance_raw: String,
+    pub collateral_balance_formatted: String,
+    pub borrow_capacity_raw: String,
+    pub borrow_capacity_formatted: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct CompoundBorrowCapacityResponse {
+    pub agent_id: String,
+    pub chain: String,
+    pub smart_wallet_address: String,
+    pub comet_address: String,
+    pub base_token_address: String,
+    pub base_token_symbol: String,
+    pub base_token_decimals: u8,
+    pub base_price_feed_address: String,
+    pub base_price_raw: String,
+    pub utilization_raw: String,
+    pub utilization_percent: String,
+    pub supply_rate_per_second_raw: String,
+    pub supply_apr_percent: String,
+    pub borrow_rate_per_second_raw: String,
+    pub borrow_apr_percent: String,
+    pub current_borrow_raw: String,
+    pub current_borrow_formatted: String,
+    pub total_borrow_capacity_raw: String,
+    pub total_borrow_capacity_formatted: String,
+    pub available_borrow_raw: String,
+    pub available_borrow_formatted: String,
+    pub is_borrow_collateralized: bool,
+    pub collateral_assets: Vec<CompoundBorrowCapacityCollateral>,
 }
 
 #[derive(Debug, Clone)]
@@ -321,6 +373,12 @@ pub fn validate_position_query(query: &CompoundPositionQuery) -> Result<()> {
 }
 
 pub fn validate_balances_query(query: &CompoundBalancesQuery) -> Result<()> {
+    validate_chain_and_agent(&query.agent_id, &query.chain)?;
+    market_from_query(query.market.as_deref())?;
+    Ok(())
+}
+
+pub fn validate_borrow_capacity_query(query: &CompoundBorrowCapacityQuery) -> Result<()> {
     validate_chain_and_agent(&query.agent_id, &query.chain)?;
     market_from_query(query.market.as_deref())?;
     Ok(())
@@ -539,6 +597,32 @@ pub fn encode_is_borrow_collateralized(account: Address) -> String {
     encode_call(
         selector("isBorrowCollateralized(address)"),
         &[Token::Address(account)],
+    )
+}
+
+pub fn encode_base_token_price_feed() -> String {
+    encode_call(selector("baseTokenPriceFeed()"), &[])
+}
+
+pub fn encode_get_price(price_feed: Address) -> String {
+    encode_call(selector("getPrice(address)"), &[Token::Address(price_feed)])
+}
+
+pub fn encode_get_utilization() -> String {
+    encode_call(selector("getUtilization()"), &[])
+}
+
+pub fn encode_get_supply_rate(utilization: U256) -> String {
+    encode_call(
+        selector("getSupplyRate(uint256)"),
+        &[Token::Uint(utilization)],
+    )
+}
+
+pub fn encode_get_borrow_rate(utilization: U256) -> String {
+    encode_call(
+        selector("getBorrowRate(uint256)"),
+        &[Token::Uint(utilization)],
     )
 }
 
