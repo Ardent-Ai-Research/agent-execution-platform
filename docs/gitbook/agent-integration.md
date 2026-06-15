@@ -95,8 +95,8 @@ ardent compound-balances --agent-id <id>               # Compound wallet/protoco
 ardent compound-position --agent-id <id>               # Compound base supply, debt, and collateral
 ardent compound-borrow-capacity --agent-id <id>        # Compound available borrow and rates
 ardent status   --request-id <id>
-ardent self-update
-ardent self-update --with-runtime       # also refreshes ~/.ardent files
+ardent self-update                      # updates CLI plus ~/.ardent runtime files
+ardent self-update --cli-only           # updates only the CLI
 ```
 
 ---

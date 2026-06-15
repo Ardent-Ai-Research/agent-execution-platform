@@ -55,8 +55,8 @@ ardent execute \
 ### 5) Update later
 
 ```bash
-ardent self-update                # updates CLI only
-ardent self-update --with-runtime # also refreshes ~/.ardent files
+ardent self-update              # updates CLI plus ~/.ardent runtime files
+ardent self-update --cli-only   # updates only the CLI
 ```
 
 ### Optional: MCP server for AI tool runtimes

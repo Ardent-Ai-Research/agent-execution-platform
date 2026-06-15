@@ -133,8 +133,8 @@ ardent execute \
 Update CLI and runtime files:
 
 ```bash
-ardent self-update
-ardent self-update --with-runtime
+ardent self-update              # updates CLI plus ~/.ardent runtime files
+ardent self-update --cli-only   # updates only the CLI
 ```
 
 ## Files in this folder

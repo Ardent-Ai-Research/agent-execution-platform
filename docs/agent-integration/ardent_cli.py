@@ -42,7 +42,7 @@ from urllib import parse, request
 from urllib.error import HTTPError, URLError
 
 
-VERSION = "0.5.0"
+VERSION = "0.5.1"
 REPO_RAW_BASE = "https://raw.githubusercontent.com/Ardent-Ai-Research/agent-execution-platform/master/docs/agent-integration"
 RUNTIME_DIR = Path(os.getenv("ARDENT_RUNTIME_DIR", str(Path.home() / ".ardent")))
 
@@ -878,7 +878,7 @@ def run_self_update(args: argparse.Namespace) -> int:
 
     refreshed_files: list[str] = [str(cli_path)]
 
-    if args.with_runtime:
+    if not args.cli_only:
         RUNTIME_DIR.mkdir(parents=True, exist_ok=True)
         runtime_files = ["mcp_server.py", "mcp-tools.json", "skills.md", "openapi.yaml"]
         for name in runtime_files:
@@ -889,11 +889,17 @@ def run_self_update(args: argparse.Namespace) -> int:
                 target.chmod(0o755)
             refreshed_files.append(str(target))
 
+    restart_note = None
+    if not args.cli_only:
+        restart_note = "Restart any AI app/MCP session so it reloads the refreshed Ardent tools."
+
     output(
         {
             "message": "update complete",
             "version": new_version,
             "updated": refreshed_files,
+            "runtime_refreshed": not args.cli_only,
+            "restart_note": restart_note,
         }
     )
     return 0
@@ -1395,11 +1401,11 @@ def build_parser() -> argparse.ArgumentParser:
     p_status.add_argument("--request-id", required=True, help="Request UUID")
     p_status.set_defaults(func=run_status)
 
-    p_update = subparsers.add_parser("self-update", help="Update CLI from GitHub")
+    p_update = subparsers.add_parser("self-update", help="Update CLI and runtime files from GitHub")
     p_update.add_argument(
-        "--with-runtime",
+        "--cli-only",
         action="store_true",
-        help="Also refresh ~/.ardent runtime files (mcp_server.py, mcp-tools.json, skills.md, openapi.yaml)",
+        help="Update only the ardent CLI and leave ~/.ardent runtime files unchanged",
     )
     p_update.set_defaults(func=run_self_update)
 
