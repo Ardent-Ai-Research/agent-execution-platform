@@ -15,13 +15,13 @@ use std::net::SocketAddr;
 use anyhow::Context;
 use axum::{
     extract::{Request, State},
-    http::StatusCode,
+    http::{HeaderValue, StatusCode},
     middleware,
     response::IntoResponse,
     routing::{get, post},
     Router,
 };
-use tower_http::cors::CorsLayer;
+use tower_http::cors::{AllowOrigin, CorsLayer};
 use tower_http::limit::RequestBodyLimitLayer;
 use tower_http::trace::TraceLayer;
 use tracing::info;
@@ -45,6 +45,83 @@ use agent_execution_platform::{
     types::{ApiKeyContext, PaymentMode},
     worker::{self, WorkerContext},
 };
+
+fn cors_allowed_origins(raw_origins: Option<&str>) -> Vec<HeaderValue> {
+    let mut allowed_origins = vec![
+        HeaderValue::from_static("https://ardentresearch.xyz"),
+        HeaderValue::from_static("https://www.ardentresearch.xyz"),
+    ];
+
+    if let Some(raw_origins) = raw_origins {
+        for raw_origin in raw_origins
+            .split(',')
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+        {
+            let origin = raw_origin
+                .parse::<HeaderValue>()
+                .expect("invalid CORS_ORIGIN");
+            if !allowed_origins.iter().any(|allowed| allowed == &origin) {
+                allowed_origins.push(origin);
+            }
+        }
+    }
+
+    allowed_origins
+}
+
+fn configured_cors_layer() -> CorsLayer {
+    let raw_origins = std::env::var("CORS_ORIGIN").ok();
+    if raw_origins
+        .as_deref()
+        .map(str::trim)
+        .unwrap_or("")
+        .is_empty()
+    {
+        return CorsLayer::permissive();
+    }
+
+    let allowed_origins = cors_allowed_origins(raw_origins.as_deref());
+
+    CorsLayer::new()
+        .allow_origin(AllowOrigin::predicate(
+            move |origin: &HeaderValue, _request_parts| allowed_origins.contains(origin),
+        ))
+        .allow_methods(tower_http::cors::Any)
+        .allow_headers(tower_http::cors::Any)
+}
+
+#[cfg(test)]
+mod cors_tests {
+    use super::cors_allowed_origins;
+    use axum::http::HeaderValue;
+
+    #[test]
+    fn cors_always_includes_public_landing_origins() {
+        let origins = cors_allowed_origins(Some("https://ardentresearch.xyz"));
+
+        assert!(origins.contains(&HeaderValue::from_static("https://ardentresearch.xyz")));
+        assert!(origins.contains(&HeaderValue::from_static("https://www.ardentresearch.xyz")));
+    }
+
+    #[test]
+    fn cors_accepts_comma_separated_extra_origins_without_duplicates() {
+        let origins = cors_allowed_origins(Some(
+            "https://app.example.com, https://www.ardentresearch.xyz",
+        ));
+
+        assert!(origins.contains(&HeaderValue::from_static("https://app.example.com")));
+        assert_eq!(
+            origins
+                .iter()
+                .filter(|origin| {
+                    *origin == &HeaderValue::from_static("https://www.ardentresearch.xyz")
+                })
+                .count(),
+            1
+        );
+    }
+}
 
 /// Supervisor that restarts a worker if it panics.  Each restart recovers
 /// stale jobs from that worker's processing list first, so nothing is lost.
@@ -669,22 +746,7 @@ async fn main() -> anyhow::Result<()> {
         .layer(tower::limit::ConcurrencyLimitLayer::new(
             config.max_concurrent_requests.max(1) as usize,
         ))
-        .layer({
-            // In production set CORS_ORIGIN=https://yourdomain.com
-            // Default (empty / unset) = permissive (for local dev)
-            let cors = match std::env::var("CORS_ORIGIN") {
-                Ok(origin) if !origin.is_empty() => CorsLayer::new()
-                    .allow_origin(
-                        origin
-                            .parse::<axum::http::HeaderValue>()
-                            .expect("invalid CORS_ORIGIN"),
-                    )
-                    .allow_methods(tower_http::cors::Any)
-                    .allow_headers(tower_http::cors::Any),
-                _ => CorsLayer::permissive(),
-            };
-            cors
-        })
+        .layer(configured_cors_layer())
         .with_state(state);
 
     // ── Serve with graceful shutdown ────────────────────────────────

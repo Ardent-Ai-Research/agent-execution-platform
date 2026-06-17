@@ -496,7 +496,7 @@ NUM_WORKERS=2
 MAX_CONCURRENT_REQUESTS=200
 PER_KEY_RATE_LIMIT_RPS=5.0
 PER_KEY_RATE_LIMIT_BURST=10.0
-# CORS_ORIGIN=https://yourdomain.com
+# CORS_ORIGIN=https://ardentresearch.xyz,https://www.ardentresearch.xyz
 ```
 
 ### Step 6 — Deploy Contracts (if you haven't already)
@@ -1047,7 +1047,7 @@ curl -X POST http://localhost:8080/admin/api-keys \
 | `PRICE_CACHE_TTL_SECS`      | `60`                               | No       | Price cache TTL in seconds                 |
 | `NUM_WORKERS`               | `2`                                | No       | Background worker count                    |
 | `MIN_PAYMENT_CONFIRMATIONS` | `1`                                | No       | Required block confirmations for payment   |
-| `CORS_ORIGIN`               | *(unset = permissive)*             | No       | Restrict CORS to specific origin           |
+| `CORS_ORIGIN`               | *(unset = permissive)*             | No       | Restrict CORS to comma-separated origins   |
 
 > ¹ At least one chain must have `{CHAIN}_RPC_URL` set.
 
