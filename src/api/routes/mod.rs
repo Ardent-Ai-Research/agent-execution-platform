@@ -71,6 +71,8 @@ fn chain_display(chain: &str) -> String {
     match chain.to_lowercase().as_str() {
         "ethereum" | "eth" => "Ethereum Sepolia".to_string(),
         "sepolia" => "Ethereum Sepolia".to_string(),
+        "base" => "Base Sepolia".to_string(),
+        "arbitrum" | "arb" => "Arbitrum Sepolia".to_string(),
         other => {
             let mut chars = other.chars();
             match chars.next() {
@@ -86,6 +88,18 @@ fn format_amount_usd(amount: f64) -> String {
         format!("${:.0}", amount)
     } else {
         format!("${:.2}", amount)
+    }
+}
+
+#[cfg(test)]
+mod feed_tests {
+    use super::chain_display;
+
+    #[test]
+    fn chain_display_names_supported_testnets() {
+        assert_eq!(chain_display("ethereum"), "Ethereum Sepolia");
+        assert_eq!(chain_display("base"), "Base Sepolia");
+        assert_eq!(chain_display("arbitrum"), "Arbitrum Sepolia");
     }
 }
 

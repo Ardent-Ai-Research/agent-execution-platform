@@ -426,6 +426,18 @@
         background: var(--green);
         animation: blink 1.5s ease infinite;
       }
+      .feed-live.demo {
+        color: var(--amber);
+      }
+      .feed-live.demo::before {
+        background: var(--amber);
+      }
+      .feed-live.syncing {
+        color: var(--cyan);
+      }
+      .feed-live.syncing::before {
+        background: var(--cyan);
+      }
       @keyframes blink {
         0%,
         100% {
@@ -1538,7 +1550,7 @@
       <div class="hero-right">
         <div class="feed-header">
           <div class="feed-title">Agent Execution Feed</div>
-          <div class="feed-live">Live</div>
+          <div class="feed-live syncing" id="feed-mode">Syncing</div>
         </div>
         <div class="feed-body" id="feed-body">
           <!-- populated by JS -->
@@ -1676,9 +1688,9 @@
           <div class="feat-icon-wrap">MC</div>
           <div class="feat-title">Multi-Chain Relayer</div>
           <div class="feat-desc">
-            Send transactions across chains without rebuilding your stack for
-            every network. One API. Multiple chains. A unified execution flow
-            from a single integration point.
+            Send transactions across Ethereum, Base, and Arbitrum Sepolia
+            without rebuilding your stack for every network. One API. Multiple
+            chains. A unified execution flow from a single integration point.
           </div>
           <div class="feat-badge">Infrastructure</div>
         </div>
@@ -1722,8 +1734,8 @@
             <div class="feat-title">Framework Agnostic Integration</div>
             <div class="feat-desc">
               Not locked to one chain, one bundler, or one agent framework. Plug
-              into LangChain, AutoGPT, custom pipelines, or raw API calls. One
-              REST endpoint is all your agent needs to go onchain.
+              into LangChain, AutoGPT, custom pipelines, or raw API calls, with
+              typed actions for Aave V3, Compound III, and GMX V2.
             </div>
             <div class="feat-badge">Composable</div>
           </div>
@@ -2188,7 +2200,7 @@
           type: "exec",
           type_label: "EXEC",
           agent: "agent-7f2ac9e1",
-          detail: "contract execution · Ethereum Sepolia",
+          detail: "Aave V3 supply · Ethereum Sepolia",
           hash: "0x7f2ac9e1...d41a",
           status: "ok",
           confirm: "Confirmed",
@@ -2197,7 +2209,7 @@
           type: "reg",
           type_label: "REG",
           agent: "agent-3b91ff42",
-          detail: "request queued · Ethereum Sepolia",
+          detail: "Compound III borrow read · Base Sepolia",
           hash: "0x3b91ff42...8a6c",
           status: "pending",
           confirm: "Pending...",
@@ -2206,7 +2218,7 @@
           type: "pay",
           type_label: "PAY",
           agent: "agent-aa1482bd",
-          detail: "x402 verify · $50 USDC · Ethereum Sepolia",
+          detail: "x402 verify · $12.50 USDC · Base Sepolia",
           hash: "0xaa1482bd...14f2",
           status: "ok",
           confirm: "Confirmed",
@@ -2215,7 +2227,7 @@
           type: "relay",
           type_label: "RELAY",
           agent: "agent-5c081a3f",
-          detail: "bundler relay · Ethereum Sepolia",
+          detail: "GMX V2 order relay · Arbitrum Sepolia",
           hash: "0x5c081a3f...b6c1",
           status: "pending",
           confirm: "Pending...",
@@ -2224,7 +2236,7 @@
           type: "exec",
           type_label: "EXEC",
           agent: "agent-9d337c2a",
-          detail: "contract execution · Ethereum Sepolia",
+          detail: "wallet balance read · Base Sepolia",
           hash: "0x9d337c2a...7a10",
           status: "ok",
           confirm: "Confirmed",
@@ -2233,7 +2245,7 @@
           type: "pay",
           type_label: "PAY",
           agent: "agent-f012a9d1",
-          detail: "x402 verify · $200 USDC · Ethereum Sepolia",
+          detail: "x402 verify · $42.00 USDC · Arbitrum Sepolia",
           hash: "0xf012a9d1...0b9a",
           status: "ok",
           confirm: "Confirmed",
@@ -2242,7 +2254,7 @@
           type: "exec",
           type_label: "EXEC",
           agent: "agent-2e77b5c3",
-          detail: "contract execution · Ethereum Sepolia",
+          detail: "Compound III supply · Base Sepolia",
           hash: "0x2e77b5c3...f114",
           status: "ok",
           confirm: "Confirmed",
@@ -2251,7 +2263,7 @@
           type: "reg",
           type_label: "REG",
           agent: "agent-8a553d9e",
-          detail: "request queued · Ethereum Sepolia",
+          detail: "simulation queued · Arbitrum Sepolia",
           hash: "0x8a553d9e...764e",
           status: "pending",
           confirm: "Pending...",
@@ -2260,7 +2272,7 @@
           type: "relay",
           type_label: "RELAY",
           agent: "agent-c3416f7b",
-          detail: "bundler relay · Ethereum Sepolia",
+          detail: "ERC-4337 userOp relay · Base Sepolia",
           hash: "0xc3416f7b...2d99",
           status: "ok",
           confirm: "Confirmed",
@@ -2269,7 +2281,7 @@
           type: "exec",
           type_label: "EXEC",
           agent: "agent-1b29e4a2",
-          detail: "contract execution · Ethereum Sepolia",
+          detail: "GMX V2 balances read · Arbitrum Sepolia",
           hash: "0x1b29e4a2...0d88",
           status: "pending",
           confirm: "Pending...",
@@ -2277,6 +2289,7 @@
       ];
 
       const feedBody = document.getElementById("feed-body");
+      const feedMode = document.getElementById("feed-mode");
       let feedIdx = 0,
         feedItems = [];
       const seenFeedKeys = new Set();
@@ -2284,6 +2297,8 @@
       let apiStreamTimer = null;
       let apiPollTimer = null;
       let demoTimer = null;
+      let demoSeedTimers = [];
+      let fallbackRetryTimer = null;
       let apiConsecutiveFailures = 0;
 
       // Optional override when frontend and backend are on different origins.
@@ -2292,21 +2307,41 @@
       const apiBase =
         window.ARDENT_API_BASE || localStorage.getItem("ARDENT_API_BASE") || "";
 
+      function setFeedMode(mode, label) {
+        feedMode.className = `feed-live ${mode}`;
+        feedMode.textContent = label;
+      }
+
+      function appendText(parent, className, text) {
+        const child = document.createElement("div");
+        child.className = className;
+        child.textContent = text;
+        parent.appendChild(child);
+        return child;
+      }
+
       function renderFeedItem(item) {
         const div = document.createElement("div");
         div.className = "feed-item";
-        div.innerHTML = `
-    <div class="feed-type ${item.type}">${item.typeLabel}</div>
-    <div class="feed-info">
-      <div class="feed-agent">${item.agent}</div>
-      <div class="feed-detail">${item.detail}</div>
-    </div>
-    <div class="feed-status">
-      <div class="feed-hash">${item.hash}</div>
-      <div class="feed-confirm ${item.status === "ok" ? "ok" : "pending"}">
-        ${item.status === "ok" ? "OK" : "PENDING"} ${item.confirm}
-      </div>
-    </div>`;
+        const type = document.createElement("div");
+        type.className = `feed-type ${item.type}`;
+        type.textContent = item.typeLabel;
+
+        const info = document.createElement("div");
+        info.className = "feed-info";
+        appendText(info, "feed-agent", item.agent);
+        appendText(info, "feed-detail", item.detail);
+
+        const status = document.createElement("div");
+        status.className = "feed-status";
+        appendText(status, "feed-hash", item.hash);
+        appendText(
+          status,
+          `feed-confirm ${item.status === "ok" ? "ok" : "pending"}`,
+          `${item.status === "ok" ? "OK" : "PENDING"} ${item.confirm}`,
+        );
+
+        div.append(type, info, status);
         feedBody.insertBefore(div, feedBody.firstChild);
         setTimeout(() => div.classList.add("visible"), 50);
         feedItems.push(div);
@@ -2328,8 +2363,11 @@
       }
 
       function normalizeFeedItem(raw) {
+        const type = ["exec", "pay", "reg", "relay"].includes(raw.type)
+          ? raw.type
+          : "exec";
         return {
-          type: raw.type || "exec",
+          type,
           typeLabel: raw.typeLabel || raw.type_label || "EXEC",
           agent: raw.agent || "agent-unknown",
           detail: raw.detail || "execution update",
@@ -2395,6 +2433,8 @@
           return false;
         }
 
+        setFeedMode("", "Live");
+        apiConsecutiveFailures = 0;
         resetFeed();
         seenFeedKeys.clear();
         apiQueue = [];
@@ -2410,7 +2450,41 @@
 
       async function pollFeedFromApi() {
         const items = await fetchFeedFromApi();
+        apiConsecutiveFailures = 0;
+        setFeedMode("", "Live");
         enqueueUnseenApiItems(items);
+      }
+
+      function stopDemoFeed() {
+        if (demoTimer) {
+          clearInterval(demoTimer);
+          demoTimer = null;
+        }
+        demoSeedTimers.forEach((timer) => clearTimeout(timer));
+        demoSeedTimers = [];
+      }
+
+      function scheduleFallbackRetry() {
+        if (fallbackRetryTimer) {
+          return;
+        }
+        fallbackRetryTimer = setInterval(async () => {
+          try {
+            setFeedMode("syncing", "Syncing");
+            const ok = await seedFeedFromApi();
+            if (!ok) {
+              setFeedMode("demo", "Demo");
+              return;
+            }
+            stopDemoFeed();
+            clearInterval(fallbackRetryTimer);
+            fallbackRetryTimer = null;
+            startApiStreamLoop();
+            startApiPolling();
+          } catch (_) {
+            setFeedMode("demo", "Demo");
+          }
+        }, 15000);
       }
 
       function startDemoFeed() {
@@ -2418,6 +2492,7 @@
           return;
         }
 
+        setFeedMode("demo", "Demo");
         if (apiPollTimer) {
           clearInterval(apiPollTimer);
           apiPollTimer = null;
@@ -2427,22 +2502,44 @@
           apiStreamTimer = null;
         }
 
+        apiQueue = [];
+        demoSeedTimers = [];
         resetFeed();
         for (let i = 0; i < 6; i++) {
-          setTimeout(() => {
-            renderFeedItem(normalizeFeedItem(feedData[feedIdx % feedData.length]));
-            feedIdx++;
-          }, i * 300);
+          demoSeedTimers.push(
+            setTimeout(() => {
+              renderFeedItem(normalizeFeedItem(feedData[feedIdx % feedData.length]));
+              feedIdx++;
+            }, i * 300),
+          );
         }
 
         demoTimer = setInterval(() => {
           renderFeedItem(normalizeFeedItem(feedData[feedIdx % feedData.length]));
           feedIdx++;
         }, 2800);
+        scheduleFallbackRetry();
+      }
+
+      function startApiPolling() {
+        if (apiPollTimer) {
+          clearInterval(apiPollTimer);
+        }
+        apiPollTimer = setInterval(async () => {
+          try {
+            await pollFeedFromApi();
+          } catch (_) {
+            apiConsecutiveFailures += 1;
+            if (apiConsecutiveFailures >= 3) {
+              startDemoFeed();
+            }
+          }
+        }, 7000);
       }
 
       async function bootFeed() {
         try {
+          setFeedMode("syncing", "Syncing");
           const ok = await seedFeedFromApi();
           if (!ok) {
             startDemoFeed();
@@ -2450,18 +2547,7 @@
           }
 
           startApiStreamLoop();
-
-          apiPollTimer = setInterval(async () => {
-            try {
-              await pollFeedFromApi();
-              apiConsecutiveFailures = 0;
-            } catch (_) {
-              apiConsecutiveFailures += 1;
-              if (apiConsecutiveFailures >= 3) {
-                startDemoFeed();
-              }
-            }
-          }, 7000);
+          startApiPolling();
         } catch (_) {
           startDemoFeed();
         }
