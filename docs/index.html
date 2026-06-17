@@ -2301,11 +2301,16 @@
       let fallbackRetryTimer = null;
       let apiConsecutiveFailures = 0;
 
-      // Optional override when frontend and backend are on different origins.
+      // Optional override for local development or alternate API deployments.
       // Example in browser console before reload:
       // localStorage.setItem("ARDENT_API_BASE", "https://api.ardentresearch.xyz")
-      const apiBase =
-        window.ARDENT_API_BASE || localStorage.getItem("ARDENT_API_BASE") || "";
+      const configuredApiBase =
+        window.ARDENT_API_BASE || localStorage.getItem("ARDENT_API_BASE");
+      const localApiBase =
+        ["localhost", "127.0.0.1", ""].includes(window.location.hostname)
+          ? ""
+          : "https://api.ardentresearch.xyz";
+      const apiBase = (configuredApiBase || localApiBase).replace(/\/$/, "");
 
       function setFeedMode(mode, label) {
         feedMode.className = `feed-live ${mode}`;
