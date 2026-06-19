@@ -23,6 +23,10 @@ use crate::protocols::aave_v3::{
     service as aave_v3_service, AaveBalancesQuery, AaveBorrowRequest, AavePositionQuery,
     AaveRepayRequest, AaveSupplyRequest, AaveWithdrawRequest,
 };
+use crate::protocols::balancer_v3::{
+    service as balancer_v3_service, BalancerAddLiquidityRequest, BalancerBalancesQuery,
+    BalancerPoolQuery, BalancerRemoveLiquidityRequest, BalancerSwapRequest,
+};
 use crate::protocols::compound_v3::{
     service as compound_v3_service, CompoundBalancesQuery, CompoundBorrowCapacityQuery,
     CompoundBorrowRequest, CompoundPositionQuery, CompoundRepayRequest, CompoundSupplyRequest,
@@ -681,6 +685,283 @@ pub async fn compound_borrow_capacity_handler(
     }
 }
 
+pub async fn balancer_swap_handler(
+    State(state): State<AppState>,
+    Extension(api_ctx): Extension<ApiKeyContext>,
+    payment_proof: Option<Extension<PaymentProof>>,
+    Json(req): Json<BalancerSwapRequest>,
+) -> impl IntoResponse {
+    info!(
+        agent_id = %req.agent_id,
+        chain = %req.chain,
+        pool = %req.pool,
+        "POST /protocols/balancer-v3/swap"
+    );
+    let proof_ref = payment_proof.as_ref().map(|proof| &proof.0);
+    let mut redis = state.redis_conn.clone();
+
+    match balancer_v3_service::handle_swap(
+        &state.engine,
+        &state.db_pool,
+        &mut redis,
+        &state.wallet_registry,
+        &state.bundler_clients,
+        &state.paymaster_signers,
+        api_ctx.api_key_id,
+        api_ctx.payment_mode.clone(),
+        &req,
+        proof_ref,
+    )
+    .await
+    {
+        Ok(resp) => execution_response_to_http(&state, &req.chain, resp),
+        Err(e) => protocol_error_to_http(e),
+    }
+}
+
+pub async fn balancer_swap_simulate_handler(
+    State(state): State<AppState>,
+    Extension(api_ctx): Extension<ApiKeyContext>,
+    Json(req): Json<BalancerSwapRequest>,
+) -> impl IntoResponse {
+    info!(
+        agent_id = %req.agent_id,
+        chain = %req.chain,
+        pool = %req.pool,
+        "POST /protocols/balancer-v3/swap/simulate"
+    );
+    match balancer_v3_service::handle_swap_simulate(
+        &state.engine,
+        &state.db_pool,
+        &state.wallet_registry,
+        &state.bundler_clients,
+        &state.paymaster_signers,
+        api_ctx.api_key_id,
+        api_ctx.payment_mode.clone(),
+        &req,
+    )
+    .await
+    {
+        Ok(resp) => (StatusCode::OK, Json(serde_json::to_value(resp).unwrap())).into_response(),
+        Err(e) => protocol_error_to_http(e),
+    }
+}
+
+pub async fn balancer_quote_handler(
+    State(state): State<AppState>,
+    Extension(api_ctx): Extension<ApiKeyContext>,
+    Json(req): Json<BalancerSwapRequest>,
+) -> impl IntoResponse {
+    info!(
+        agent_id = %req.agent_id,
+        chain = %req.chain,
+        pool = %req.pool,
+        "POST /protocols/balancer-v3/swap/quote"
+    );
+    match balancer_v3_service::handle_quote(
+        &state.engine,
+        &state.wallet_registry,
+        api_ctx.api_key_id,
+        &req,
+    )
+    .await
+    {
+        Ok(resp) => (StatusCode::OK, Json(serde_json::to_value(resp).unwrap())).into_response(),
+        Err(e) => protocol_error_to_http(e),
+    }
+}
+
+pub async fn balancer_add_liquidity_handler(
+    State(state): State<AppState>,
+    Extension(api_ctx): Extension<ApiKeyContext>,
+    payment_proof: Option<Extension<PaymentProof>>,
+    Json(req): Json<BalancerAddLiquidityRequest>,
+) -> impl IntoResponse {
+    info!(
+        agent_id = %req.agent_id,
+        chain = %req.chain,
+        pool = %req.pool,
+        "POST /protocols/balancer-v3/liquidity/add"
+    );
+    let proof_ref = payment_proof.as_ref().map(|proof| &proof.0);
+    let mut redis = state.redis_conn.clone();
+    match balancer_v3_service::handle_add_liquidity(
+        &state.engine,
+        &state.db_pool,
+        &mut redis,
+        &state.wallet_registry,
+        &state.bundler_clients,
+        &state.paymaster_signers,
+        api_ctx.api_key_id,
+        api_ctx.payment_mode.clone(),
+        &req,
+        proof_ref,
+    )
+    .await
+    {
+        Ok(resp) => execution_response_to_http(&state, &req.chain, resp),
+        Err(e) => protocol_error_to_http(e),
+    }
+}
+
+pub async fn balancer_add_liquidity_simulate_handler(
+    State(state): State<AppState>,
+    Extension(api_ctx): Extension<ApiKeyContext>,
+    Json(req): Json<BalancerAddLiquidityRequest>,
+) -> impl IntoResponse {
+    info!(
+        agent_id = %req.agent_id,
+        chain = %req.chain,
+        pool = %req.pool,
+        "POST /protocols/balancer-v3/liquidity/add/simulate"
+    );
+    match balancer_v3_service::handle_add_liquidity_simulate(
+        &state.engine,
+        &state.db_pool,
+        &state.wallet_registry,
+        &state.bundler_clients,
+        &state.paymaster_signers,
+        api_ctx.api_key_id,
+        api_ctx.payment_mode.clone(),
+        &req,
+    )
+    .await
+    {
+        Ok(resp) => (StatusCode::OK, Json(serde_json::to_value(resp).unwrap())).into_response(),
+        Err(e) => protocol_error_to_http(e),
+    }
+}
+
+pub async fn balancer_add_liquidity_quote_handler(
+    State(state): State<AppState>,
+    Extension(api_ctx): Extension<ApiKeyContext>,
+    Json(req): Json<BalancerAddLiquidityRequest>,
+) -> impl IntoResponse {
+    match balancer_v3_service::handle_add_liquidity_quote(
+        &state.engine,
+        &state.wallet_registry,
+        api_ctx.api_key_id,
+        &req,
+    )
+    .await
+    {
+        Ok(resp) => (StatusCode::OK, Json(serde_json::to_value(resp).unwrap())).into_response(),
+        Err(e) => protocol_error_to_http(e),
+    }
+}
+
+pub async fn balancer_remove_liquidity_handler(
+    State(state): State<AppState>,
+    Extension(api_ctx): Extension<ApiKeyContext>,
+    payment_proof: Option<Extension<PaymentProof>>,
+    Json(req): Json<BalancerRemoveLiquidityRequest>,
+) -> impl IntoResponse {
+    info!(
+        agent_id = %req.agent_id,
+        chain = %req.chain,
+        pool = %req.pool,
+        "POST /protocols/balancer-v3/liquidity/remove"
+    );
+    let proof_ref = payment_proof.as_ref().map(|proof| &proof.0);
+    let mut redis = state.redis_conn.clone();
+    match balancer_v3_service::handle_remove_liquidity(
+        &state.engine,
+        &state.db_pool,
+        &mut redis,
+        &state.wallet_registry,
+        &state.bundler_clients,
+        &state.paymaster_signers,
+        api_ctx.api_key_id,
+        api_ctx.payment_mode.clone(),
+        &req,
+        proof_ref,
+    )
+    .await
+    {
+        Ok(resp) => execution_response_to_http(&state, &req.chain, resp),
+        Err(e) => protocol_error_to_http(e),
+    }
+}
+
+pub async fn balancer_remove_liquidity_simulate_handler(
+    State(state): State<AppState>,
+    Extension(api_ctx): Extension<ApiKeyContext>,
+    Json(req): Json<BalancerRemoveLiquidityRequest>,
+) -> impl IntoResponse {
+    match balancer_v3_service::handle_remove_liquidity_simulate(
+        &state.engine,
+        &state.db_pool,
+        &state.wallet_registry,
+        &state.bundler_clients,
+        &state.paymaster_signers,
+        api_ctx.api_key_id,
+        api_ctx.payment_mode.clone(),
+        &req,
+    )
+    .await
+    {
+        Ok(resp) => (StatusCode::OK, Json(serde_json::to_value(resp).unwrap())).into_response(),
+        Err(e) => protocol_error_to_http(e),
+    }
+}
+
+pub async fn balancer_remove_liquidity_quote_handler(
+    State(state): State<AppState>,
+    Extension(api_ctx): Extension<ApiKeyContext>,
+    Json(req): Json<BalancerRemoveLiquidityRequest>,
+) -> impl IntoResponse {
+    match balancer_v3_service::handle_remove_liquidity_quote(
+        &state.engine,
+        &state.wallet_registry,
+        api_ctx.api_key_id,
+        &req,
+    )
+    .await
+    {
+        Ok(resp) => (StatusCode::OK, Json(serde_json::to_value(resp).unwrap())).into_response(),
+        Err(e) => protocol_error_to_http(e),
+    }
+}
+
+pub async fn balancer_pool_handler(
+    State(state): State<AppState>,
+    Query(query): Query<BalancerPoolQuery>,
+) -> impl IntoResponse {
+    info!(
+        chain = %query.chain,
+        pool = %query.pool,
+        "GET /protocols/balancer-v3/pool"
+    );
+    match balancer_v3_service::handle_pool(&state.engine, &query).await {
+        Ok(resp) => (StatusCode::OK, Json(serde_json::to_value(resp).unwrap())).into_response(),
+        Err(e) => protocol_error_to_http(e),
+    }
+}
+
+pub async fn balancer_balances_handler(
+    State(state): State<AppState>,
+    Extension(api_ctx): Extension<ApiKeyContext>,
+    Query(query): Query<BalancerBalancesQuery>,
+) -> impl IntoResponse {
+    info!(
+        agent_id = %query.agent_id,
+        chain = %query.chain,
+        pool = %query.pool,
+        "GET /protocols/balancer-v3/balances"
+    );
+    match balancer_v3_service::handle_balances(
+        &state.engine,
+        &state.wallet_registry,
+        api_ctx.api_key_id,
+        &query,
+    )
+    .await
+    {
+        Ok(resp) => (StatusCode::OK, Json(serde_json::to_value(resp).unwrap())).into_response(),
+        Err(e) => protocol_error_to_http(e),
+    }
+}
+
 pub async fn gmx_create_order_handler(
     State(state): State<AppState>,
     Extension(api_ctx): Extension<ApiKeyContext>,
@@ -1033,6 +1314,14 @@ fn protocol_error_to_http(e: anyhow::Error) -> axum::response::Response {
         || err_str.contains("rejected")
         || err_str.contains("exceeds")
         || err_str.contains("collateral")
+        || err_str.contains("not registered")
+        || err_str.contains("not initialized")
+        || err_str.contains("pool is paused")
+        || err_str.contains("recovery mode")
+        || err_str.contains("token_in")
+        || err_str.contains("token_out")
+        || err_str.contains("slippage")
+        || err_str.contains("deadline")
         || err_str.contains("must be");
     let status = if is_client_error {
         StatusCode::BAD_REQUEST

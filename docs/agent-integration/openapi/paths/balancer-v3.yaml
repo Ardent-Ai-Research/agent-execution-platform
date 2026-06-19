@@ -1,0 +1,284 @@
+---
+"/protocols/balancer-v3/swap/quote":
+  post:
+    summary: Quote a Balancer V3 Ethereum Sepolia single-pool swap
+    description: Verifies the pool and tokens on-chain, queries the Balancer Router, and returns the quote plus the slippage-derived execution limit.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            "$ref": "#/components/schemas/BalancerSwapRequest"
+    responses:
+      '200':
+        description: Balancer swap quote
+        content:
+          application/json:
+            schema:
+              "$ref": "#/components/schemas/BalancerQuoteResponse"
+      '400':
+        "$ref": "#/components/responses/ErrorResponse"
+      '401':
+        "$ref": "#/components/responses/ErrorResponse"
+"/protocols/balancer-v3/swap/simulate":
+  post:
+    summary: Simulate a Balancer V3 Ethereum Sepolia swap
+    description: Quotes the swap, derives a limit when needed, compiles bounded ERC20 and Permit2 allowances, the Router swap, and post-swap allowance cleanup, then performs full UserOperation simulation.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            "$ref": "#/components/schemas/BalancerSwapRequest"
+    responses:
+      '200':
+        description: Simulation result
+        content:
+          application/json:
+            schema:
+              "$ref": "#/components/schemas/ExecutionResponse"
+      '400':
+        "$ref": "#/components/responses/ErrorResponse"
+      '401':
+        "$ref": "#/components/responses/ErrorResponse"
+"/protocols/balancer-v3/swap":
+  post:
+    summary: Execute a Balancer V3 Ethereum Sepolia swap
+    parameters:
+    - in: header
+      name: X-Payment-Proof
+      required: false
+      schema:
+        type: string
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            "$ref": "#/components/schemas/BalancerSwapRequest"
+    responses:
+      '200':
+        description: Execution accepted/queued
+        content:
+          application/json:
+            schema:
+              "$ref": "#/components/schemas/ExecutionResponse"
+      '402':
+        description: Payment required for manual mode
+        content:
+          application/json:
+            schema:
+              "$ref": "#/components/schemas/PaymentRequiredBody"
+      '400':
+        "$ref": "#/components/responses/ErrorResponse"
+      '401':
+        "$ref": "#/components/responses/ErrorResponse"
+"/protocols/balancer-v3/liquidity/add/quote":
+  post:
+    summary: Quote a Balancer V3 unbalanced liquidity addition
+    description: Orders supplied token amounts using the Vault token order, queries expected BPT output, and derives a slippage-protected minimum.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            "$ref": "#/components/schemas/BalancerAddLiquidityRequest"
+    responses:
+      '200':
+        description: Add-liquidity quote
+        content:
+          application/json:
+            schema:
+              "$ref": "#/components/schemas/BalancerAddLiquidityQuoteResponse"
+      '400':
+        "$ref": "#/components/responses/ErrorResponse"
+      '401':
+        "$ref": "#/components/responses/ErrorResponse"
+"/protocols/balancer-v3/liquidity/add/simulate":
+  post:
+    summary: Simulate a Balancer V3 unbalanced liquidity addition
+    description: Quotes and fully simulates bounded ERC20 and Permit2 approvals, the Router liquidity call, and allowance cleanup as one UserOperation.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            "$ref": "#/components/schemas/BalancerAddLiquidityRequest"
+    responses:
+      '200':
+        description: Simulation result
+        content:
+          application/json:
+            schema:
+              "$ref": "#/components/schemas/ExecutionResponse"
+      '400':
+        "$ref": "#/components/responses/ErrorResponse"
+      '401':
+        "$ref": "#/components/responses/ErrorResponse"
+"/protocols/balancer-v3/liquidity/add":
+  post:
+    summary: Add liquidity to a Balancer V3 pool
+    parameters:
+    - in: header
+      name: X-Payment-Proof
+      required: false
+      schema:
+        type: string
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            "$ref": "#/components/schemas/BalancerAddLiquidityRequest"
+    responses:
+      '200':
+        description: Execution accepted/queued
+        content:
+          application/json:
+            schema:
+              "$ref": "#/components/schemas/ExecutionResponse"
+      '402':
+        description: Payment required for manual mode
+        content:
+          application/json:
+            schema:
+              "$ref": "#/components/schemas/PaymentRequiredBody"
+      '400':
+        "$ref": "#/components/responses/ErrorResponse"
+      '401':
+        "$ref": "#/components/responses/ErrorResponse"
+"/protocols/balancer-v3/liquidity/remove/quote":
+  post:
+    summary: Quote a proportional Balancer V3 liquidity removal
+    description: Queries token outputs for an exact BPT burn and derives per-token slippage-protected minimums.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            "$ref": "#/components/schemas/BalancerRemoveLiquidityRequest"
+    responses:
+      '200':
+        description: Remove-liquidity quote
+        content:
+          application/json:
+            schema:
+              "$ref": "#/components/schemas/BalancerRemoveLiquidityQuoteResponse"
+      '400':
+        "$ref": "#/components/responses/ErrorResponse"
+      '401':
+        "$ref": "#/components/responses/ErrorResponse"
+"/protocols/balancer-v3/liquidity/remove/simulate":
+  post:
+    summary: Simulate a proportional Balancer V3 liquidity removal
+    description: Quotes and fully simulates burning an exact BPT amount for all registered pool tokens.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            "$ref": "#/components/schemas/BalancerRemoveLiquidityRequest"
+    responses:
+      '200':
+        description: Simulation result
+        content:
+          application/json:
+            schema:
+              "$ref": "#/components/schemas/ExecutionResponse"
+      '400':
+        "$ref": "#/components/responses/ErrorResponse"
+      '401':
+        "$ref": "#/components/responses/ErrorResponse"
+"/protocols/balancer-v3/liquidity/remove":
+  post:
+    summary: Remove liquidity proportionally from a Balancer V3 pool
+    parameters:
+    - in: header
+      name: X-Payment-Proof
+      required: false
+      schema:
+        type: string
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            "$ref": "#/components/schemas/BalancerRemoveLiquidityRequest"
+    responses:
+      '200':
+        description: Execution accepted/queued
+        content:
+          application/json:
+            schema:
+              "$ref": "#/components/schemas/ExecutionResponse"
+      '402':
+        description: Payment required for manual mode
+        content:
+          application/json:
+            schema:
+              "$ref": "#/components/schemas/PaymentRequiredBody"
+      '400':
+        "$ref": "#/components/responses/ErrorResponse"
+      '401':
+        "$ref": "#/components/responses/ErrorResponse"
+"/protocols/balancer-v3/pool":
+  get:
+    summary: Read a Balancer V3 Ethereum Sepolia pool
+    parameters:
+    - in: query
+      name: chain
+      required: false
+      schema:
+        type: string
+        enum:
+        - ethereum
+        default: ethereum
+    - in: query
+      name: pool
+      required: true
+      schema:
+        type: string
+    responses:
+      '200':
+        description: Balancer pool state and registered tokens
+        content:
+          application/json:
+            schema:
+              "$ref": "#/components/schemas/BalancerPoolResponse"
+      '400':
+        "$ref": "#/components/responses/ErrorResponse"
+      '401':
+        "$ref": "#/components/responses/ErrorResponse"
+"/protocols/balancer-v3/balances":
+  get:
+    summary: Read Balancer V3 pool-related balances for an agent wallet
+    parameters:
+    - in: query
+      name: agent_id
+      required: true
+      schema:
+        type: string
+    - in: query
+      name: chain
+      required: false
+      schema:
+        type: string
+        enum:
+        - ethereum
+        default: ethereum
+    - in: query
+      name: pool
+      required: true
+      schema:
+        type: string
+    responses:
+      '200':
+        description: Agent BPT and registered pool-token balances
+        content:
+          application/json:
+            schema:
+              "$ref": "#/components/schemas/BalancerBalancesResponse"
+      '400':
+        "$ref": "#/components/responses/ErrorResponse"
+      '401':
+        "$ref": "#/components/responses/ErrorResponse"

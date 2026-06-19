@@ -258,6 +258,53 @@ For raw token addresses, use `amount_raw`. Supply, withdraw, and repay support
 `market: "usdc"` or `market: "weth"` when the asset alone does not identify the
 intended market.
 
+### Typed Balancer V3 Ethereum Sepolia Flow
+
+Balancer V3 actions are pool-address driven. Read the executor-selected pool
+first so the agent can use its exact registered token addresses:
+
+```bash
+curl -X GET "$BASE_URL/protocols/balancer-v3/pool?chain=ethereum&pool=0xYourBalancerV3Pool" \
+  -H "X-API-Key: $API_KEY"
+```
+
+Request a live quote before simulation:
+
+```bash
+curl -X POST "$BASE_URL/protocols/balancer-v3/swap/quote" \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: $API_KEY" \
+  -d '{
+    "agent_id": "my-agent-001",
+    "chain": "ethereum",
+    "pool": "0xYourBalancerV3Pool",
+    "token_in": "0xFirstPoolToken",
+    "token_out": "0xSecondPoolToken",
+    "swap_kind": "exact_in",
+    "amount_raw": "1000000",
+    "slippage_bps": 100
+  }'
+```
+
+Then simulate the same body at `/protocols/balancer-v3/swap/simulate`. The
+service verifies the pool and tokens, quotes the Router, derives `limit_raw`
+when omitted, and compiles allowance reset, ERC-20 Permit2 approval, Permit2
+Router approval, Router swap, and allowance cleanup as one atomic UserOperation
+batch.
+
+Use raw integer amounts only. For `exact_in`, `amount_raw` is input and
+`limit_raw` is minimum output. For `exact_out`, `amount_raw` is output and
+`limit_raw` is maximum input. A registered pool may still reject quotes because
+of hook rules, such as an inactive LBP sale window.
+
+For liquidity, use `ardent_balancer_add_liquidity_quote`, simulate, then execute
+with `ardent_balancer_add_liquidity_execute`. Supply `amounts_in` as token
+address and raw amount objects; the API reorders them using the Vault token
+order. Up to three deposited token addresses are supported per operation. Use
+`ardent_balancer_remove_liquidity_quote`, simulate, then execute with
+`ardent_balancer_remove_liquidity_execute` to burn an exact BPT amount and
+receive every pool token proportionally.
+
 ### Typed GMX V2 Arbitrum Sepolia Flow
 
 Use typed protocol tools for GMX V2 Arbitrum Sepolia orders instead of manually

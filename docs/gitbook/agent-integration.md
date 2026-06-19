@@ -94,6 +94,17 @@ ardent aave-position --agent-id <id>                   # Aave account data and h
 ardent compound-balances --agent-id <id>               # Compound wallet/protocol balances
 ardent compound-position --agent-id <id>               # Compound base supply, debt, and collateral
 ardent compound-borrow-capacity --agent-id <id>        # Compound available borrow and rates
+ardent balancer-pool --pool <pool>                     # Balancer pool state and registered tokens
+ardent balancer-balances --agent-id <id> --pool <pool> # Balancer BPT and pool-token balances
+ardent balancer-quote --agent-id <id> --pool <pool> --token-in <addr> --token-out <addr> --amount-raw <raw>
+ardent balancer-swap-simulate --agent-id <id> --pool <pool> --token-in <addr> --token-out <addr> --amount-raw <raw>
+ardent balancer-swap --agent-id <id> --pool <pool> --token-in <addr> --token-out <addr> --amount-raw <raw>
+ardent balancer-add-liquidity-quote --agent-id <id> --pool <pool> --amount-in <token=raw>
+ardent balancer-add-liquidity-simulate --agent-id <id> --pool <pool> --amount-in <token=raw>
+ardent balancer-add-liquidity --agent-id <id> --pool <pool> --amount-in <token=raw>
+ardent balancer-remove-liquidity-quote --agent-id <id> --pool <pool> --bpt-amount-in-raw <raw>
+ardent balancer-remove-liquidity-simulate --agent-id <id> --pool <pool> --bpt-amount-in-raw <raw>
+ardent balancer-remove-liquidity --agent-id <id> --pool <pool> --bpt-amount-in-raw <raw>
 ardent status   --request-id <id>
 ardent self-update                      # updates CLI plus ~/.ardent runtime files
 ardent self-update --cli-only           # updates only the CLI
@@ -139,6 +150,8 @@ The installer configures Codex by default and automatically patches the config f
 
 > *"Show my Compound III supplied balances and debt for agent-001 on Base."*
 
+> *"Quote and simulate an exact-input Balancer V3 swap for agent-001 on Sepolia."*
+
 > *"Simulate a transfer of 100 USDC from my agent wallet on Base and tell me the gas cost."*
 
 > *"Execute the approve and swap sequence for agent-001 on Ethereum. Use the calldata I just generated."*
@@ -167,6 +180,17 @@ python3 ~/.ardent/mcp_server.py
 | `ardent_aave_position` | Read Aave account data, borrowing capacity, and health factor |
 | `ardent_compound_balances` | Read Compound wallet and protocol balances |
 | `ardent_compound_position` | Read Compound base supply, base debt, and collateral balances |
+| `ardent_balancer_pool` | Read Balancer pool state, registered tokens, balances, and fee |
+| `ardent_balancer_balances` | Read Balancer BPT and pool-token wallet balances |
+| `ardent_balancer_swap_quote` | Quote a Balancer single-pool swap and derive its limit |
+| `ardent_balancer_swap_simulate` | Fully simulate the Permit2 plus Router swap batch |
+| `ardent_balancer_swap_execute` | Execute a Balancer single-pool swap |
+| `ardent_balancer_add_liquidity_quote` | Quote BPT output for an unbalanced liquidity addition |
+| `ardent_balancer_add_liquidity_simulate` | Fully simulate liquidity addition and approval cleanup |
+| `ardent_balancer_add_liquidity_execute` | Add liquidity and receive BPT |
+| `ardent_balancer_remove_liquidity_quote` | Quote proportional token outputs for a BPT burn |
+| `ardent_balancer_remove_liquidity_simulate` | Fully simulate proportional liquidity removal |
+| `ardent_balancer_remove_liquidity_execute` | Burn BPT and receive all pool tokens proportionally |
 | `ardent_simulate` | Simulate a transaction and return estimated cost |
 | `ardent_execute` | Submit a transaction for execution |
 | `ardent_status` | Poll execution request status |

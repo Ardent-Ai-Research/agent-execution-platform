@@ -637,6 +637,50 @@ async fn main() -> anyhow::Result<()> {
             get(routes::compound_borrow_capacity_handler),
         )
         .route(
+            "/protocols/balancer-v3/swap",
+            post(routes::balancer_swap_handler),
+        )
+        .route(
+            "/protocols/balancer-v3/swap/simulate",
+            post(routes::balancer_swap_simulate_handler),
+        )
+        .route(
+            "/protocols/balancer-v3/swap/quote",
+            post(routes::balancer_quote_handler),
+        )
+        .route(
+            "/protocols/balancer-v3/liquidity/add",
+            post(routes::balancer_add_liquidity_handler),
+        )
+        .route(
+            "/protocols/balancer-v3/liquidity/add/simulate",
+            post(routes::balancer_add_liquidity_simulate_handler),
+        )
+        .route(
+            "/protocols/balancer-v3/liquidity/add/quote",
+            post(routes::balancer_add_liquidity_quote_handler),
+        )
+        .route(
+            "/protocols/balancer-v3/liquidity/remove",
+            post(routes::balancer_remove_liquidity_handler),
+        )
+        .route(
+            "/protocols/balancer-v3/liquidity/remove/simulate",
+            post(routes::balancer_remove_liquidity_simulate_handler),
+        )
+        .route(
+            "/protocols/balancer-v3/liquidity/remove/quote",
+            post(routes::balancer_remove_liquidity_quote_handler),
+        )
+        .route(
+            "/protocols/balancer-v3/pool",
+            get(routes::balancer_pool_handler),
+        )
+        .route(
+            "/protocols/balancer-v3/balances",
+            get(routes::balancer_balances_handler),
+        )
+        .route(
             "/protocols/gmx-v2/orders/simulate",
             post(routes::gmx_create_order_simulate_handler),
         )

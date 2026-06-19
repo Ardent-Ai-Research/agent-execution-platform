@@ -16,6 +16,12 @@ Commands:
 - compound-position
 - compound-balances
 - compound-borrow-capacity
+- balancer-swap
+- balancer-quote
+- balancer-add-liquidity
+- balancer-remove-liquidity
+- balancer-pool
+- balancer-balances
 - gmx-create-order
 - gmx-cancel-order
 - gmx-markets
@@ -42,7 +48,7 @@ from urllib import parse, request
 from urllib.error import HTTPError, URLError
 
 
-VERSION = "0.5.1"
+VERSION = "0.6.0"
 REPO_RAW_BASE = "https://raw.githubusercontent.com/Ardent-Ai-Research/agent-execution-platform/master/docs/agent-integration"
 RUNTIME_DIR = Path(os.getenv("ARDENT_RUNTIME_DIR", str(Path.home() / ".ardent")))
 
@@ -499,6 +505,153 @@ def run_compound_borrow_capacity(args: argparse.Namespace) -> int:
     qs = parse.urlencode({"agent_id": args.agent_id, "chain": args.chain, "market": args.market})
     url = f"{build_base_url(args)}/protocols/compound-v3/borrow-capacity?{qs}"
     status, payload = call_api("GET", url, api_key=api_key)
+    output({"status": status, "data": payload})
+    return 0 if 200 <= status < 300 else 1
+
+
+def resolve_balancer_swap_body(args: argparse.Namespace) -> dict[str, Any]:
+    body: dict[str, Any] = {
+        "agent_id": args.agent_id,
+        "chain": args.chain,
+        "pool": args.pool,
+        "token_in": args.token_in,
+        "token_out": args.token_out,
+        "swap_kind": args.swap_kind,
+        "amount_raw": args.amount_raw,
+        "slippage_bps": args.slippage_bps,
+    }
+    if args.limit_raw is not None:
+        body["limit_raw"] = args.limit_raw
+    if args.deadline is not None:
+        body["deadline"] = args.deadline
+    if args.strategy_id:
+        body["strategy_id"] = args.strategy_id
+    if args.callback_url:
+        body["callback_url"] = args.callback_url
+    return body
+
+
+def run_balancer_swap_simulate(args: argparse.Namespace) -> int:
+    api_key = require_api_key(args)
+    body = resolve_balancer_swap_body(args)
+    url = f"{build_base_url(args)}/protocols/balancer-v3/swap/simulate"
+    status, payload = call_api("POST", url, body=body, api_key=api_key)
+    output({"status": status, "data": payload})
+    return 0 if 200 <= status < 300 else 1
+
+
+def run_balancer_swap(args: argparse.Namespace) -> int:
+    api_key = require_api_key(args)
+    body = resolve_balancer_swap_body(args)
+    payment_proof = resolve_payment_proof(args)
+    url = f"{build_base_url(args)}/protocols/balancer-v3/swap"
+    status, payload = call_api(
+        "POST",
+        url,
+        body=body,
+        api_key=api_key,
+        payment_proof=payment_proof,
+    )
+    output({"status": status, "data": payload})
+    return 0 if 200 <= status < 300 else 1
+
+
+def run_balancer_quote(args: argparse.Namespace) -> int:
+    api_key = require_api_key(args)
+    body = resolve_balancer_swap_body(args)
+    url = f"{build_base_url(args)}/protocols/balancer-v3/swap/quote"
+    status, payload = call_api("POST", url, body=body, api_key=api_key)
+    output({"status": status, "data": payload})
+    return 0 if 200 <= status < 300 else 1
+
+
+def run_balancer_pool(args: argparse.Namespace) -> int:
+    api_key = require_api_key(args)
+    qs = parse.urlencode({"chain": args.chain, "pool": args.pool})
+    url = f"{build_base_url(args)}/protocols/balancer-v3/pool?{qs}"
+    status, payload = call_api("GET", url, api_key=api_key)
+    output({"status": status, "data": payload})
+    return 0 if 200 <= status < 300 else 1
+
+
+def run_balancer_balances(args: argparse.Namespace) -> int:
+    api_key = require_api_key(args)
+    qs = parse.urlencode(
+        {"agent_id": args.agent_id, "chain": args.chain, "pool": args.pool}
+    )
+    url = f"{build_base_url(args)}/protocols/balancer-v3/balances?{qs}"
+    status, payload = call_api("GET", url, api_key=api_key)
+    output({"status": status, "data": payload})
+    return 0 if 200 <= status < 300 else 1
+
+
+def parse_balancer_token_amounts(values: list[str] | None, flag: str) -> list[dict[str, str]]:
+    amounts: list[dict[str, str]] = []
+    for value in values or []:
+        token, separator, amount_raw = value.partition("=")
+        if not separator or not token.strip() or not amount_raw.strip():
+            raise ValueError(f"{flag} must use TOKEN_ADDRESS=RAW_AMOUNT")
+        amounts.append({"token": token.strip(), "amount_raw": amount_raw.strip()})
+    return amounts
+
+
+def resolve_balancer_add_liquidity_body(args: argparse.Namespace) -> dict[str, Any]:
+    body: dict[str, Any] = {
+        "agent_id": args.agent_id,
+        "chain": args.chain,
+        "pool": args.pool,
+        "amounts_in": parse_balancer_token_amounts(args.amount_in, "--amount-in"),
+        "slippage_bps": args.slippage_bps,
+    }
+    if args.min_bpt_amount_out_raw is not None:
+        body["min_bpt_amount_out_raw"] = args.min_bpt_amount_out_raw
+    if args.deadline is not None:
+        body["deadline"] = args.deadline
+    if args.strategy_id:
+        body["strategy_id"] = args.strategy_id
+    if args.callback_url:
+        body["callback_url"] = args.callback_url
+    return body
+
+
+def resolve_balancer_remove_liquidity_body(args: argparse.Namespace) -> dict[str, Any]:
+    body: dict[str, Any] = {
+        "agent_id": args.agent_id,
+        "chain": args.chain,
+        "pool": args.pool,
+        "bpt_amount_in_raw": args.bpt_amount_in_raw,
+        "slippage_bps": args.slippage_bps,
+    }
+    minimums = parse_balancer_token_amounts(args.min_amount_out, "--min-amount-out")
+    if minimums:
+        body["min_amounts_out"] = minimums
+    if args.strategy_id:
+        body["strategy_id"] = args.strategy_id
+    if args.callback_url:
+        body["callback_url"] = args.callback_url
+    return body
+
+
+def run_balancer_liquidity(args: argparse.Namespace) -> int:
+    api_key = require_api_key(args)
+    body = (
+        resolve_balancer_add_liquidity_body(args)
+        if args.liquidity_action == "add"
+        else resolve_balancer_remove_liquidity_body(args)
+    )
+    suffix = f"/protocols/balancer-v3/liquidity/{args.liquidity_action}"
+    if args.liquidity_mode != "execute":
+        suffix += f"/{args.liquidity_mode}"
+    payment_proof = (
+        resolve_payment_proof(args) if args.liquidity_mode == "execute" else None
+    )
+    status, payload = call_api(
+        "POST",
+        f"{build_base_url(args)}{suffix}",
+        body=body,
+        api_key=api_key,
+        payment_proof=payment_proof,
+    )
     output({"status": status, "data": payload})
     return 0 if 200 <= status < 300 else 1
 
@@ -1124,6 +1277,99 @@ def add_gmx_claim_flags(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--body-file", help="Path to full request JSON object (overrides payload flags)")
 
 
+def add_balancer_swap_flags(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--agent-id", required=True, help="Agent identifier")
+    parser.add_argument(
+        "--chain",
+        default="ethereum",
+        choices=["ethereum"],
+        help="Balancer V3 Ethereum Sepolia chain label",
+    )
+    parser.add_argument("--pool", required=True, help="Balancer V3 pool address")
+    parser.add_argument("--token-in", required=True, help="Input token address")
+    parser.add_argument("--token-out", required=True, help="Output token address")
+    parser.add_argument(
+        "--swap-kind",
+        default="exact_in",
+        choices=["exact_in", "exact_out"],
+        help="Exact input or exact output swap",
+    )
+    parser.add_argument(
+        "--amount-raw",
+        required=True,
+        help="Exact input amount for exact_in, or exact output amount for exact_out",
+    )
+    parser.add_argument(
+        "--limit-raw",
+        help="Minimum output for exact_in, or maximum input for exact_out",
+    )
+    parser.add_argument(
+        "--slippage-bps",
+        type=int,
+        default=100,
+        help="Quote-derived slippage limit in basis points when --limit-raw is omitted",
+    )
+    parser.add_argument(
+        "--deadline",
+        type=int,
+        help="Optional future Unix timestamp; defaults to 20 minutes",
+    )
+    parser.add_argument("--strategy-id", help="Optional strategy ID")
+    parser.add_argument("--callback-url", help="Optional callback webhook URL")
+
+
+def add_balancer_liquidity_common_flags(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--agent-id", required=True, help="Agent identifier")
+    parser.add_argument(
+        "--chain",
+        default="ethereum",
+        choices=["ethereum"],
+        help="Balancer V3 Ethereum Sepolia chain label",
+    )
+    parser.add_argument("--pool", required=True, help="Balancer V3 pool address")
+    parser.add_argument(
+        "--slippage-bps",
+        type=int,
+        default=100,
+        help="Quote-derived slippage limit in basis points",
+    )
+    parser.add_argument("--strategy-id", help="Optional strategy ID")
+    parser.add_argument("--callback-url", help="Optional callback webhook URL")
+
+
+def add_balancer_add_liquidity_flags(parser: argparse.ArgumentParser) -> None:
+    add_balancer_liquidity_common_flags(parser)
+    parser.add_argument(
+        "--amount-in",
+        action="append",
+        required=True,
+        help="Token and raw amount as TOKEN_ADDRESS=RAW_AMOUNT; repeatable up to 3 times",
+    )
+    parser.add_argument(
+        "--min-bpt-amount-out-raw",
+        help="Optional explicit minimum BPT output",
+    )
+    parser.add_argument(
+        "--deadline",
+        type=int,
+        help="Optional future Unix timestamp for expiring Permit2 allowances",
+    )
+
+
+def add_balancer_remove_liquidity_flags(parser: argparse.ArgumentParser) -> None:
+    add_balancer_liquidity_common_flags(parser)
+    parser.add_argument(
+        "--bpt-amount-in-raw",
+        required=True,
+        help="Exact raw BPT amount to burn",
+    )
+    parser.add_argument(
+        "--min-amount-out",
+        action="append",
+        help="Optional token minimum as TOKEN_ADDRESS=RAW_AMOUNT; repeatable",
+    )
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Ardent API CLI")
     parser.add_argument("--version", action="version", version=f"ardent {VERSION}")
@@ -1295,6 +1541,118 @@ def build_parser() -> argparse.ArgumentParser:
     p_compound_borrow_capacity.add_argument("--chain", default="base", choices=["base"], help="Compound III Base Sepolia chain label")
     p_compound_borrow_capacity.add_argument("--market", default="usdc", choices=["usdc", "weth"], help="Compound III market")
     p_compound_borrow_capacity.set_defaults(func=run_compound_borrow_capacity)
+
+    p_balancer_swap_sim = subparsers.add_parser(
+        "balancer-swap-simulate",
+        help="POST /protocols/balancer-v3/swap/simulate",
+    )
+    add_global_flags(p_balancer_swap_sim)
+    add_balancer_swap_flags(p_balancer_swap_sim)
+    p_balancer_swap_sim.set_defaults(func=run_balancer_swap_simulate)
+
+    p_balancer_swap = subparsers.add_parser(
+        "balancer-swap",
+        help="POST /protocols/balancer-v3/swap",
+    )
+    add_global_flags(p_balancer_swap)
+    add_balancer_swap_flags(p_balancer_swap)
+    add_payment_proof_flags(p_balancer_swap)
+    p_balancer_swap.set_defaults(func=run_balancer_swap)
+
+    p_balancer_quote = subparsers.add_parser(
+        "balancer-quote",
+        help="POST /protocols/balancer-v3/swap/quote",
+    )
+    add_global_flags(p_balancer_quote)
+    add_balancer_swap_flags(p_balancer_quote)
+    p_balancer_quote.set_defaults(func=run_balancer_quote)
+
+    for command, action, mode, help_text in [
+        (
+            "balancer-add-liquidity-quote",
+            "add",
+            "quote",
+            "POST /protocols/balancer-v3/liquidity/add/quote",
+        ),
+        (
+            "balancer-add-liquidity-simulate",
+            "add",
+            "simulate",
+            "POST /protocols/balancer-v3/liquidity/add/simulate",
+        ),
+        (
+            "balancer-add-liquidity",
+            "add",
+            "execute",
+            "POST /protocols/balancer-v3/liquidity/add",
+        ),
+    ]:
+        liquidity_parser = subparsers.add_parser(command, help=help_text)
+        add_global_flags(liquidity_parser)
+        add_balancer_add_liquidity_flags(liquidity_parser)
+        if mode == "execute":
+            add_payment_proof_flags(liquidity_parser)
+        liquidity_parser.set_defaults(
+            func=run_balancer_liquidity,
+            liquidity_action=action,
+            liquidity_mode=mode,
+        )
+
+    for command, action, mode, help_text in [
+        (
+            "balancer-remove-liquidity-quote",
+            "remove",
+            "quote",
+            "POST /protocols/balancer-v3/liquidity/remove/quote",
+        ),
+        (
+            "balancer-remove-liquidity-simulate",
+            "remove",
+            "simulate",
+            "POST /protocols/balancer-v3/liquidity/remove/simulate",
+        ),
+        (
+            "balancer-remove-liquidity",
+            "remove",
+            "execute",
+            "POST /protocols/balancer-v3/liquidity/remove",
+        ),
+    ]:
+        liquidity_parser = subparsers.add_parser(command, help=help_text)
+        add_global_flags(liquidity_parser)
+        add_balancer_remove_liquidity_flags(liquidity_parser)
+        if mode == "execute":
+            add_payment_proof_flags(liquidity_parser)
+        liquidity_parser.set_defaults(
+            func=run_balancer_liquidity,
+            liquidity_action=action,
+            liquidity_mode=mode,
+        )
+
+    p_balancer_pool = subparsers.add_parser(
+        "balancer-pool",
+        help="GET /protocols/balancer-v3/pool",
+    )
+    add_global_flags(p_balancer_pool)
+    p_balancer_pool.add_argument(
+        "--chain", default="ethereum", choices=["ethereum"], help="Ethereum Sepolia"
+    )
+    p_balancer_pool.add_argument("--pool", required=True, help="Balancer V3 pool address")
+    p_balancer_pool.set_defaults(func=run_balancer_pool)
+
+    p_balancer_balances = subparsers.add_parser(
+        "balancer-balances",
+        help="GET /protocols/balancer-v3/balances",
+    )
+    add_global_flags(p_balancer_balances)
+    p_balancer_balances.add_argument("--agent-id", required=True, help="Agent identifier")
+    p_balancer_balances.add_argument(
+        "--chain", default="ethereum", choices=["ethereum"], help="Ethereum Sepolia"
+    )
+    p_balancer_balances.add_argument(
+        "--pool", required=True, help="Balancer V3 pool address"
+    )
+    p_balancer_balances.set_defaults(func=run_balancer_balances)
 
     p_gmx_create_order_sim = subparsers.add_parser("gmx-create-order-simulate", help="POST /protocols/gmx-v2/orders/simulate")
     add_global_flags(p_gmx_create_order_sim)

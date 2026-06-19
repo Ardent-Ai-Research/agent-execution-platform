@@ -350,6 +350,93 @@ ardent aave-balances --agent-id my-agent-001
 ardent aave-position --agent-id my-agent-001
 ```
 
+## Balancer V3 Ethereum Sepolia
+
+Balancer V3 swaps and liquidity actions should use the typed endpoints instead
+of manually encoding Permit2 and Router calls. See
+[Balancer V3 Ethereum Sepolia](../balancer-v3.md) for the full reference.
+
+Inspect the pool and request a quote:
+
+```bash
+curl -X GET "$BASE_URL/protocols/balancer-v3/pool?chain=ethereum&pool=0xYourBalancerV3Pool" \
+  -H "X-API-Key: $API_KEY"
+
+curl -X POST "$BASE_URL/protocols/balancer-v3/swap/quote" \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: $API_KEY" \
+  -d '{
+    "agent_id": "my-agent-001",
+    "chain": "ethereum",
+    "pool": "0xYourBalancerV3Pool",
+    "token_in": "0xFirstPoolToken",
+    "token_out": "0xSecondPoolToken",
+    "swap_kind": "exact_in",
+    "amount_raw": "1000000",
+    "slippage_bps": 100
+  }'
+```
+
+CLI equivalents:
+
+```bash
+ardent balancer-pool --pool 0xYourBalancerV3Pool
+
+ardent balancer-quote \
+  --agent-id my-agent-001 \
+  --pool 0xYourBalancerV3Pool \
+  --token-in 0xFirstPoolToken \
+  --token-out 0xSecondPoolToken \
+  --swap-kind exact_in \
+  --amount-raw 1000000
+
+ardent balancer-swap-simulate \
+  --agent-id my-agent-001 \
+  --pool 0xYourBalancerV3Pool \
+  --token-in 0xFirstPoolToken \
+  --token-out 0xSecondPoolToken \
+  --swap-kind exact_in \
+  --amount-raw 1000000
+
+ardent balancer-swap \
+  --agent-id my-agent-001 \
+  --pool 0xYourBalancerV3Pool \
+  --token-in 0xFirstPoolToken \
+  --token-out 0xSecondPoolToken \
+  --swap-kind exact_in \
+  --amount-raw 1000000
+
+ardent balancer-add-liquidity-simulate \
+  --agent-id my-agent-001 \
+  --pool 0xYourBalancerV3Pool \
+  --amount-in 0xFirstPoolToken=1000000 \
+  --amount-in 0xSecondPoolToken=1000000
+
+ardent balancer-add-liquidity \
+  --agent-id my-agent-001 \
+  --pool 0xYourBalancerV3Pool \
+  --amount-in 0xFirstPoolToken=1000000 \
+  --amount-in 0xSecondPoolToken=1000000
+
+ardent balancer-remove-liquidity-simulate \
+  --agent-id my-agent-001 \
+  --pool 0xYourBalancerV3Pool \
+  --bpt-amount-in-raw 1000000000000000000
+
+ardent balancer-remove-liquidity \
+  --agent-id my-agent-001 \
+  --pool 0xYourBalancerV3Pool \
+  --bpt-amount-in-raw 1000000000000000000
+```
+
+The adapter resets existing approval, grants bounded ERC-20 and Permit2
+allowances, executes the Router swap, then clears both allowance layers in one
+atomic batch. The server derives the limit from a live Router quote when
+`limit_raw` is omitted, then runs the normal full UserOperation simulation.
+Liquidity additions use the same bounded approval and cleanup pattern.
+They support up to three deposited token addresses per operation. Proportional
+removals burn BPT directly and require no approval.
+
 ## GMX V2 Arbitrum Sepolia
 
 For GMX V2, prefer the typed protocol endpoints instead of manually encoding

@@ -77,6 +77,61 @@ ardent compound-balances --agent-id my-agent-001
 ardent compound-borrow-capacity --agent-id my-agent-001
 ```
 
+### Balancer V3 Ethereum Sepolia
+
+Balancer pool and token addresses are supplied per request and verified against
+the V3 Vault. `balancer-pool` inspects one provided address; it does not list
+every pool. Find pool addresses through `https://test.balancer.fi/` or
+Balancer's `https://api-v3.balancer.fi/graphql` API. Inspect and quote a pool
+before simulation because pool-specific hooks can disable swaps even when a
+pool is registered.
+
+```bash
+ardent balancer-pool --pool 0xYourBalancerV3Pool
+ardent balancer-balances --agent-id my-agent-001 --pool 0xYourBalancerV3Pool
+
+ardent balancer-quote \
+  --agent-id my-agent-001 \
+  --pool 0xYourBalancerV3Pool \
+  --token-in 0xFirstPoolToken \
+  --token-out 0xSecondPoolToken \
+  --swap-kind exact_in \
+  --amount-raw 1000000
+
+ardent balancer-swap-simulate \
+  --agent-id my-agent-001 \
+  --pool 0xYourBalancerV3Pool \
+  --token-in 0xFirstPoolToken \
+  --token-out 0xSecondPoolToken \
+  --swap-kind exact_in \
+  --amount-raw 1000000
+
+ardent balancer-swap \
+  --agent-id my-agent-001 \
+  --pool 0xYourBalancerV3Pool \
+  --token-in 0xFirstPoolToken \
+  --token-out 0xSecondPoolToken \
+  --swap-kind exact_in \
+  --amount-raw 1000000
+
+ardent balancer-add-liquidity-simulate \
+  --agent-id my-agent-001 \
+  --pool 0xYourBalancerV3Pool \
+  --amount-in 0xFirstPoolToken=1000000 \
+  --amount-in 0xSecondPoolToken=1000000
+
+ardent balancer-remove-liquidity-simulate \
+  --agent-id my-agent-001 \
+  --pool 0xYourBalancerV3Pool \
+  --bpt-amount-in-raw 1000000000000000000
+```
+
+The server quotes the Router and derives a 1% slippage limit by default.
+Balancer input tokens are approved through Permit2 and both approval layers are
+cleared after swaps and liquidity additions inside the same atomic UserOperation
+batch. Proportional removal burns BPT directly and requires no token approval.
+Liquidity additions accept up to three deposited token addresses per operation.
+
 ### GMX V2 Arbitrum Sepolia
 
 Use raw GMX values for order sizing. Market increase `size_delta_usd_raw` and
@@ -163,4 +218,4 @@ ruby docs/agent-integration/openapi/bundle.rb
 
 ## Notes
 
-- MCP tools available: `ardent_health`, `ardent_feed_recent`, `ardent_get_wallet`, `ardent_wallet_balance`, `ardent_simulate`, `ardent_execute`, Aave tools (`ardent_aave_supply_simulate`, `ardent_aave_supply_execute`, `ardent_aave_withdraw_simulate`, `ardent_aave_withdraw_execute`, `ardent_aave_repay_simulate`, `ardent_aave_repay_execute`, `ardent_aave_borrow_simulate`, `ardent_aave_borrow_execute`, `ardent_aave_position`, `ardent_aave_balances`), Compound tools (`ardent_compound_supply_simulate`, `ardent_compound_supply_execute`, `ardent_compound_withdraw_simulate`, `ardent_compound_withdraw_execute`, `ardent_compound_repay_simulate`, `ardent_compound_repay_execute`, `ardent_compound_borrow_simulate`, `ardent_compound_borrow_execute`, `ardent_compound_position`, `ardent_compound_balances`, `ardent_compound_borrow_capacity`), GMX tools (`ardent_gmx_create_order_simulate`, `ardent_gmx_create_order_execute`, `ardent_gmx_cancel_order_simulate`, `ardent_gmx_cancel_order_execute`), and `ardent_status`
+- MCP tools available: `ardent_health`, `ardent_feed_recent`, `ardent_get_wallet`, `ardent_wallet_balance`, `ardent_simulate`, `ardent_execute`, Aave tools (`ardent_aave_supply_simulate`, `ardent_aave_supply_execute`, `ardent_aave_withdraw_simulate`, `ardent_aave_withdraw_execute`, `ardent_aave_repay_simulate`, `ardent_aave_repay_execute`, `ardent_aave_borrow_simulate`, `ardent_aave_borrow_execute`, `ardent_aave_position`, `ardent_aave_balances`), Compound tools (`ardent_compound_supply_simulate`, `ardent_compound_supply_execute`, `ardent_compound_withdraw_simulate`, `ardent_compound_withdraw_execute`, `ardent_compound_repay_simulate`, `ardent_compound_repay_execute`, `ardent_compound_borrow_simulate`, `ardent_compound_borrow_execute`, `ardent_compound_position`, `ardent_compound_balances`, `ardent_compound_borrow_capacity`), Balancer swap, liquidity, pool, and balance tools, GMX tools (`ardent_gmx_create_order_simulate`, `ardent_gmx_create_order_execute`, `ardent_gmx_cancel_order_simulate`, `ardent_gmx_cancel_order_execute`), and `ardent_status`

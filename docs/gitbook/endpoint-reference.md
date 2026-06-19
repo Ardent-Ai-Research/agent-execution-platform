@@ -38,8 +38,9 @@ curl -X GET "$BASE_URL/feed/recent?limit=12"
 4. `POST /execute`
 5. Aave V3 typed protocol endpoints
 6. Compound III typed protocol endpoints
-7. GMX V2 typed protocol endpoints
-8. `GET /status/:id`
+7. Balancer V3 typed protocol endpoints
+8. GMX V2 typed protocol endpoints
+9. `GET /status/:id`
 
 Authentication:
 
