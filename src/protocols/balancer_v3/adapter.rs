@@ -518,14 +518,39 @@ pub fn compile_remove_liquidity(
     Ok(ExecutionRequest {
         agent_id: req.agent_id.clone(),
         chain: req.chain.clone(),
-        target_contract: format!("{router:?}"),
-        calldata: encode_remove_liquidity_proportional(pool, bpt_amount_in, min_amounts_out),
+        target_contract: String::new(),
+        calldata: String::new(),
         value: "0".to_string(),
         strategy_id: req
             .strategy_id
             .clone()
             .or_else(|| Some("balancer-v3-sepolia-remove-liquidity".to_string())),
-        batch_calls: None,
+        batch_calls: Some(vec![
+            BatchCall {
+                target_contract: format!("{pool:?}"),
+                calldata: encode_erc20_approve(router, U256::zero()),
+                value: "0".to_string(),
+            },
+            BatchCall {
+                target_contract: format!("{pool:?}"),
+                calldata: encode_erc20_approve(router, bpt_amount_in),
+                value: "0".to_string(),
+            },
+            BatchCall {
+                target_contract: format!("{router:?}"),
+                calldata: encode_remove_liquidity_proportional(
+                    pool,
+                    bpt_amount_in,
+                    min_amounts_out,
+                ),
+                value: "0".to_string(),
+            },
+            BatchCall {
+                target_contract: format!("{pool:?}"),
+                calldata: encode_erc20_approve(router, U256::zero()),
+                value: "0".to_string(),
+            },
+        ]),
         callback_url: req.callback_url.clone(),
     })
 }
@@ -1182,19 +1207,41 @@ mod tests {
     }
 
     #[test]
-    fn compiles_remove_liquidity_without_token_approval() {
+    fn compiles_remove_liquidity_with_bpt_router_approval() {
         let req = remove_liquidity_request();
         let compiled =
             compile_remove_liquidity(&req, &[U256::from(400_000u64), U256::from(500_000u64)])
                 .unwrap();
-
-        assert!(compiled.batch_calls.is_none());
+        let calls = compiled.batch_calls.unwrap();
+        assert_eq!(calls.len(), 4);
         assert_eq!(
-            &compiled.calldata[2..10],
+            calls[0].target_contract.to_ascii_lowercase(),
+            req.pool.to_ascii_lowercase()
+        );
+        assert_eq!(
+            calls[1].target_contract.to_ascii_lowercase(),
+            req.pool.to_ascii_lowercase()
+        );
+        assert_eq!(
+            calls[2].target_contract.to_ascii_lowercase(),
+            BALANCER_V3_SEPOLIA_ROUTER.to_ascii_lowercase()
+        );
+        assert_eq!(
+            calls[3].target_contract.to_ascii_lowercase(),
+            req.pool.to_ascii_lowercase()
+        );
+        assert_eq!(calldata_word(&calls[0].calldata, 1), U256::zero());
+        assert_eq!(
+            calldata_word(&calls[1].calldata, 1),
+            U256::from_dec_str(&req.bpt_amount_in_raw).unwrap()
+        );
+        assert_eq!(
+            &calls[2].calldata[2..10],
             hex::encode(selector(
                 "removeLiquidityProportional(address,uint256,uint256[],bool,bytes)"
             ))
         );
+        assert_eq!(calldata_word(&calls[3].calldata, 1), U256::zero());
     }
 
     #[test]

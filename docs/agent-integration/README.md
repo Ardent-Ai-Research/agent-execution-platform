@@ -129,7 +129,8 @@ ardent balancer-remove-liquidity-simulate \
 The server quotes the Router and derives a 1% slippage limit by default.
 Balancer input tokens are approved through Permit2 and both approval layers are
 cleared after swaps and liquidity additions inside the same atomic UserOperation
-batch. Proportional removal burns BPT directly and requires no token approval.
+batch. Proportional removal grants the Router an exact, temporary BPT allowance,
+executes the removal, and clears the allowance in the same atomic batch.
 Liquidity additions accept up to three deposited token addresses per operation.
 
 ### GMX V2 Arbitrum Sepolia

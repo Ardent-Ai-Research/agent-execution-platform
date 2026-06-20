@@ -161,6 +161,8 @@ ardent balancer-remove-liquidity \
 
 The quote derives a minimum for every output token. Advanced callers may supply
 repeatable `--min-amount-out TOKEN_ADDRESS=RAW_AMOUNT` values instead.
+Execution atomically resets the BPT allowance, approves the Router for the exact
+BPT input, removes liquidity, and clears the remaining allowance.
 
 ## Quote an exact-input swap
 

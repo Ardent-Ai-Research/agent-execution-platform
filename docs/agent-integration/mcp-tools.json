@@ -2285,7 +2285,7 @@
     },
     {
       "name": "ardent_balancer_remove_liquidity_simulate",
-      "description": "Quote and fully simulate burning BPT for a proportional Balancer V3 liquidity removal.",
+      "description": "Quote and fully simulate exact BPT Router approval, proportional Balancer V3 liquidity removal, and allowance cleanup.",
       "method": "POST",
       "path": "/protocols/balancer-v3/liquidity/remove/simulate",
       "authRequired": true,
@@ -2319,7 +2319,7 @@
     },
     {
       "name": "ardent_balancer_remove_liquidity_execute",
-      "description": "Execute a proportional Balancer V3 liquidity removal through the agent smart wallet.",
+      "description": "Execute a proportional Balancer V3 liquidity removal with an exact temporary BPT Router allowance.",
       "method": "POST",
       "path": "/protocols/balancer-v3/liquidity/remove",
       "authRequired": true,

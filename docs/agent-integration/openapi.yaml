@@ -627,8 +627,8 @@ paths:
   "/protocols/balancer-v3/liquidity/remove/simulate":
     post:
       summary: Simulate a proportional Balancer V3 liquidity removal
-      description: Quotes and fully simulates burning an exact BPT amount for all
-        registered pool tokens.
+      description: Quotes and fully simulates a temporary exact BPT Router approval,
+        proportional removal for all registered pool tokens, and allowance cleanup.
       requestBody:
         required: true
         content:

@@ -435,7 +435,8 @@ atomic batch. The server derives the limit from a live Router quote when
 `limit_raw` is omitted, then runs the normal full UserOperation simulation.
 Liquidity additions use the same bounded approval and cleanup pattern.
 They support up to three deposited token addresses per operation. Proportional
-removals burn BPT directly and require no approval.
+removals use an exact temporary BPT allowance for the Router and clear it after
+the removal inside the same atomic batch.
 
 ## GMX V2 Arbitrum Sepolia
 
