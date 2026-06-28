@@ -3,16 +3,23 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>
-      AI Agent Blockchain Execution Platform — The Execution Layer for Autonomous AI Agents
-    </title>
+    <title>Ardent Research | Onchain Execution for AI Agents</title>
     <meta
       name="description"
-      content="Secure, production-grade infrastructure for AI agents to execute payments, transactions, and smart contract calls onchain."
+      content="Ardent gives AI agents secure smart wallets, simulation-first execution, gas sponsorship, and typed DeFi actions across Ethereum, Base, and Arbitrum."
     />
+    <meta name="theme-color" content="#f2f7f4" />
+    <meta property="og:title" content="Ardent Research | Onchain Execution for AI Agents" />
+    <meta
+      property="og:description"
+      content="Smart wallets, transaction simulation, gas sponsorship, and typed protocol actions for autonomous AI agents."
+    />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://ardentresearch.xyz" />
+    <meta name="twitter:card" content="summary_large_image" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link
-      href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Geist+Mono:wght@300;400;500&family=Instrument+Serif:ital,wght@0,400;1,400&family=Manrope:wght@300;400;500;600;700;800&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Bebas+Neue&amp;family=Geist+Mono:wght@300;400;500&amp;family=Instrument+Serif:ital,wght@0,400;1,400&amp;family=Manrope:wght@300;400;500;600;700;800&amp;display=swap"
       rel="stylesheet"
     />
     <style>
@@ -70,6 +77,9 @@
       html {
         scroll-behavior: smooth;
         font-size: 16px;
+      }
+      section[id] {
+        scroll-margin-top: 60px;
       }
       body {
         background: var(--void);
@@ -162,6 +172,7 @@
         font-size: 20px;
         letter-spacing: 0.15em;
         color: var(--white);
+        text-decoration: none;
       }
       .nav-logo span {
         color: var(--cyan);
@@ -221,6 +232,65 @@
         padding: 5px 12px;
         border-radius: 2px;
         animation: pulse-green 3s ease infinite;
+      }
+      .nav-cta {
+        display: inline-flex;
+        align-items: center;
+        min-height: 32px;
+        padding: 0 14px;
+        border: 1px solid var(--white);
+        background: var(--white);
+        color: var(--void);
+        font-family: "Geist Mono", monospace;
+        font-size: 9px;
+        font-weight: 500;
+        letter-spacing: 0.12em;
+        text-decoration: none;
+        text-transform: uppercase;
+        transition:
+          background 0.2s,
+          color 0.2s;
+      }
+      .nav-cta:hover {
+        background: transparent;
+        color: var(--white);
+      }
+      .menu-toggle {
+        display: none;
+        width: 34px;
+        height: 34px;
+        border: 1px solid var(--line2);
+        background: transparent;
+        position: relative;
+      }
+      .menu-toggle::before,
+      .menu-toggle::after {
+        content: "";
+        position: absolute;
+        left: 9px;
+        width: 14px;
+        height: 1px;
+        background: var(--white);
+        transition:
+          top 0.2s,
+          transform 0.2s;
+      }
+      .menu-toggle::before {
+        top: 12px;
+      }
+      .menu-toggle::after {
+        top: 20px;
+      }
+      .menu-toggle[aria-expanded="true"]::before {
+        top: 16px;
+        transform: rotate(45deg);
+      }
+      .menu-toggle[aria-expanded="true"]::after {
+        top: 16px;
+        transform: rotate(-45deg);
+      }
+      .mobile-nav {
+        display: none;
       }
       @keyframes pulse-green {
         0%,
@@ -326,7 +396,8 @@
 
       .hero-actions {
         display: flex;
-        gap: 16px;
+        flex-wrap: wrap;
+        gap: 10px;
         align-items: center;
         opacity: 0;
         animation: fadeUp 0.8s 0.95s ease forwards;
@@ -1398,6 +1469,446 @@
         letter-spacing: 0.05em;
       }
 
+      /* WEBSITE EXPANSION */
+      .section-heading-row {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(280px, 420px);
+        gap: 64px;
+        align-items: end;
+        margin-bottom: 56px;
+      }
+      .section-heading-row h2 {
+        margin-bottom: 0;
+      }
+      .section-intro {
+        color: var(--mid);
+        font-size: 15px;
+        line-height: 1.8;
+        max-width: 42rem;
+      }
+      .section-intro strong {
+        color: var(--white);
+        font-weight: 600;
+      }
+
+      .protocol-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        border-top: 1px solid var(--line);
+        border-left: 1px solid var(--line);
+      }
+      .protocol-card {
+        min-height: 330px;
+        padding: 34px;
+        border-right: 1px solid var(--line);
+        border-bottom: 1px solid var(--line);
+        display: flex;
+        flex-direction: column;
+        position: relative;
+        overflow: hidden;
+        transition:
+          background 0.25s,
+          border-color 0.25s;
+      }
+      .protocol-card:hover {
+        background: var(--ice);
+        border-color: var(--line2);
+      }
+      .protocol-top {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 16px;
+        margin-bottom: 48px;
+      }
+      .protocol-mark {
+        width: 48px;
+        height: 48px;
+        display: grid;
+        place-items: center;
+        border: 1px solid var(--line2);
+        background: var(--void);
+        color: var(--white);
+        font-family: "Bebas Neue", sans-serif;
+        font-size: 18px;
+        letter-spacing: 0.08em;
+      }
+      .protocol-mark img {
+        display: block;
+        width: 38px;
+        height: 38px;
+        object-fit: contain;
+      }
+      .protocol-chain {
+        font-family: "Geist Mono", monospace;
+        color: var(--dim);
+        font-size: 9px;
+        letter-spacing: 0.1em;
+        text-align: right;
+        text-transform: uppercase;
+      }
+      .protocol-chain span {
+        display: block;
+        color: var(--green);
+        margin-top: 5px;
+      }
+      .protocol-name {
+        color: var(--white);
+        font-family: "Bebas Neue", sans-serif;
+        font-size: 36px;
+        letter-spacing: 0;
+        line-height: 1;
+        margin-bottom: 14px;
+      }
+      .protocol-desc {
+        color: var(--dim);
+        font-size: 13px;
+        line-height: 1.7;
+        max-width: 34rem;
+        margin-bottom: 30px;
+      }
+      .action-list {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 7px;
+        margin-top: auto;
+      }
+      .action-list span {
+        border: 1px solid var(--line);
+        color: var(--mid);
+        font-family: "Geist Mono", monospace;
+        font-size: 9px;
+        padding: 5px 8px;
+        text-transform: uppercase;
+      }
+
+      .network-shell {
+        border: 1px solid var(--line);
+      }
+      .network-row {
+        display: grid;
+        grid-template-columns: 1.1fr 0.8fr 1.8fr 0.5fr;
+        align-items: center;
+        min-height: 84px;
+        padding: 18px 24px;
+        border-bottom: 1px solid var(--line);
+      }
+      .network-row:last-child {
+        border-bottom: 0;
+      }
+      .network-row.network-head {
+        min-height: 42px;
+        background: var(--void2);
+        color: var(--dim);
+        font-family: "Geist Mono", monospace;
+        font-size: 9px;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+      }
+      .network-name {
+        color: var(--white);
+        font-size: 15px;
+        font-weight: 600;
+      }
+      .network-name small {
+        display: block;
+        color: var(--dim);
+        font-family: "Geist Mono", monospace;
+        font-size: 9px;
+        font-weight: 400;
+        margin-top: 3px;
+        text-transform: uppercase;
+      }
+      .network-chain-id,
+      .network-protocols,
+      .network-status {
+        color: var(--mid);
+        font-family: "Geist Mono", monospace;
+        font-size: 11px;
+      }
+      .network-status {
+        color: var(--green);
+        text-align: right;
+        text-transform: uppercase;
+      }
+      .network-note {
+        display: flex;
+        justify-content: space-between;
+        gap: 32px;
+        padding: 18px 24px;
+        border-top: 1px solid var(--line);
+        color: var(--dim);
+        font-family: "Geist Mono", monospace;
+        font-size: 10px;
+      }
+      .network-note a {
+        color: var(--white);
+        text-decoration: none;
+      }
+
+      .developer-shell {
+        display: grid;
+        grid-template-columns: 280px minmax(0, 1fr);
+        border: 1px solid var(--line);
+        min-height: 480px;
+      }
+      .developer-tabs {
+        border-right: 1px solid var(--line);
+        background: var(--void2);
+      }
+      .developer-tab {
+        width: 100%;
+        min-height: 96px;
+        padding: 20px 22px;
+        border: 0;
+        border-bottom: 1px solid var(--line);
+        background: transparent;
+        color: var(--dim);
+        cursor: none;
+        font-family: "Manrope", sans-serif;
+        text-align: left;
+        transition:
+          background 0.2s,
+          color 0.2s;
+      }
+      .developer-tab strong {
+        display: block;
+        color: inherit;
+        font-size: 13px;
+        letter-spacing: 0;
+        margin-bottom: 4px;
+      }
+      .developer-tab span {
+        font-family: "Geist Mono", monospace;
+        font-size: 9px;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+      .developer-tab:hover,
+      .developer-tab.active {
+        background: var(--ice);
+        color: var(--white);
+      }
+      .developer-tab.active {
+        box-shadow: inset 2px 0 0 var(--green);
+      }
+      .developer-content {
+        min-width: 0;
+        padding: 42px;
+      }
+      .developer-panel {
+        display: none;
+      }
+      .developer-panel.active {
+        display: block;
+        animation: panelIn 0.3s ease;
+      }
+      @keyframes panelIn {
+        from {
+          opacity: 0;
+          transform: translateY(5px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+      .developer-kicker {
+        color: var(--green);
+        font-family: "Geist Mono", monospace;
+        font-size: 9px;
+        letter-spacing: 0.14em;
+        margin-bottom: 16px;
+        text-transform: uppercase;
+      }
+      .developer-title {
+        color: var(--white);
+        font-family: "Bebas Neue", sans-serif;
+        font-size: 42px;
+        letter-spacing: 0;
+        line-height: 1;
+        margin-bottom: 14px;
+      }
+      .developer-copy {
+        color: var(--dim);
+        font-size: 13px;
+        line-height: 1.7;
+        max-width: 42rem;
+        margin-bottom: 28px;
+      }
+      .command-block {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 18px;
+        min-height: 64px;
+        padding: 14px 16px;
+        border: 1px solid var(--line);
+        background: var(--void2);
+        margin-bottom: 22px;
+      }
+      .command-block code {
+        min-width: 0;
+        color: var(--mid);
+        font-family: "Geist Mono", monospace;
+        font-size: 11px;
+        overflow-wrap: anywhere;
+      }
+      .copy-command {
+        flex: 0 0 auto;
+        min-width: 58px;
+        min-height: 30px;
+        border: 1px solid var(--line2);
+        background: transparent;
+        color: var(--white);
+        cursor: none;
+        font-family: "Geist Mono", monospace;
+        font-size: 9px;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+      }
+      .developer-links {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 18px;
+      }
+      .developer-links a {
+        color: var(--white);
+        font-family: "Geist Mono", monospace;
+        font-size: 10px;
+        letter-spacing: 0.06em;
+        text-decoration: none;
+        text-transform: uppercase;
+      }
+      .developer-links a:hover {
+        color: var(--green);
+      }
+
+      .trust-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 1px;
+        background: var(--line);
+        border: 1px solid var(--line);
+      }
+      .trust-item {
+        background: var(--void);
+        padding: 30px;
+        min-height: 220px;
+      }
+      .alt .trust-item {
+        background: var(--void2);
+      }
+      .trust-num {
+        color: var(--green);
+        font-family: "Geist Mono", monospace;
+        font-size: 10px;
+        margin-bottom: 48px;
+      }
+      .trust-title {
+        color: var(--white);
+        font-size: 15px;
+        font-weight: 600;
+        margin-bottom: 12px;
+      }
+      .trust-copy {
+        color: var(--dim);
+        font-size: 12px;
+        line-height: 1.7;
+      }
+
+      .faq-list {
+        border-top: 1px solid var(--line);
+      }
+      .faq-item {
+        border-bottom: 1px solid var(--line);
+      }
+      .faq-question {
+        width: 100%;
+        min-height: 78px;
+        display: grid;
+        grid-template-columns: 36px minmax(0, 1fr) 24px;
+        gap: 18px;
+        align-items: center;
+        border: 0;
+        background: transparent;
+        color: var(--white);
+        cursor: none;
+        font-family: "Manrope", sans-serif;
+        font-size: 14px;
+        font-weight: 600;
+        text-align: left;
+      }
+      .faq-index {
+        color: var(--dim);
+        font-family: "Geist Mono", monospace;
+        font-size: 9px;
+      }
+      .faq-icon {
+        color: var(--dim);
+        font-family: "Geist Mono", monospace;
+        font-size: 17px;
+        font-weight: 300;
+        text-align: center;
+        transition: transform 0.2s;
+      }
+      .faq-question[aria-expanded="true"] .faq-icon {
+        transform: rotate(45deg);
+      }
+      .faq-answer {
+        display: grid;
+        grid-template-rows: 0fr;
+        transition: grid-template-rows 0.25s ease;
+      }
+      .faq-answer > div {
+        overflow: hidden;
+      }
+      .faq-answer p {
+        max-width: 760px;
+        padding: 0 78px 28px;
+        color: var(--dim);
+        font-size: 13px;
+        line-height: 1.8;
+      }
+      .faq-item.open .faq-answer {
+        grid-template-rows: 1fr;
+      }
+
+      .footer-product {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+      .footer-nav-groups {
+        display: grid;
+        grid-template-columns: repeat(3, auto);
+        gap: 46px;
+      }
+      .footer-nav-group {
+        display: flex;
+        flex-direction: column;
+        gap: 9px;
+      }
+      .footer-nav-label {
+        color: var(--white);
+        font-family: "Geist Mono", monospace;
+        font-size: 9px;
+        letter-spacing: 0.12em;
+        margin-bottom: 4px;
+        text-transform: uppercase;
+      }
+      .footer-nav-group a {
+        color: var(--dim);
+        font-family: "Geist Mono", monospace;
+        font-size: 9px;
+        letter-spacing: 0.06em;
+        text-decoration: none;
+        text-transform: uppercase;
+      }
+      .footer-nav-group a:hover {
+        color: var(--white);
+      }
+
       /* ANIMATIONS */
       @keyframes fadeUp {
         from {
@@ -1436,8 +1947,37 @@
         transition-delay: 0.36s;
       }
 
+      @media (max-width: 1120px) {
+        nav {
+          padding: 0 28px;
+        }
+        .nav-links {
+          gap: 18px;
+        }
+        .nav-badge {
+          display: none;
+        }
+        .protocol-card {
+          min-height: 350px;
+        }
+        footer {
+          grid-template-columns: 1fr auto;
+        }
+        .ft-copy {
+          grid-column: 1 / -1;
+          text-align: left;
+        }
+      }
+
       /* MOBILE */
       @media (max-width: 900px) {
+        body {
+          cursor: auto;
+        }
+        #cursor,
+        #cursor-ring {
+          display: none;
+        }
         .hero {
           grid-template-columns: 1fr;
           grid-template-rows: auto auto auto;
@@ -1459,11 +1999,144 @@
         nav {
           padding: 0 24px;
         }
-        .nav-links {
+        .nav-links,
+        .nav-cta {
           display: none;
+        }
+        .nav-right {
+          gap: 8px;
+        }
+        .theme-toggle {
+          min-height: 34px;
+        }
+        .menu-toggle {
+          display: block;
+        }
+        .mobile-nav {
+          position: fixed;
+          z-index: 490;
+          top: 60px;
+          left: 0;
+          right: 0;
+          display: grid;
+          grid-template-rows: 0fr;
+          background: var(--nav-bg);
+          backdrop-filter: blur(24px);
+          -webkit-backdrop-filter: blur(24px);
+          border-bottom: 1px solid transparent;
+          transition:
+            grid-template-rows 0.25s ease,
+            border-color 0.25s;
+        }
+        .mobile-nav.open {
+          grid-template-rows: 1fr;
+          border-color: var(--line);
+        }
+        .mobile-nav-inner {
+          overflow: hidden;
+        }
+        .mobile-nav-links {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          padding: 20px 24px 24px;
+          gap: 1px;
+        }
+        .mobile-nav-links a {
+          min-height: 54px;
+          display: flex;
+          align-items: center;
+          padding: 0 14px;
+          border: 1px solid var(--line);
+          color: var(--white);
+          font-family: "Geist Mono", monospace;
+          font-size: 9px;
+          letter-spacing: 0.1em;
+          text-decoration: none;
+          text-transform: uppercase;
         }
         .section {
           padding: 80px 24px;
+        }
+        .section-heading-row {
+          grid-template-columns: 1fr;
+          gap: 24px;
+          margin-bottom: 38px;
+        }
+        .protocol-grid {
+          grid-template-columns: 1fr;
+        }
+        .protocol-card {
+          min-height: 310px;
+          padding: 28px;
+        }
+        .network-row {
+          grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) auto;
+          gap: 12px;
+          padding: 16px;
+        }
+        .network-row > :nth-child(2) {
+          display: none;
+        }
+        .network-protocols {
+          font-size: 9px;
+        }
+        .network-note {
+          flex-direction: column;
+          gap: 8px;
+          padding: 16px;
+        }
+        .developer-shell {
+          grid-template-columns: 1fr;
+        }
+        .developer-tabs {
+          display: grid;
+          grid-template-columns: repeat(3, 1fr);
+          border-right: 0;
+          border-bottom: 1px solid var(--line);
+        }
+        .developer-tab {
+          min-height: 72px;
+          padding: 14px;
+          border-right: 1px solid var(--line);
+          border-bottom: 0;
+        }
+        .developer-tab:last-child {
+          border-right: 0;
+        }
+        .developer-tab span {
+          display: none;
+        }
+        .developer-tab.active {
+          box-shadow: inset 0 -2px 0 var(--green);
+        }
+        .developer-content {
+          padding: 28px;
+        }
+        .developer-title {
+          font-size: 34px;
+        }
+        .command-block {
+          align-items: flex-start;
+          flex-direction: column;
+        }
+        .copy-command {
+          align-self: flex-end;
+        }
+        .trust-grid {
+          grid-template-columns: 1fr;
+        }
+        .trust-item {
+          min-height: 180px;
+        }
+        .trust-num {
+          margin-bottom: 30px;
+        }
+        .faq-question {
+          grid-template-columns: 28px minmax(0, 1fr) 20px;
+          gap: 10px;
+        }
+        .faq-answer p {
+          padding: 0 38px 24px;
         }
         .problem-cols {
           grid-template-columns: 1fr;
@@ -1490,8 +2163,15 @@
         footer {
           grid-template-columns: 1fr;
           gap: 24px;
+          padding: 36px 24px;
+          align-items: start;
+        }
+        .footer-nav-groups {
+          grid-template-columns: repeat(3, 1fr);
+          gap: 20px;
         }
         .ft-copy {
+          grid-column: auto;
           text-align: left;
         }
         .how-track {
@@ -1502,6 +2182,48 @@
           font-size: clamp(44px, 12vw, 72px);
         }
       }
+
+      @media (max-width: 520px) {
+        .theme-toggle {
+          width: 34px;
+          overflow: hidden;
+          color: transparent;
+          padding: 0;
+          position: relative;
+        }
+        .theme-toggle::after {
+          content: "";
+          position: absolute;
+          width: 10px;
+          height: 10px;
+          border: 1px solid var(--white);
+          border-radius: 50%;
+          left: 11px;
+          top: 10px;
+        }
+        .hero-left {
+          padding-top: 64px;
+        }
+        .hero-actions {
+          align-items: stretch;
+          flex-direction: column;
+        }
+        .btn-main,
+        .btn-ghost {
+          justify-content: center;
+          text-align: center;
+        }
+        .hero-bottom {
+          grid-template-columns: 1fr;
+        }
+        .hero-stat {
+          min-height: 92px;
+        }
+        .footer-nav-groups {
+          grid-template-columns: 1fr 1fr;
+          row-gap: 28px;
+        }
+      }
     </style>
   </head>
   <body>
@@ -1510,23 +2232,48 @@
 
     <!-- NAV -->
     <nav>
-      <div class="nav-logo">Ardent <span>Research</span></div>
+      <a class="nav-logo" href="#top" aria-label="Ardent Research home"
+        >Ardent <span>Research</span></a
+      >
       <div class="nav-right">
         <div class="nav-links">
-          <a href="#problem">Problem</a>
           <a href="#platform">Platform</a>
-          <a href="#how">How It Works</a>
-          <a href="#about">About</a>
+          <a href="#integrations">Integrations</a>
+          <a href="#networks">Networks</a>
+          <a href="#developers">Developers</a>
         </div>
         <button class="theme-toggle" id="theme-toggle" type="button">
           Theme: Light
         </button>
         <div class="nav-badge">TESTNET LIVE</div>
+        <a class="nav-cta" href="https://docs.ardentresearch.xyz">Read Docs</a>
+        <button
+          class="menu-toggle"
+          id="menu-toggle"
+          type="button"
+          aria-label="Open navigation"
+          aria-controls="mobile-nav"
+          aria-expanded="false"
+        ></button>
       </div>
     </nav>
+    <div class="mobile-nav" id="mobile-nav" aria-hidden="true" inert>
+      <div class="mobile-nav-inner">
+        <div class="mobile-nav-links">
+          <a href="#platform">Platform</a>
+          <a href="#integrations">Integrations</a>
+          <a href="#networks">Networks</a>
+          <a href="#developers">Developers</a>
+          <a href="#how">How It Works</a>
+          <a href="#waitlist">Get Access</a>
+          <a href="https://docs.ardentresearch.xyz">Documentation</a>
+          <a href="https://github.com/Ardent-Ai-Research" target="_blank" rel="noreferrer">GitHub</a>
+        </div>
+      </div>
+    </div>
 
     <!-- HERO -->
-    <section class="hero">
+    <section class="hero" id="top">
       <div class="hero-left">
         <div class="hero-tag">
           AI Agent Blockchain Execution Platform <span class="ver">V0.1 TESTNET</span>
@@ -1534,15 +2281,16 @@
         <div class="headline">THE<br />EXECUTION<br />LAYER</div>
         <div class="headline-sub">for <em>autonomous</em><br />AI agents</div>
         <p class="hero-desc">
-          AI agents can think. Now give them the power to act, pay, transact,
-          and operate onchain without a human in the loop at every step.
-          <strong>No centralized gatekeepers. No compromises.</strong>
+          Secure smart wallets, simulation-first execution, gas sponsorship,
+          and typed DeFi actions for AI agents operating across Ethereum, Base,
+          and Arbitrum testnets.
+          <strong>One integration from intent to confirmed transaction.</strong>
         </p>
         <div class="hero-actions">
           <a href="#waitlist" class="btn-main"
-            ><span>→ Request Testnet Access</span></a
+            ><span>Get Access</span></a
           >
-          <a href="#platform" class="btn-ghost">View Platform ↓</a>
+          <a href="#developers" class="btn-ghost">Start Building</a>
         </div>
       </div>
 
@@ -1572,8 +2320,8 @@
           <div class="stat-lbl">Key Encryption</div>
         </div>
         <div class="hero-stat">
-          <div class="stat-val">Battle<span>-Tested</span></div>
-          <div class="stat-lbl">Reliability First</div>
+          <div class="stat-val">DeFi<span> Native</span></div>
+          <div class="stat-lbl">Protocol Integrations</div>
         </div>
       </div>
     </section>
@@ -1589,8 +2337,8 @@
 
       <p class="problem-statement reveal d1">
         Today's agents reason, plan, and generate. But when it comes to
-        <em>doing</em> executing a payment, signing a transaction, calling a
-        contract they <mark>hit a wall.</mark>
+        <em>doing</em> - executing a payment, signing a transaction, or calling
+        a contract - they <mark>hit a wall.</mark>
       </p>
 
       <div class="problem-cols reveal d2">
@@ -1604,14 +2352,15 @@
               <span class="icon">X</span> Manage private keys unsafely
             </div>
             <div class="prob-item bad">
-              <span class="icon">X</span> Route actions through centralized APIs
+              <span class="icon">X</span> Hand-build every protocol integration
             </div>
             <div class="prob-item bad">
-              <span class="icon">X</span> APIs revoked, throttled, or surveilled
-              anytime
+              <span class="icon">X</span> Estimate account-abstraction gas
+              manually
             </div>
             <div class="prob-item bad">
-              <span class="icon">X</span> No onchain finality or audit trail
+              <span class="icon">X</span> Stitch together simulation and status
+              tracking
             </div>
             <div class="prob-item bad">
               <span class="icon">X</span> Agent can't confirm its own actions
@@ -1622,22 +2371,22 @@
           <div class="prob-col-label good">ARDENT MODEL</div>
           <div class="prob-list">
             <div class="prob-item good">
-              <span class="icon">OK</span> Production-grade wallet infra,
-              plug-and-play
+              <span class="icon">OK</span> Integrated smart-wallet
+              infrastructure
             </div>
             <div class="prob-item good">
               <span class="icon">OK</span> AES-256-GCM encrypted signing keys
             </div>
             <div class="prob-item good">
-              <span class="icon">OK</span> Sovereign execution no central choke
-              point
+              <span class="icon">OK</span> Typed actions for supported DeFi
+              protocols
             </div>
             <div class="prob-item good">
-              <span class="icon">OK</span> Permissionless, unstoppable
-              infrastructure
+              <span class="icon">OK</span> Stateful UserOperation simulation
             </div>
             <div class="prob-item good">
-              <span class="icon">OK</span> ERC-4337 onchain finality guaranteed
+              <span class="icon">OK</span> ERC-4337 submission and finality
+              tracking
             </div>
             <div class="prob-item good">
               <span class="icon">OK</span> HMAC-signed webhook confirms every
@@ -1667,8 +2416,8 @@
           <div class="feat-title">Encrypted Wallet Infrastructure</div>
           <div class="feat-desc">
             Every agent gets a dedicated smart contract wallet (ERC-4337).
-            Signing keys encrypted at rest with AES-256-GCM. Your agents own
-            their identity nobody can take it.
+            Signing keys are encrypted at rest with AES-256-GCM, giving each
+            agent a persistent onchain identity across supported networks.
           </div>
           <div class="feat-badge">Security Layer</div>
         </div>
@@ -1677,9 +2426,9 @@
           <div class="feat-icon-wrap">AA</div>
           <div class="feat-title">ERC-4337 Execution Pipeline</div>
           <div class="feat-desc">
-            Gasless, account-abstracted transactions via Bundler + Paymaster
-            integration. Agents submit UserOperations, we handle fee
-            sponsorship, simulation, and onchain finality.
+            Account-abstracted transactions via Bundler and Paymaster
+            integrations. Ardent handles simulation, final gas calculation,
+            submission, and onchain status tracking.
           </div>
           <div class="feat-badge">Execution Layer</div>
         </div>
@@ -1700,8 +2449,8 @@
           <div class="feat-title">Payment Verification (x402)</div>
           <div class="feat-desc">
             Onchain ERC-20 payment verification gates execution. Agents can pay
-            for services and verify value transfer trustlessly, without any
-            centralized oracle or middleman.
+            for services and prove value transfer through verifiable
+            transaction data.
           </div>
           <div class="feat-badge">Payment Layer</div>
         </div>
@@ -1711,19 +2460,19 @@
           <div class="feat-title">Signed Webhook Delivery</div>
           <div class="feat-desc">
             Every execution event delivered via HMAC-SHA256 signed webhooks with
-            exponential backoff. Cryptographic proof your agent's action
-            happened exactly when it should.
+            exponential backoff, giving your application authenticated status
+            updates throughout the request lifecycle.
           </div>
           <div class="feat-badge">Reliability</div>
         </div>
         <div class="feat-card">
           <div class="feat-num">06</div>
           <div class="feat-icon-wrap">QA</div>
-          <div class="feat-title">Battle-Tested Coverage</div>
+          <div class="feat-title">Reliability-Focused Coverage</div>
           <div class="feat-desc">
-            Built with correctness as a
-            first-class requirement. This is infrastructure, not a demo. Live
-            on testnet and production-hardening every week.
+            Built with correctness as a first-class requirement. Live on public
+            testnets, covered by focused integration tests, and hardened as the
+            execution surface grows.
           </div>
           <div class="feat-badge">Quality</div>
         </div>
@@ -1735,7 +2484,7 @@
             <div class="feat-desc">
               Not locked to one chain, one bundler, or one agent framework. Plug
               into LangChain, AutoGPT, custom pipelines, or raw API calls, with
-              typed actions for Aave V3, Compound III, and GMX V2.
+              typed actions for Aave V3, Compound III, GMX V2, and Balancer V3.
             </div>
             <div class="feat-badge">Composable</div>
           </div>
@@ -1775,9 +2524,165 @@
 
     <div class="divider"></div>
 
+    <!-- INTEGRATIONS -->
+    <section class="section alt" id="integrations">
+      <div class="s-tag"><span class="num">03</span> Protocol Integrations</div>
+      <div class="section-heading-row">
+        <h2 class="reveal">DEFI.<br /><span class="accent">TYPED.</span></h2>
+        <p class="section-intro reveal d1">
+          Agents work with explicit, protocol-aware actions instead of composing
+          opaque calldata. Every supported write path includes preparation,
+          simulation, and structured execution through the same wallet.
+        </p>
+      </div>
+
+      <div class="protocol-grid reveal d2">
+        <article class="protocol-card">
+          <div class="protocol-top">
+            <div class="protocol-mark">
+              <img src="assets/protocols/aave.svg" alt="" aria-hidden="true" />
+            </div>
+            <div class="protocol-chain">
+              Ethereum Sepolia
+              <span>Integration live</span>
+            </div>
+          </div>
+          <div class="protocol-name">Aave V3</div>
+          <p class="protocol-desc">
+            Manage lending positions with health-factor-aware borrowing,
+            debt-aware maximum repayment, and wallet-level asset visibility.
+          </p>
+          <div class="action-list">
+            <span>Supply</span><span>Withdraw</span><span>Borrow</span>
+            <span>Repay</span><span>Positions</span><span>Balances</span>
+          </div>
+        </article>
+
+        <article class="protocol-card">
+          <div class="protocol-top">
+            <div class="protocol-mark">
+              <img src="assets/protocols/compound.svg" alt="" aria-hidden="true" />
+            </div>
+            <div class="protocol-chain">
+              Base Sepolia
+              <span>Integration live</span>
+            </div>
+          </div>
+          <div class="protocol-name">Compound III</div>
+          <p class="protocol-desc">
+            Interact with the Base USDC and WETH Comet markets, including
+            position data, current rates, and borrow-capacity reads.
+          </p>
+          <div class="action-list">
+            <span>Supply</span><span>Withdraw</span><span>Borrow</span>
+            <span>Repay</span><span>Capacity</span><span>Rates</span>
+          </div>
+        </article>
+
+        <article class="protocol-card">
+          <div class="protocol-top">
+            <div class="protocol-mark">
+              <img src="assets/protocols/gmx.svg" alt="" aria-hidden="true" />
+            </div>
+            <div class="protocol-chain">
+              Arbitrum Sepolia
+              <span>Integration live</span>
+            </div>
+          </div>
+          <div class="protocol-name">GMX V2</div>
+          <p class="protocol-desc">
+            Prepare and execute exchange, increase, decrease, cancel, and claim
+            actions with market metadata, order reads, and token balances.
+          </p>
+          <div class="action-list">
+            <span>Swap</span><span>Increase</span><span>Decrease</span>
+            <span>Cancel</span><span>Claim</span><span>Markets</span>
+          </div>
+        </article>
+
+        <article class="protocol-card">
+          <div class="protocol-top">
+            <div class="protocol-mark">
+              <img src="assets/protocols/balancer.svg" alt="" aria-hidden="true" />
+            </div>
+            <div class="protocol-chain">
+              Ethereum Sepolia
+              <span>Integration live</span>
+            </div>
+          </div>
+          <div class="protocol-name">Balancer V3</div>
+          <p class="protocol-desc">
+            Quote and execute swaps, inspect pool state, and manage proportional
+            liquidity through Balancer's V3 Router and Vault architecture.
+          </p>
+          <div class="action-list">
+            <span>Swap</span><span>Quote</span><span>Add Liquidity</span>
+            <span>Remove Liquidity</span><span>Pools</span><span>Balances</span>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <div class="divider"></div>
+
+    <!-- NETWORKS -->
+    <section class="section" id="networks">
+      <div class="s-tag"><span class="num">04</span> Network Coverage</div>
+      <div class="section-heading-row">
+        <h2 class="reveal">ONE<br />AGENT.<br />THREE CHAINS.</h2>
+        <p class="section-intro reveal d1">
+          A single agent identity can operate through chain-specific smart
+          wallets while your integration keeps one API, one authentication
+          model, and one execution workflow.
+        </p>
+      </div>
+
+      <div class="network-shell reveal d2">
+        <div class="network-row network-head">
+          <div>Network</div>
+          <div>Chain ID</div>
+          <div>Protocol coverage</div>
+          <div style="text-align: right">Status</div>
+        </div>
+        <div class="network-row">
+          <div class="network-name">
+            Ethereum
+            <small>Sepolia testnet</small>
+          </div>
+          <div class="network-chain-id">11155111</div>
+          <div class="network-protocols">Aave V3 · Balancer V3 · Payments</div>
+          <div class="network-status">Live</div>
+        </div>
+        <div class="network-row">
+          <div class="network-name">
+            Base
+            <small>Sepolia testnet</small>
+          </div>
+          <div class="network-chain-id">84532</div>
+          <div class="network-protocols">Compound III · Payments</div>
+          <div class="network-status">Live</div>
+        </div>
+        <div class="network-row">
+          <div class="network-name">
+            Arbitrum
+            <small>Sepolia testnet</small>
+          </div>
+          <div class="network-chain-id">421614</div>
+          <div class="network-protocols">GMX V2 · Payments</div>
+          <div class="network-status">Live</div>
+        </div>
+        <div class="network-note">
+          <span>Account abstraction infrastructure is deployed deterministically across supported networks.</span>
+          <a href="https://docs.ardentresearch.xyz/testnet-guide">Open testnet guide</a>
+        </div>
+      </div>
+    </section>
+
+    <div class="divider"></div>
+
     <!-- HOW IT WORKS -->
     <section class="section alt" id="how">
-      <div class="s-tag"><span class="num">03</span> How It Works</div>
+      <div class="s-tag"><span class="num">05</span> How It Works</div>
       <h2 class="reveal">ONE API<br />CALL. FULL<br />CHAIN.</h2>
       <p class="s-lead reveal d1">
         From agent decision to confirmed onchain transaction with full security,
@@ -1793,7 +2698,7 @@
           <div class="how-step-desc">
             Your AI agent is provisioned a dedicated encrypted smart contract
             wallet and issued an API key. Identity established. Keys secured
-            with AES-256-GCM. Sovereign from day one.
+            with AES-256-GCM. Ready to operate across supported testnets.
           </div>
           <div class="how-step-chip">
             ERC-4337 Smart Wallet · AES-256-GCM · API Key
@@ -1818,7 +2723,7 @@
           <div class="how-step-dot"></div>
           <div class="how-step-tag">Construction</div>
           <div class="how-step-title">
-            Platform Builds & Sponsors the UserOperation
+            Platform Builds &amp; Sponsors the UserOperation
           </div>
           <div class="how-step-desc">
             We construct a PackedUserOperation, simulate it, validate gas
@@ -1862,9 +2767,225 @@
 
     <div class="divider"></div>
 
+    <!-- DEVELOPERS -->
+    <section class="section" id="developers">
+      <div class="s-tag"><span class="num">06</span> Developer Experience</div>
+      <div class="section-heading-row">
+        <h2 class="reveal">MEET<br />AGENTS<br />WHERE THEY ARE.</h2>
+        <p class="section-intro reveal d1">
+          Use the REST API directly, install the zero-dependency CLI, or expose
+          Ardent as tools through MCP. Each path reaches the same typed actions
+          and simulation pipeline.
+        </p>
+      </div>
+
+      <div class="developer-shell reveal d2">
+        <div class="developer-tabs" role="tablist" aria-label="Integration methods">
+          <button
+            class="developer-tab active"
+            type="button"
+            role="tab"
+            aria-selected="true"
+            aria-controls="developer-cli"
+            id="tab-cli"
+            data-panel="developer-cli"
+          >
+            <strong>CLI</strong>
+            <span>Terminal workflows</span>
+          </button>
+          <button
+            class="developer-tab"
+            type="button"
+            role="tab"
+            aria-selected="false"
+            aria-controls="developer-mcp"
+            id="tab-mcp"
+            data-panel="developer-mcp"
+          >
+            <strong>MCP</strong>
+            <span>Assistant tools</span>
+          </button>
+          <button
+            class="developer-tab"
+            type="button"
+            role="tab"
+            aria-selected="false"
+            aria-controls="developer-api"
+            id="tab-api"
+            data-panel="developer-api"
+          >
+            <strong>REST API</strong>
+            <span>Direct integration</span>
+          </button>
+        </div>
+
+        <div class="developer-content">
+          <div
+            class="developer-panel active"
+            id="developer-cli"
+            role="tabpanel"
+            aria-labelledby="tab-cli"
+          >
+            <div class="developer-kicker">Zero dependencies · Self-updating</div>
+            <div class="developer-title">Install the Ardent CLI</div>
+            <p class="developer-copy">
+              Get wallet, balance, simulation, execution, and protocol commands
+              in your terminal. The installer also provisions the local files
+              used by supported agent integrations.
+            </p>
+            <div class="command-block">
+              <code>curl -fsSL https://raw.githubusercontent.com/Ardent-Ai-Research/agent-execution-platform/master/docs/agent-integration/install.sh | bash</code>
+              <button
+                class="copy-command"
+                type="button"
+                data-copy="curl -fsSL https://raw.githubusercontent.com/Ardent-Ai-Research/agent-execution-platform/master/docs/agent-integration/install.sh | bash"
+                aria-label="Copy CLI installation command"
+              >
+                Copy
+              </button>
+            </div>
+            <div class="developer-links">
+              <a href="https://docs.ardentresearch.xyz/agent-integration">CLI reference</a>
+              <a href="https://github.com/Ardent-Ai-Research/agent-execution-platform">View source</a>
+            </div>
+          </div>
+
+          <div
+            class="developer-panel"
+            id="developer-mcp"
+            role="tabpanel"
+            aria-labelledby="tab-mcp"
+            hidden
+          >
+            <div class="developer-kicker">Natural language · Tool calling</div>
+            <div class="developer-title">Give assistants Ardent tools</div>
+            <p class="developer-copy">
+              The MCP server turns wallet, simulation, execution, and protocol
+              capabilities into callable tools for compatible desktop AI
+              assistants. The installer detects supported apps and registers the
+              server automatically; you then add your Ardent API key locally.
+            </p>
+            <div class="command-block">
+              <code>curl -fsSL https://raw.githubusercontent.com/Ardent-Ai-Research/agent-execution-platform/master/docs/agent-integration/install.sh | bash</code>
+              <button
+                class="copy-command"
+                type="button"
+                data-copy="curl -fsSL https://raw.githubusercontent.com/Ardent-Ai-Research/agent-execution-platform/master/docs/agent-integration/install.sh | bash"
+                aria-label="Copy agent integration installation command"
+              >
+                Copy
+              </button>
+            </div>
+            <div class="developer-links">
+              <a href="https://docs.ardentresearch.xyz/agent-integration">MCP setup guide</a>
+              <a href="https://docs.ardentresearch.xyz/authentication-and-keys">Authentication</a>
+            </div>
+          </div>
+
+          <div
+            class="developer-panel"
+            id="developer-api"
+            role="tabpanel"
+            aria-labelledby="tab-api"
+            hidden
+          >
+            <div class="developer-kicker">OpenAPI 3.1 · HTTPS + JSON</div>
+            <div class="developer-title">Build against one API</div>
+            <p class="developer-copy">
+              Integrate from any language or agent framework using conventional
+              HTTP. Prepare and simulate actions, submit execution requests, and
+              track finality through status endpoints and signed webhooks.
+            </p>
+            <div class="command-block">
+              <code>GET https://api.ardentresearch.xyz/wallet?agent_id=my-agent&amp;chain=ethereum</code>
+              <button
+                class="copy-command"
+                type="button"
+                data-copy="curl -G 'https://api.ardentresearch.xyz/wallet' --data-urlencode 'agent_id=my-agent' --data-urlencode 'chain=ethereum' -H 'X-API-Key: YOUR_API_KEY'"
+                aria-label="Copy API request command"
+              >
+                Copy
+              </button>
+            </div>
+            <div class="developer-links">
+              <a href="https://docs.ardentresearch.xyz/getting-started">API quick start</a>
+              <a href="https://docs.ardentresearch.xyz/endpoint-reference">Endpoint reference</a>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <div class="divider"></div>
+
+    <!-- EXECUTION SAFETY -->
+    <section class="section alt" id="safety">
+      <div class="s-tag"><span class="num">07</span> Execution Safety</div>
+      <div class="section-heading-row">
+        <h2 class="reveal">VERIFY.<br />THEN<br /><span class="accent">ACT.</span></h2>
+        <p class="section-intro reveal d1">
+          Onchain autonomy should not mean blind execution. Ardent builds
+          inspection, simulation, policy-aware sponsorship, and finality
+          tracking into the transaction lifecycle.
+        </p>
+      </div>
+      <div class="trust-grid reveal d2">
+        <article class="trust-item">
+          <div class="trust-num">01 / PRE-FLIGHT</div>
+          <div class="trust-title">Full UserOperation simulation</div>
+          <p class="trust-copy">
+            Bundler gas estimation and stateful batch simulation validate the
+            complete account-abstraction path before submission.
+          </p>
+        </article>
+        <article class="trust-item">
+          <div class="trust-num">02 / CUSTODY</div>
+          <div class="trust-title">Encrypted agent keys</div>
+          <p class="trust-copy">
+            Agent signing material is encrypted at rest with AES-256-GCM and is
+            never returned through public API responses.
+          </p>
+        </article>
+        <article class="trust-item">
+          <div class="trust-num">03 / GAS</div>
+          <div class="trust-title">Flexible payment modes</div>
+          <p class="trust-copy">
+            Transactions can use native funds or qualified paymaster
+            sponsorship with gas recalculated for the final operation.
+          </p>
+        </article>
+        <article class="trust-item">
+          <div class="trust-num">04 / PROTOCOLS</div>
+          <div class="trust-title">Typed action boundaries</div>
+          <p class="trust-copy">
+            Protocol adapters validate markets, assets, amounts, and relevant
+            risk constraints before constructing contract calls.
+          </p>
+        </article>
+        <article class="trust-item">
+          <div class="trust-num">05 / DELIVERY</div>
+          <div class="trust-title">Signed completion events</div>
+          <p class="trust-copy">
+            HMAC-SHA256 signed webhooks deliver verifiable execution outcomes
+            with retry handling for transient delivery failures.
+          </p>
+        </article>
+        <article class="trust-item">
+          <div class="trust-num">06 / AUDIT</div>
+          <div class="trust-title">Traceable request lifecycle</div>
+          <p class="trust-copy">
+            Request IDs connect submitted intent, execution status,
+            UserOperations, and confirmed transaction hashes.
+          </p>
+        </article>
+      </div>
+    </section>
+
+    <div class="divider"></div>
+
     <!-- WHO -->
     <section class="section">
-      <div class="s-tag"><span class="num">04</span> Who It's For</div>
+      <div class="s-tag"><span class="num">08</span> Who It's For</div>
       <h2 class="reveal">
         IF YOUR<br />AGENTS<br /><span class="accent">ACT,</span><br />NOT
         JUST<br />TALK.
@@ -1877,7 +2998,7 @@
           <div class="who-desc">
             Give your agents a real onchain identity and execution capability
             without building wallet infrastructure from scratch. Ship faster.
-            Ship safer. Ship sovereign.
+            Test safely. Integrate once.
           </div>
         </div>
         <div class="who-card" data-num="02">
@@ -1890,8 +3011,8 @@
           </div>
         </div>
         <div class="who-card" data-num="03">
-          <span class="who-emoji">R&D</span>
-          <div class="who-title">Researchers & Experimenters</div>
+          <span class="who-emoji">R&amp;D</span>
+          <div class="who-title">Researchers &amp; Experimenters</div>
           <div class="who-desc">
             Test onchain AI agent behavior in a real, structured environment
             with proper logging, webhooks, and full audit trails. Real data,
@@ -1905,7 +3026,7 @@
 
     <!-- WHY ARDENT / ABOUT -->
     <section class="section alt" id="about">
-      <div class="s-tag"><span class="num">05</span> Why Ardent</div>
+      <div class="s-tag"><span class="num">09</span> Why Ardent</div>
       <div class="why-layout">
         <div class="why-list">
           <div class="why-item reveal d1">
@@ -1913,8 +3034,8 @@
             <div class="why-body">
               <h4>Infrastructure-First</h4>
               <p>
-                Production-grade platform with a real execution engine, proper
-                key management, reliable queuing, and comprehensive test
+                A working testnet platform with a real execution engine,
+                encrypted key management, reliable queuing, and focused test
                 coverage.
               </p>
             </div>
@@ -1924,20 +3045,19 @@
             <div class="why-body">
               <h4>Security by Design</h4>
               <p>
-                Agent signing keys never leave your environment unencrypted.
-                AES-256-GCM at rest. HMAC-signed webhooks. Rate-limited APIs.
-                Security is first-class, not an afterthought.
+                Agent signing keys persist only as AES-256-GCM encrypted records
+                at rest. HMAC-signed webhooks and rate-limited APIs protect the
+                surrounding execution flow.
               </p>
             </div>
           </div>
           <div class="why-item reveal d3">
             <div class="why-icon">CMP</div>
             <div class="why-body">
-              <h4>Composable & Chain-Agnostic</h4>
+              <h4>Composable &amp; Chain-Agnostic</h4>
               <p>
-                Not locked to one chain or one bundler. Plug into LangChain,
-                AutoGPT, custom pipelines, or raw API calls. Your stack, your
-                choice.
+                One interface across supported chains and protocol adapters.
+                Plug into assistant tools, custom pipelines, or raw API calls.
               </p>
             </div>
           </div>
@@ -1958,7 +3078,7 @@
             "We believe the next generation of AI agents won't just answer
             questions they'll
             <em
-              >own wallets, execute contracts, pay for services, and operate
+              >operate through wallets, execute contracts, pay for services, and act
               across blockchains</em
             >
             without human intervention at every step."
@@ -1994,12 +3114,109 @@
 
     <div class="divider"></div>
 
+    <!-- FAQ -->
+    <section class="section" id="faq">
+      <div class="s-tag"><span class="num">10</span> Frequently Asked</div>
+      <div class="section-heading-row">
+        <h2 class="reveal">THE<br />SHORT<br />ANSWERS.</h2>
+        <p class="section-intro reveal d1">
+          Ardent is live on public testnets and is intended for developers
+          evaluating agent-driven onchain execution before production use.
+        </p>
+      </div>
+
+      <div class="faq-list reveal d2">
+        <div class="faq-item">
+          <button class="faq-question" type="button" aria-expanded="false">
+            <span class="faq-index">01</span>
+            <span>Does Ardent hold user funds?</span>
+            <span class="faq-icon">+</span>
+          </button>
+          <div class="faq-answer">
+            <div>
+              <p>
+                No. Each agent operates through its own ERC-4337 smart account.
+                Ardent constructs, simulates, signs, and submits authorized
+                operations, but assets remain in the agent's onchain wallet.
+              </p>
+            </div>
+          </div>
+        </div>
+        <div class="faq-item">
+          <button class="faq-question" type="button" aria-expanded="false">
+            <span class="faq-index">02</span>
+            <span>Are transactions simulated before execution?</span>
+            <span class="faq-icon">+</span>
+          </button>
+          <div class="faq-answer">
+            <div>
+              <p>
+                Yes. Ardent exposes dedicated simulation endpoints and performs
+                full UserOperation gas estimation in the account-abstraction
+                flow. Protocol actions use the same execution pipeline.
+              </p>
+            </div>
+          </div>
+        </div>
+        <div class="faq-item">
+          <button class="faq-question" type="button" aria-expanded="false">
+            <span class="faq-index">03</span>
+            <span>Which networks are currently supported?</span>
+            <span class="faq-icon">+</span>
+          </button>
+          <div class="faq-answer">
+            <div>
+              <p>
+                Ethereum Sepolia, Base Sepolia, and Arbitrum Sepolia. Protocol
+                availability follows the deployments listed in the network
+                section above.
+              </p>
+            </div>
+          </div>
+        </div>
+        <div class="faq-item">
+          <button class="faq-question" type="button" aria-expanded="false">
+            <span class="faq-index">04</span>
+            <span>Can I use Ardent from an AI assistant?</span>
+            <span class="faq-icon">+</span>
+          </button>
+          <div class="faq-answer">
+            <div>
+              <p>
+                Yes. The integration pack includes an MCP server for compatible
+                desktop assistants and an OpenAPI specification for hosted tool
+                integrations such as custom assistant actions.
+              </p>
+            </div>
+          </div>
+        </div>
+        <div class="faq-item">
+          <button class="faq-question" type="button" aria-expanded="false">
+            <span class="faq-index">05</span>
+            <span>Is this ready for mainnet funds?</span>
+            <span class="faq-icon">+</span>
+          </button>
+          <div class="faq-answer">
+            <div>
+              <p>
+                Not yet. The current public release is a testnet environment for
+                integration testing and product feedback. Do not treat it as a
+                production custody or mainnet execution service.
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <div class="divider"></div>
+
     <!-- WAITLIST -->
     <section class="waitlist-section" id="waitlist">
       <div class="waitlist-glow"></div>
       <div class="waitlist-inner">
         <div class="waitlist-left reveal">
-          <div class="s-tag"><span class="num">06</span> Get Early Access</div>
+          <div class="s-tag"><span class="num">11</span> Get Testnet Access</div>
           <h2>BE FIRST<br />ON<br />TESTNET.</h2>
           <p>
             We're onboarding a limited number of early builders. Apply below and
@@ -2114,21 +3331,34 @@
 
     <!-- FOOTER -->
     <footer>
-      <div>
+      <div class="footer-product">
         <div class="ft-logo">Ardent <span>Research</span> </div>
         <div class="ft-tag">
-          Building Permissionless autonomous infrastructure economy.
+          Onchain execution infrastructure for autonomous AI agents.
         </div>
       </div>
-      <div class="ft-links">
-        <a href="https://x.com/aairesearchxyz" target="_blank">Twitter / X</a>
-        <a href="https://github.com/Ardent-Ai-Research" target="_blank"
-          >GitHub</a
-        >
-        <a href="https://docs.ardentresearch.xyz">Docs</a>
+      <div class="footer-nav-groups">
+        <div class="footer-nav-group">
+          <div class="footer-nav-label">Product</div>
+          <a href="#platform">Platform</a>
+          <a href="#integrations">Integrations</a>
+          <a href="#networks">Networks</a>
+        </div>
+        <div class="footer-nav-group">
+          <div class="footer-nav-label">Developers</div>
+          <a href="https://docs.ardentresearch.xyz">Documentation</a>
+          <a href="https://docs.ardentresearch.xyz/agent-integration">Agent tools</a>
+          <a href="https://docs.ardentresearch.xyz/endpoint-reference">API reference</a>
+        </div>
+        <div class="footer-nav-group">
+          <div class="footer-nav-label">Connect</div>
+          <a href="https://x.com/aairesearchxyz" target="_blank" rel="noreferrer">Twitter / X</a>
+          <a href="https://github.com/Ardent-Ai-Research" target="_blank" rel="noreferrer">GitHub</a>
+          <a href="#waitlist">Get access</a>
+        </div>
       </div>
       <div class="ft-copy">
-        © 2026 Ardent Research.<br />All rights reserved.
+        2026 Ardent Research.<br />Public testnet.
       </div>
     </footer>
 
@@ -2141,7 +3371,14 @@
         const isDark = theme === "dark";
         document.body.classList.toggle("theme-dark", isDark);
         themeToggle.textContent = `Theme: ${isDark ? "Dark" : "Light"}`;
+        themeToggle.setAttribute(
+          "aria-label",
+          `Switch to ${isDark ? "light" : "dark"} theme`,
+        );
         themeToggle.setAttribute("aria-pressed", String(isDark));
+        document
+          .querySelector('meta[name="theme-color"]')
+          ?.setAttribute("content", isDark ? "#1c2526" : "#f2f7f4");
       }
 
       const savedTheme = localStorage.getItem(THEME_KEY);
@@ -2154,6 +3391,38 @@
           : "dark";
         applyTheme(nextTheme);
         localStorage.setItem(THEME_KEY, nextTheme);
+      });
+
+      // MOBILE NAVIGATION
+      const menuToggle = document.getElementById("menu-toggle");
+      const mobileNav = document.getElementById("mobile-nav");
+
+      function setMobileNav(open) {
+        menuToggle.setAttribute("aria-expanded", String(open));
+        menuToggle.setAttribute(
+          "aria-label",
+          open ? "Close navigation" : "Open navigation",
+        );
+        mobileNav.classList.toggle("open", open);
+        mobileNav.setAttribute("aria-hidden", String(!open));
+        mobileNav.inert = !open;
+      }
+
+      menuToggle.addEventListener("click", () => {
+        setMobileNav(menuToggle.getAttribute("aria-expanded") !== "true");
+      });
+      mobileNav.querySelectorAll("a").forEach((link) => {
+        link.addEventListener("click", () => setMobileNav(false));
+      });
+      document.addEventListener("keydown", (event) => {
+        if (event.key === "Escape") {
+          setMobileNav(false);
+        }
+      });
+      window.addEventListener("resize", () => {
+        if (window.innerWidth > 900) {
+          setMobileNav(false);
+        }
       });
 
       // CURSOR
@@ -2575,6 +3844,57 @@
         { threshold: 0.1 },
       );
       revealEls.forEach((el) => ro.observe(el));
+
+      // DEVELOPER TABS
+      const developerTabs = document.querySelectorAll(".developer-tab");
+      const developerPanels = document.querySelectorAll(".developer-panel");
+      developerTabs.forEach((tab) => {
+        tab.addEventListener("click", () => {
+          const panelId = tab.dataset.panel;
+          developerTabs.forEach((candidate) => {
+            const selected = candidate === tab;
+            candidate.classList.toggle("active", selected);
+            candidate.setAttribute("aria-selected", String(selected));
+          });
+          developerPanels.forEach((panel) => {
+            const selected = panel.id === panelId;
+            panel.classList.toggle("active", selected);
+            panel.hidden = !selected;
+          });
+        });
+      });
+
+      // COPY COMMANDS
+      document.querySelectorAll(".copy-command").forEach((button) => {
+        button.addEventListener("click", async () => {
+          const original = button.textContent;
+          try {
+            await navigator.clipboard.writeText(button.dataset.copy);
+            button.textContent = "Copied";
+          } catch (_) {
+            button.textContent = "Select";
+          }
+          setTimeout(() => {
+            button.textContent = original;
+          }, 1600);
+        });
+      });
+
+      // FAQ
+      document.querySelectorAll(".faq-question").forEach((question) => {
+        question.addEventListener("click", () => {
+          const item = question.closest(".faq-item");
+          const willOpen = !item.classList.contains("open");
+          document.querySelectorAll(".faq-item.open").forEach((openItem) => {
+            openItem.classList.remove("open");
+            openItem
+              .querySelector(".faq-question")
+              .setAttribute("aria-expanded", "false");
+          });
+          item.classList.toggle("open", willOpen);
+          question.setAttribute("aria-expanded", String(willOpen));
+        });
+      });
 
       // FORM (Web3Forms AJAX)
       const WEB3FORMS_ENDPOINT = "https://api.web3forms.com/submit";
