@@ -10,7 +10,7 @@ use crate::types::{BatchCall, ExecutionRequest};
 
 pub const MORPHO_ADDRESS: &str = "0xBBBBBbbBBb9cC5e90e3b3Af64bdAF62C37EEFFCb";
 pub const DEFAULT_MARKET_ID: &str =
-    "0xd39b446f5f67c78fa8be78efab5715845290d1cfb12874f5f0b245d638a153a8";
+    "0x6143c1e52ed45fb9a0551b349abb4a1b8c5962dd39545ac235a9c98610bf97da";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MorphoActionRequest {
@@ -628,7 +628,7 @@ mod tests {
             collateral_token: "0x4200000000000000000000000000000000000006"
                 .parse()
                 .unwrap(),
-            oracle: "0x025d1401aec9e37d4d00795e2277cfb0635e35fc"
+            oracle: "0x1631366c38d49ba58793a5f219050923fbf24c81"
                 .parse()
                 .unwrap(),
             irm: "0x46415998764c29ab2a25cbea6254146d50d22687"

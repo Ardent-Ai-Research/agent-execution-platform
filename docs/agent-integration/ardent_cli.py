@@ -1192,7 +1192,7 @@ def add_morpho_action_flags(
     parser.add_argument("--chain", default="base", choices=["base"], help="Morpho Base Sepolia chain label")
     parser.add_argument(
         "--market-id",
-        default="0xd39b446f5f67c78fa8be78efab5715845290d1cfb12874f5f0b245d638a153a8",
+        default="0x6143c1e52ed45fb9a0551b349abb4a1b8c5962dd39545ac235a9c98610bf97da",
         help="Morpho Blue market ID; defaults to Ardent's preconfigured USDC/WETH 86%% LLTV test market",
     )
     amount_help = "Human-readable action-token amount"
@@ -1633,7 +1633,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_compound_borrow_capacity.add_argument("--market", default="usdc", choices=["usdc", "weth"], help="Compound III market")
     p_compound_borrow_capacity.set_defaults(func=run_compound_borrow_capacity)
 
-    morpho_default_market = "0xd39b446f5f67c78fa8be78efab5715845290d1cfb12874f5f0b245d638a153a8"
+    morpho_default_market = "0x6143c1e52ed45fb9a0551b349abb4a1b8c5962dd39545ac235a9c98610bf97da"
     p_morpho_market = subparsers.add_parser("morpho-market", help="GET /protocols/morpho/market")
     add_global_flags(p_morpho_market)
     p_morpho_market.add_argument("--chain", default="base", choices=["base"])

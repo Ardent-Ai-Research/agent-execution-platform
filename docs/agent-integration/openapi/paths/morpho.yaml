@@ -13,7 +13,7 @@
       name: market_id
       schema:
         type: string
-        default: "0xd39b446f5f67c78fa8be78efab5715845290d1cfb12874f5f0b245d638a153a8"
+        default: "0x6143c1e52ed45fb9a0551b349abb4a1b8c5962dd39545ac235a9c98610bf97da"
     responses:
       '200':
         description: Market parameters and accrued state
@@ -44,7 +44,7 @@
       name: market_id
       schema:
         type: string
-        default: "0xd39b446f5f67c78fa8be78efab5715845290d1cfb12874f5f0b245d638a153a8"
+        default: "0x6143c1e52ed45fb9a0551b349abb4a1b8c5962dd39545ac235a9c98610bf97da"
     responses:
       '200':
         description: Agent wallet position

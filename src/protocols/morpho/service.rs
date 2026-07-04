@@ -29,12 +29,24 @@ const VIRTUAL_ASSETS: u64 = 1;
 const SECONDS_PER_YEAR: u64 = 31_536_000;
 const MAX_SAFE_TOKEN_DECIMALS: u8 = 77;
 const DEFAULT_MIN_HEALTH_FACTOR_WAD: u128 = 1_050_000_000_000_000_000;
+const PYTH_STALE_PRICE_SELECTOR: &str = "0x19abf40e";
 
 #[derive(Debug, Clone, Serialize)]
 pub struct MorphoToken {
     pub address: String,
     pub symbol: String,
     pub decimals: u8,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum MorphoOracleStatus {
+    Available,
+    Stale,
+    Unavailable,
+    ZeroPrice,
+    NotConfigured,
+    NotRead,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -48,7 +60,8 @@ pub struct MorphoMarketResponse {
     pub irm_address: String,
     pub lltv_raw: String,
     pub lltv_percent: String,
-    pub oracle_price_raw: String,
+    pub oracle_price_raw: Option<String>,
+    pub oracle_status: MorphoOracleStatus,
     pub total_supply_assets_raw: String,
     pub total_supply_assets_formatted: String,
     pub total_borrow_assets_raw: String,
@@ -84,16 +97,17 @@ pub struct MorphoPositionResponse {
     pub borrowed_assets_formatted: String,
     pub collateral_assets_raw: String,
     pub collateral_assets_formatted: String,
-    pub collateral_value_in_loan_assets_raw: String,
-    pub collateral_value_in_loan_assets_formatted: String,
-    pub borrow_capacity_raw: String,
-    pub borrow_capacity_formatted: String,
-    pub available_borrow_raw: String,
-    pub available_borrow_formatted: String,
+    pub collateral_value_in_loan_assets_raw: Option<String>,
+    pub collateral_value_in_loan_assets_formatted: Option<String>,
+    pub borrow_capacity_raw: Option<String>,
+    pub borrow_capacity_formatted: Option<String>,
+    pub available_borrow_raw: Option<String>,
+    pub available_borrow_formatted: Option<String>,
     pub health_factor: Option<String>,
     pub ltv_percent: Option<String>,
     pub lltv_percent: String,
-    pub is_healthy: bool,
+    pub is_healthy: Option<bool>,
+    pub oracle_status: MorphoOracleStatus,
 }
 
 #[derive(Debug, Clone)]
@@ -105,7 +119,8 @@ struct MarketContext {
     loan_decimals: u8,
     collateral_symbol: String,
     collateral_decimals: u8,
-    oracle_price: U256,
+    oracle_price: Option<U256>,
+    oracle_status: MorphoOracleStatus,
     borrow_rate: U256,
 }
 
@@ -202,8 +217,15 @@ pub async fn handle_market(
 ) -> Result<MorphoMarketResponse> {
     morpho::validate_market_query(query)?;
     let chain = parse_chain(&query.chain)?;
-    let context =
-        load_market_context(engine, &chain, &query.market_id, true, MetadataScope::Both).await?;
+    let context = load_market_context(
+        engine,
+        &chain,
+        &query.market_id,
+        true,
+        false,
+        MetadataScope::Both,
+    )
+    .await?;
     let liquidity = context
         .state
         .total_supply_assets
@@ -227,7 +249,8 @@ pub async fn handle_market(
         irm_address: format!("{:?}", context.params.irm),
         lltv_raw: context.params.lltv.to_string(),
         lltv_percent: format_percent(context.params.lltv, U256::from(WAD), 2),
-        oracle_price_raw: context.oracle_price.to_string(),
+        oracle_price_raw: context.oracle_price.map(|price| price.to_string()),
+        oracle_status: context.oracle_status,
         total_supply_assets_raw: context.state.total_supply_assets.to_string(),
         total_supply_assets_formatted: format_token_units(
             context.state.total_supply_assets,
@@ -265,8 +288,15 @@ pub async fn handle_position(
         .get_or_create(api_key_id, &query.agent_id)
         .await?;
     let wallet = resolve_chain_smart_wallet_address(engine, &chain, &agent_wallet).await?;
-    let context =
-        load_market_context(engine, &chain, &query.market_id, true, MetadataScope::Both).await?;
+    let context = load_market_context(
+        engine,
+        &chain,
+        &query.market_id,
+        true,
+        false,
+        MetadataScope::Both,
+    )
+    .await?;
     let (position, wallet_loan) = tokio::try_join!(
         load_position(engine, &chain, context.market_id, wallet),
         token_balance(engine, &chain, context.params.loan_token, wallet),
@@ -310,7 +340,7 @@ async fn prepare_action(
         }
     };
     let mut context =
-        load_market_context(engine, &chain, &req.market_id, false, metadata_scope).await?;
+        load_market_context(engine, &chain, &req.market_id, false, false, metadata_scope).await?;
     if matches!(
         action,
         MorphoAction::SupplyCollateral
@@ -329,7 +359,8 @@ async fn prepare_action(
     if action == MorphoAction::Borrow
         || (action == MorphoAction::WithdrawCollateral && !position.borrow_shares.is_zero())
     {
-        context = load_market_context(engine, &chain, &req.market_id, true, metadata_scope).await?;
+        context =
+            load_market_context(engine, &chain, &req.market_id, true, true, metadata_scope).await?;
     }
     let amount =
         resolve_action_amount(engine, &chain, req, action, &context, &position, wallet).await?;
@@ -396,6 +427,7 @@ async fn load_market_context(
     chain: &Chain,
     market_id_raw: &str,
     with_analytics: bool,
+    require_oracle: bool,
     metadata_scope: MetadataScope,
 ) -> Result<MarketContext> {
     let market_id = morpho::parse_market_id(market_id_raw)?;
@@ -435,15 +467,26 @@ async fn load_market_context(
             token_decimals(engine, chain, params.collateral_token),
         )?
     };
-    let oracle_price = if !with_analytics || params.oracle == Address::zero() {
-        U256::zero()
+    let (oracle_price, oracle_status) = if !with_analytics {
+        (None, MorphoOracleStatus::NotRead)
+    } else if params.oracle == Address::zero() {
+        (None, MorphoOracleStatus::NotConfigured)
     } else {
-        call_u256(engine, chain, params.oracle, morpho::encode_oracle_price()).await?
+        match call_u256(engine, chain, params.oracle, morpho::encode_oracle_price()).await {
+            Ok(price) if !price.is_zero() => (Some(price), MorphoOracleStatus::Available),
+            Ok(_) if require_oracle => bail!("Morpho market oracle returned a zero price"),
+            Ok(_) => (None, MorphoOracleStatus::ZeroPrice),
+            Err(error) if require_oracle => return Err(describe_oracle_error(error)),
+            Err(error) => {
+                let status = if is_stale_oracle_error(&error) {
+                    MorphoOracleStatus::Stale
+                } else {
+                    MorphoOracleStatus::Unavailable
+                };
+                (None, status)
+            }
+        }
     };
-
-    if with_analytics && params.oracle != Address::zero() && oracle_price.is_zero() {
-        bail!("Morpho market oracle returned a zero price");
-    }
 
     let borrow_rate = if !with_analytics || params.irm == Address::zero() {
         U256::zero()
@@ -468,6 +511,7 @@ async fn load_market_context(
         collateral_symbol,
         collateral_decimals,
         oracle_price,
+        oracle_status,
         borrow_rate,
     })
 }
@@ -530,29 +574,61 @@ fn build_position_response(
         context.state.total_borrow_assets,
         context.state.total_borrow_shares,
     )?;
-    let collateral_value = mul_div_down(
-        position.collateral,
-        context.oracle_price,
-        U256::exp10(ORACLE_PRICE_SCALE_EXPONENT),
-    )?;
-    let borrow_capacity = mul_div_down(collateral_value, context.params.lltv, U256::from(WAD))?;
     let market_liquidity = context
         .state
         .total_supply_assets
         .saturating_sub(context.state.total_borrow_assets);
-    let available_capacity = borrow_capacity.saturating_sub(borrowed);
-    let available_borrow = min_u256(available_capacity, market_liquidity);
-    let is_healthy = borrowed.is_zero() || borrowed <= borrow_capacity;
-    let health_factor = if borrowed.is_zero() {
-        None
-    } else {
-        Some(format_ratio(borrow_capacity, borrowed, 4))
-    };
-    let ltv = if collateral_value.is_zero() {
-        None
-    } else {
-        Some(ratio_percent(borrowed, collateral_value, 2))
-    };
+    let risk = context
+        .oracle_price
+        .map(|oracle_price| {
+            let collateral_value = mul_div_down(
+                position.collateral,
+                oracle_price,
+                U256::exp10(ORACLE_PRICE_SCALE_EXPONENT),
+            )?;
+            let borrow_capacity =
+                mul_div_down(collateral_value, context.params.lltv, U256::from(WAD))?;
+            let available_capacity = borrow_capacity.saturating_sub(borrowed);
+            let available_borrow = min_u256(available_capacity, market_liquidity);
+            let health_factor = if borrowed.is_zero() {
+                None
+            } else {
+                Some(format_ratio(borrow_capacity, borrowed, 4))
+            };
+            let ltv = if collateral_value.is_zero() {
+                None
+            } else {
+                Some(ratio_percent(borrowed, collateral_value, 2))
+            };
+            Ok::<_, anyhow::Error>((
+                collateral_value,
+                borrow_capacity,
+                available_borrow,
+                health_factor,
+                ltv,
+                borrowed.is_zero() || borrowed <= borrow_capacity,
+            ))
+        })
+        .transpose()?;
+    let (collateral_value, borrow_capacity, available_borrow, health_factor, ltv, is_healthy) =
+        match risk {
+            Some((value, capacity, available, health, ltv, healthy)) => (
+                Some(value),
+                Some(capacity),
+                Some(available),
+                health,
+                ltv,
+                Some(healthy),
+            ),
+            None => (
+                None,
+                None,
+                None,
+                None,
+                None,
+                borrowed.is_zero().then_some(true),
+            ),
+        };
 
     Ok(MorphoPositionResponse {
         agent_id: query.agent_id.clone(),
@@ -588,19 +664,23 @@ fn build_position_response(
             position.collateral,
             context.collateral_decimals,
         )?,
-        collateral_value_in_loan_assets_raw: collateral_value.to_string(),
-        collateral_value_in_loan_assets_formatted: format_token_units(
-            collateral_value,
-            context.loan_decimals,
-        )?,
-        borrow_capacity_raw: borrow_capacity.to_string(),
-        borrow_capacity_formatted: format_token_units(borrow_capacity, context.loan_decimals)?,
-        available_borrow_raw: available_borrow.to_string(),
-        available_borrow_formatted: format_token_units(available_borrow, context.loan_decimals)?,
+        collateral_value_in_loan_assets_raw: collateral_value.map(|value| value.to_string()),
+        collateral_value_in_loan_assets_formatted: collateral_value
+            .map(|value| format_token_units(value, context.loan_decimals))
+            .transpose()?,
+        borrow_capacity_raw: borrow_capacity.map(|value| value.to_string()),
+        borrow_capacity_formatted: borrow_capacity
+            .map(|value| format_token_units(value, context.loan_decimals))
+            .transpose()?,
+        available_borrow_raw: available_borrow.map(|value| value.to_string()),
+        available_borrow_formatted: available_borrow
+            .map(|value| format_token_units(value, context.loan_decimals))
+            .transpose()?,
         health_factor,
         ltv_percent: ltv,
         lltv_percent: format_percent(context.params.lltv, U256::from(WAD), 2),
         is_healthy,
+        oracle_status: context.oracle_status,
     })
 }
 
@@ -776,6 +856,23 @@ fn min_u256(a: U256, b: U256) -> U256 {
     }
 }
 
+fn is_stale_oracle_error(error: &anyhow::Error) -> bool {
+    error.chain().any(|cause| {
+        cause
+            .to_string()
+            .to_ascii_lowercase()
+            .contains(PYTH_STALE_PRICE_SELECTOR)
+    })
+}
+
+fn describe_oracle_error(error: anyhow::Error) -> anyhow::Error {
+    if is_stale_oracle_error(&error) {
+        anyhow!("Morpho market oracle price is stale (StalePrice, {PYTH_STALE_PRICE_SELECTOR})")
+    } else {
+        anyhow!("failed to read Morpho market oracle price: {error}")
+    }
+}
+
 fn enforce_health_guard(
     req: &MorphoActionRequest,
     action: MorphoAction,
@@ -854,12 +951,12 @@ fn enforce_health_guard(
     if projected_debt.is_zero() {
         return Ok(());
     }
-    if context.oracle_price.is_zero() {
-        bail!("Morpho health-factor guard requires a responsive market oracle");
-    }
+    let oracle_price = context
+        .oracle_price
+        .ok_or_else(|| anyhow!("Morpho health-factor guard requires a responsive market oracle"))?;
     let collateral_value = mul_div_down(
         projected_collateral,
-        context.oracle_price,
+        oracle_price,
         U256::exp10(ORACLE_PRICE_SCALE_EXPONENT),
     )?;
     let projected_capacity = mul_div_down(collateral_value, context.params.lltv, U256::from(WAD))?;
@@ -970,7 +1067,8 @@ mod tests {
             loan_decimals: 6,
             collateral_symbol: "WETH".to_string(),
             collateral_decimals: 18,
-            oracle_price: U256::from(2_000u64) * U256::exp10(24),
+            oracle_price: Some(U256::from(2_000u64) * U256::exp10(24)),
+            oracle_status: MorphoOracleStatus::Available,
             borrow_rate: U256::zero(),
         }
     }
@@ -1103,6 +1201,51 @@ mod tests {
             parse_min_health_factor(None).unwrap(),
             U256::from(DEFAULT_MIN_HEALTH_FACTOR_WAD)
         );
+    }
+
+    #[test]
+    fn stale_oracle_selector_gets_a_clear_error() {
+        let error = anyhow!("execution reverted, data: 0x19abf40e");
+        assert!(is_stale_oracle_error(&error));
+        assert_eq!(
+            describe_oracle_error(error).to_string(),
+            "Morpho market oracle price is stale (StalePrice, 0x19abf40e)"
+        );
+    }
+
+    #[test]
+    fn position_read_remains_available_without_oracle_analytics() {
+        let mut context = health_context();
+        context.oracle_price = None;
+        context.oracle_status = MorphoOracleStatus::Stale;
+        let response = build_position_response(
+            &MorphoPositionQuery {
+                agent_id: "agent".to_string(),
+                chain: "base".to_string(),
+                market_id: morpho::DEFAULT_MARKET_ID.to_string(),
+            },
+            Address::from_low_u64_be(7),
+            context,
+            MorphoPosition {
+                supply_shares: U256::from(1_000_000u64),
+                borrow_shares: U256::zero(),
+                collateral: U256::exp10(18),
+            },
+            U256::from(10_000_000u64),
+            U256::exp10(18),
+        )
+        .unwrap();
+
+        assert_eq!(response.oracle_status, MorphoOracleStatus::Stale);
+        assert!(response.collateral_value_in_loan_assets_raw.is_none());
+        assert!(response.available_borrow_raw.is_none());
+        assert_eq!(response.is_healthy, Some(true));
+
+        let json = serde_json::to_value(response).unwrap();
+        assert_eq!(json["oracle_status"], "stale");
+        assert!(json["borrow_capacity_raw"].is_null());
+        assert!(json["available_borrow_raw"].is_null());
+        assert_eq!(json["is_healthy"], true);
     }
 
     #[test]

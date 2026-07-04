@@ -82,6 +82,8 @@ ardent compound-borrow-capacity --agent-id my-agent-001
 Morpho actions are market-ID driven. The default is an on-chain-checked
 USDC/WETH 86% LLTV test market; pass `--market-id` for another Base Sepolia
 market. This is a convenience default, not a Morpho endorsement or allowlist.
+The default may have no liquidity; supply USDC before borrowing and check
+`morpho-market` first.
 
 ```bash
 ardent morpho-market
@@ -96,8 +98,9 @@ ardent morpho-withdraw-collateral-simulate --agent-id my-agent-001 --amount 0.00
 
 Read `morpho-position` before borrow or collateral withdrawal. It returns wallet
 balances, accrued debt, collateral value, LTV, health factor, borrow capacity,
-and available market liquidity. Full repay uses borrow shares to avoid debt
-dust.
+and available market liquidity. If the selected market oracle is unavailable,
+oracle-dependent values are `null` while balances and position state remain
+readable. Full repay uses borrow shares to avoid debt dust.
 
 ### Balancer V3 Ethereum Sepolia
 

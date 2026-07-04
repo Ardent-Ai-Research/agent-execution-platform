@@ -14,7 +14,7 @@ schemas:
         market_id:
           type: string
           pattern: "^0x[0-9a-fA-F]{64}$"
-          default: "0xd39b446f5f67c78fa8be78efab5715845290d1cfb12874f5f0b245d638a153a8"
+          default: "0x6143c1e52ed45fb9a0551b349abb4a1b8c5962dd39545ac235a9c98610bf97da"
           description: Morpho Blue market ID. The default is Ardent's preconfigured Base Sepolia USDC/WETH 86% LLTV test market.
         amount:
           type: string
@@ -49,6 +49,7 @@ schemas:
       - loan_token
       - collateral_token
       - lltv_percent
+      - oracle_status
       - total_supply_assets_raw
       - total_borrow_assets_raw
       - liquidity_assets_raw
@@ -62,7 +63,12 @@ schemas:
         irm_address: { type: string }
         lltv_raw: { type: string }
         lltv_percent: { type: string }
-        oracle_price_raw: { type: string }
+        oracle_price_raw:
+          type: [string, "null"]
+          description: Null when the market oracle is stale, unavailable, or not configured.
+        oracle_status:
+          type: string
+          enum: [available, stale, unavailable, zero_price, not_configured]
         total_supply_assets_raw: { type: string }
         total_supply_assets_formatted: { type: string }
         total_borrow_assets_raw: { type: string }
@@ -91,9 +97,8 @@ schemas:
       - supplied_assets_raw
       - borrowed_assets_raw
       - collateral_assets_raw
-      - borrow_capacity_raw
-      - available_borrow_raw
       - is_healthy
+      - oracle_status
       properties:
         agent_id: { type: string }
         chain: { type: string }
@@ -114,15 +119,26 @@ schemas:
         borrowed_assets_formatted: { type: string }
         collateral_assets_raw: { type: string }
         collateral_assets_formatted: { type: string }
-        collateral_value_in_loan_assets_raw: { type: string }
-        collateral_value_in_loan_assets_formatted: { type: string }
-        borrow_capacity_raw: { type: string }
-        borrow_capacity_formatted: { type: string }
-        available_borrow_raw: { type: string }
-        available_borrow_formatted: { type: string }
+        collateral_value_in_loan_assets_raw:
+          type: [string, "null"]
+        collateral_value_in_loan_assets_formatted:
+          type: [string, "null"]
+        borrow_capacity_raw:
+          type: [string, "null"]
+        borrow_capacity_formatted:
+          type: [string, "null"]
+        available_borrow_raw:
+          type: [string, "null"]
+        available_borrow_formatted:
+          type: [string, "null"]
         health_factor:
           type: [string, "null"]
         ltv_percent:
           type: [string, "null"]
         lltv_percent: { type: string }
-        is_healthy: { type: boolean }
+        is_healthy:
+          type: [boolean, "null"]
+          description: Null when debt exists but the oracle is unavailable.
+        oracle_status:
+          type: string
+          enum: [available, stale, unavailable, zero_price, not_configured]

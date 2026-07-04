@@ -9,13 +9,20 @@ Morpho markets are permissionless and isolated. A market is identified by the ha
 | Item | Address or ID |
 | --- | --- |
 | Morpho Blue | `0xBBBBBbbBBb9cC5e90e3b3Af64bdAF62C37EEFFCb` |
-| Default USDC/WETH 86% LLTV market | `0xd39b446f5f67c78fa8be78efab5715845290d1cfb12874f5f0b245d638a153a8` |
+| Default USDC/WETH 86% LLTV market | `0x6143c1e52ed45fb9a0551b349abb4a1b8c5962dd39545ac235a9c98610bf97da` |
 | Loan token | Base Sepolia USDC, `0x036CbD53842c5426634e7929541eC2318f3dCF7e` |
 | Collateral token | Base Sepolia WETH, `0x4200000000000000000000000000000000000006` |
 
-The default market is provided for convenience and has a currently responsive oracle; it is not an official Morpho endorsement or allowlist. Pass `--market-id` to use any other created Base Sepolia market. Ardent resolves its immutable parameters directly from `Morpho.idToMarketParams`; callers do not supply token, oracle, IRM, or LLTV addresses separately.
+The default market is provided for convenience and had a correctly scaled,
+responsive ETH/USD feed when checked on July 4, 2026; it is not an official
+Morpho endorsement or allowlist. Pass
+`--market-id` to use any other created Base Sepolia market. Ardent resolves its
+immutable parameters directly from `Morpho.idToMarketParams`; callers do not
+supply token, oracle, IRM, or LLTV addresses separately.
 
-Testnet liquidity is not guaranteed and can be very small. Check `ardent morpho-market` before borrowing. If liquidity is insufficient, a tester can supply USDC to the market first.
+Testnet liquidity is not guaranteed. The default market had no supplied
+liquidity when selected, so a tester must supply USDC before borrowing. Always
+check `ardent morpho-market` first.
 
 Base Sepolia USDC is available from Circle's faucet. WETH is obtained by wrapping Base Sepolia ETH through the canonical WETH contract shown above.
 
@@ -55,6 +62,12 @@ Every execute command has a matching `-simulate` command and follows the normal 
 - current LTV, LLTV, health factor, and health status
 
 Interest accrued since the market's last on-chain update is included using Morpho's IRM and canonical Taylor-compounding formula.
+
+Both reads include `oracle_status`. If a permissionless market's oracle is
+stale or unavailable, the endpoints still return market state, token balances,
+supply, debt, and collateral. Oracle-dependent values such as collateral value,
+borrow capacity, LTV, and health are `null`. Borrow and collateral withdrawal
+continue to fail closed until the oracle is responsive.
 
 ## Amount behavior
 
