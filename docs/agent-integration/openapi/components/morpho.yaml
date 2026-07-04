@@ -1,0 +1,128 @@
+---
+schemas:
+    MorphoActionRequest:
+      type: object
+      required:
+      - agent_id
+      properties:
+        agent_id:
+          type: string
+        chain:
+          type: string
+          enum: [base]
+          default: base
+        market_id:
+          type: string
+          pattern: "^0x[0-9a-fA-F]{64}$"
+          default: "0xd39b446f5f67c78fa8be78efab5715845290d1cfb12874f5f0b245d638a153a8"
+          description: Morpho Blue market ID. The default is Ardent's preconfigured Base Sepolia USDC/WETH 86% LLTV test market.
+        amount:
+          type: string
+          description: Human-readable amount. Some actions also support max.
+        amount_raw:
+          type: string
+          description: Integer amount in native token units. Some actions also support max.
+        min_health_factor:
+          type: string
+          description: Minimum projected health factor for borrow and collateral withdrawal. Defaults to 1.05 and must be at least 1.0.
+        strategy_id:
+          type: string
+        callback_url:
+          type: string
+          format: uri
+      oneOf:
+      - required: [amount]
+      - required: [amount_raw]
+    MorphoToken:
+      type: object
+      required: [address, symbol, decimals]
+      properties:
+        address: { type: string }
+        symbol: { type: string }
+        decimals: { type: integer }
+    MorphoMarketResponse:
+      type: object
+      required:
+      - chain
+      - morpho_address
+      - market_id
+      - loan_token
+      - collateral_token
+      - lltv_percent
+      - total_supply_assets_raw
+      - total_borrow_assets_raw
+      - liquidity_assets_raw
+      properties:
+        chain: { type: string }
+        morpho_address: { type: string }
+        market_id: { type: string }
+        loan_token: { "$ref": "#/components/schemas/MorphoToken" }
+        collateral_token: { "$ref": "#/components/schemas/MorphoToken" }
+        oracle_address: { type: string }
+        irm_address: { type: string }
+        lltv_raw: { type: string }
+        lltv_percent: { type: string }
+        oracle_price_raw: { type: string }
+        total_supply_assets_raw: { type: string }
+        total_supply_assets_formatted: { type: string }
+        total_borrow_assets_raw: { type: string }
+        total_borrow_assets_formatted: { type: string }
+        liquidity_assets_raw: { type: string }
+        liquidity_assets_formatted: { type: string }
+        utilization_percent: { type: string }
+        accrual_borrow_rate_per_second_raw:
+          type: string
+          description: Average per-second rate used if pending market interest were accrued at the read block.
+        accrual_borrow_apr_percent:
+          type: string
+          description: Simple annualization of the pending-accrual average borrow rate.
+        fee_raw: { type: string }
+        fee_percent: { type: string }
+        last_update: { type: string }
+    MorphoPositionResponse:
+      type: object
+      required:
+      - agent_id
+      - chain
+      - smart_wallet_address
+      - market_id
+      - loan_token
+      - collateral_token
+      - supplied_assets_raw
+      - borrowed_assets_raw
+      - collateral_assets_raw
+      - borrow_capacity_raw
+      - available_borrow_raw
+      - is_healthy
+      properties:
+        agent_id: { type: string }
+        chain: { type: string }
+        smart_wallet_address: { type: string }
+        morpho_address: { type: string }
+        market_id: { type: string }
+        loan_token: { "$ref": "#/components/schemas/MorphoToken" }
+        collateral_token: { "$ref": "#/components/schemas/MorphoToken" }
+        wallet_loan_balance_raw: { type: string }
+        wallet_loan_balance_formatted: { type: string }
+        wallet_collateral_balance_raw: { type: string }
+        wallet_collateral_balance_formatted: { type: string }
+        supply_shares_raw: { type: string }
+        supplied_assets_raw: { type: string }
+        supplied_assets_formatted: { type: string }
+        borrow_shares_raw: { type: string }
+        borrowed_assets_raw: { type: string }
+        borrowed_assets_formatted: { type: string }
+        collateral_assets_raw: { type: string }
+        collateral_assets_formatted: { type: string }
+        collateral_value_in_loan_assets_raw: { type: string }
+        collateral_value_in_loan_assets_formatted: { type: string }
+        borrow_capacity_raw: { type: string }
+        borrow_capacity_formatted: { type: string }
+        available_borrow_raw: { type: string }
+        available_borrow_formatted: { type: string }
+        health_factor:
+          type: [string, "null"]
+        ltv_percent:
+          type: [string, "null"]
+        lltv_percent: { type: string }
+        is_healthy: { type: boolean }

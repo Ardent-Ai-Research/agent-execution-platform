@@ -350,6 +350,48 @@ ardent aave-balances --agent-id my-agent-001
 ardent aave-position --agent-id my-agent-001
 ```
 
+## Morpho Blue Base Sepolia
+
+Morpho actions are keyed by a market ID. The examples below use Ardent's
+default Base Sepolia USDC/WETH 86% LLTV market.
+
+```bash
+curl -X GET "$BASE_URL/protocols/morpho/position?agent_id=my-agent-001&chain=base" \
+  -H "X-API-Key: $ARDENT_API_KEY"
+
+curl -X POST "$BASE_URL/protocols/morpho/supply-collateral/simulate" \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: $ARDENT_API_KEY" \
+  -d '{
+    "agent_id": "my-agent-001",
+    "chain": "base",
+    "amount": "0.01"
+  }'
+
+curl -X POST "$BASE_URL/protocols/morpho/borrow/simulate" \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: $ARDENT_API_KEY" \
+  -d '{
+    "agent_id": "my-agent-001",
+    "chain": "base",
+    "amount": "5"
+  }'
+```
+
+CLI equivalents:
+
+```bash
+ardent morpho-market
+ardent morpho-position --agent-id my-agent-001
+ardent morpho-supply-collateral-simulate --agent-id my-agent-001 --amount 0.01
+ardent morpho-borrow-simulate --agent-id my-agent-001 --amount 5 --min-health-factor 1.10
+ardent morpho-repay-simulate --agent-id my-agent-001 --amount max
+ardent morpho-withdraw-collateral-simulate --agent-id my-agent-001 --amount 0.001
+```
+
+Read [Morpho Blue Base Sepolia](../morpho.md) for market selection, all
+commands, amount behavior, and safety considerations.
+
 ## Balancer V3 Ethereum Sepolia
 
 Balancer V3 swaps and liquidity actions should use the typed endpoints instead

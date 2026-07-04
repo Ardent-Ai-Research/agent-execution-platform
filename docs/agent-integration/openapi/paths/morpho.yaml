@@ -1,0 +1,155 @@
+---
+"/protocols/morpho/market":
+  get:
+    summary: Read a Morpho Blue Base Sepolia market
+    parameters:
+    - in: query
+      name: chain
+      schema:
+        type: string
+        enum: [base]
+        default: base
+    - in: query
+      name: market_id
+      schema:
+        type: string
+        default: "0xd39b446f5f67c78fa8be78efab5715845290d1cfb12874f5f0b245d638a153a8"
+    responses:
+      '200':
+        description: Market parameters and accrued state
+        content:
+          application/json:
+            schema:
+              "$ref": "#/components/schemas/MorphoMarketResponse"
+      '400':
+        "$ref": "#/components/responses/ErrorResponse"
+      '401':
+        "$ref": "#/components/responses/ErrorResponse"
+"/protocols/morpho/position":
+  get:
+    summary: Read a Morpho Blue position, balances, health, and capacity
+    parameters:
+    - in: query
+      name: agent_id
+      required: true
+      schema:
+        type: string
+    - in: query
+      name: chain
+      schema:
+        type: string
+        enum: [base]
+        default: base
+    - in: query
+      name: market_id
+      schema:
+        type: string
+        default: "0xd39b446f5f67c78fa8be78efab5715845290d1cfb12874f5f0b245d638a153a8"
+    responses:
+      '200':
+        description: Agent wallet position
+        content:
+          application/json:
+            schema:
+              "$ref": "#/components/schemas/MorphoPositionResponse"
+      '400':
+        "$ref": "#/components/responses/ErrorResponse"
+      '401':
+        "$ref": "#/components/responses/ErrorResponse"
+"/protocols/morpho/supply/simulate":
+  post:
+    summary: Simulate supplying loan assets to Morpho
+    requestBody: &morphoRequest
+      required: true
+      content:
+        application/json:
+          schema:
+            "$ref": "#/components/schemas/MorphoActionRequest"
+    responses: &morphoSimulationResponses
+      '200':
+        description: Simulation result
+        content:
+          application/json:
+            schema:
+              "$ref": "#/components/schemas/ExecutionResponse"
+      '400':
+        "$ref": "#/components/responses/ErrorResponse"
+      '401':
+        "$ref": "#/components/responses/ErrorResponse"
+"/protocols/morpho/supply":
+  post:
+    summary: Supply loan assets to Morpho
+    parameters: &paymentProofHeader
+    - in: header
+      name: X-Payment-Proof
+      required: false
+      schema: { type: string }
+    requestBody: *morphoRequest
+    responses: &morphoExecutionResponses
+      '200':
+        description: Execution accepted or queued
+        content:
+          application/json:
+            schema:
+              "$ref": "#/components/schemas/ExecutionResponse"
+      '400':
+        "$ref": "#/components/responses/ErrorResponse"
+      '401':
+        "$ref": "#/components/responses/ErrorResponse"
+      '402':
+        description: Payment required for manual mode
+"/protocols/morpho/withdraw/simulate":
+  post:
+    summary: Simulate withdrawing supplied loan assets from Morpho
+    requestBody: *morphoRequest
+    responses: *morphoSimulationResponses
+"/protocols/morpho/withdraw":
+  post:
+    summary: Withdraw supplied loan assets from Morpho
+    parameters: *paymentProofHeader
+    requestBody: *morphoRequest
+    responses: *morphoExecutionResponses
+"/protocols/morpho/supply-collateral/simulate":
+  post:
+    summary: Simulate supplying collateral to Morpho
+    requestBody: *morphoRequest
+    responses: *morphoSimulationResponses
+"/protocols/morpho/supply-collateral":
+  post:
+    summary: Supply collateral to Morpho
+    parameters: *paymentProofHeader
+    requestBody: *morphoRequest
+    responses: *morphoExecutionResponses
+"/protocols/morpho/withdraw-collateral/simulate":
+  post:
+    summary: Simulate withdrawing Morpho collateral
+    requestBody: *morphoRequest
+    responses: *morphoSimulationResponses
+"/protocols/morpho/withdraw-collateral":
+  post:
+    summary: Withdraw Morpho collateral
+    parameters: *paymentProofHeader
+    requestBody: *morphoRequest
+    responses: *morphoExecutionResponses
+"/protocols/morpho/borrow/simulate":
+  post:
+    summary: Simulate borrowing from Morpho
+    requestBody: *morphoRequest
+    responses: *morphoSimulationResponses
+"/protocols/morpho/borrow":
+  post:
+    summary: Borrow from Morpho
+    parameters: *paymentProofHeader
+    requestBody: *morphoRequest
+    responses: *morphoExecutionResponses
+"/protocols/morpho/repay/simulate":
+  post:
+    summary: Simulate repaying Morpho debt
+    requestBody: *morphoRequest
+    responses: *morphoSimulationResponses
+"/protocols/morpho/repay":
+  post:
+    summary: Repay Morpho debt
+    parameters: *paymentProofHeader
+    requestBody: *morphoRequest
+    responses: *morphoExecutionResponses

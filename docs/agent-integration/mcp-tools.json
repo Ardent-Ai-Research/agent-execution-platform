@@ -2068,6 +2068,188 @@
       }
     },
     {
+      "name": "ardent_morpho_market",
+      "description": "Read Morpho Blue Base Sepolia market parameters, liquidity, utilization, LLTV, fee, and borrow rate.",
+      "method": "GET",
+      "path": "/protocols/morpho/market",
+      "authRequired": true,
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "chain": { "type": "string", "enum": ["base"], "default": "base" },
+          "market_id": {
+            "type": "string",
+            "default": "0xd39b446f5f67c78fa8be78efab5715845290d1cfb12874f5f0b245d638a153a8"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "ardent_morpho_position",
+      "description": "Read an agent wallet's Morpho position, token balances, debt, collateral, LTV, health factor, and available borrow capacity.",
+      "method": "GET",
+      "path": "/protocols/morpho/position",
+      "authRequired": true,
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "agent_id": { "type": "string" },
+          "chain": { "type": "string", "enum": ["base"], "default": "base" },
+          "market_id": {
+            "type": "string",
+            "default": "0xd39b446f5f67c78fa8be78efab5715845290d1cfb12874f5f0b245d638a153a8"
+          }
+        },
+        "required": ["agent_id"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "ardent_morpho_supply_simulate",
+      "description": "Simulate supplying a Morpho market's loan asset on Base Sepolia. Supports amount=max.",
+      "method": "POST",
+      "path": "/protocols/morpho/supply/simulate",
+      "authRequired": true,
+      "inputSchema": {
+        "type": "object",
+        "description": "Same request body as MorphoActionRequest in openapi.yaml",
+        "additionalProperties": true
+      }
+    },
+    {
+      "name": "ardent_morpho_supply_execute",
+      "description": "Execute supplying a Morpho market's loan asset on Base Sepolia.",
+      "method": "POST",
+      "path": "/protocols/morpho/supply",
+      "authRequired": true,
+      "inputSchema": {
+        "type": "object",
+        "description": "Same request body as MorphoActionRequest in openapi.yaml",
+        "additionalProperties": true
+      }
+    },
+    {
+      "name": "ardent_morpho_withdraw_simulate",
+      "description": "Simulate withdrawing supplied loan assets from Morpho. Amount=max withdraws all supply shares.",
+      "method": "POST",
+      "path": "/protocols/morpho/withdraw/simulate",
+      "authRequired": true,
+      "inputSchema": {
+        "type": "object",
+        "description": "Same request body as MorphoActionRequest in openapi.yaml",
+        "additionalProperties": true
+      }
+    },
+    {
+      "name": "ardent_morpho_withdraw_execute",
+      "description": "Execute withdrawing supplied loan assets from Morpho.",
+      "method": "POST",
+      "path": "/protocols/morpho/withdraw",
+      "authRequired": true,
+      "inputSchema": {
+        "type": "object",
+        "description": "Same request body as MorphoActionRequest in openapi.yaml",
+        "additionalProperties": true
+      }
+    },
+    {
+      "name": "ardent_morpho_supply_collateral_simulate",
+      "description": "Simulate supplying collateral to a Morpho Blue market. Supports amount=max.",
+      "method": "POST",
+      "path": "/protocols/morpho/supply-collateral/simulate",
+      "authRequired": true,
+      "inputSchema": {
+        "type": "object",
+        "description": "Same request body as MorphoActionRequest in openapi.yaml",
+        "additionalProperties": true
+      }
+    },
+    {
+      "name": "ardent_morpho_supply_collateral_execute",
+      "description": "Execute supplying collateral to a Morpho Blue market.",
+      "method": "POST",
+      "path": "/protocols/morpho/supply-collateral",
+      "authRequired": true,
+      "inputSchema": {
+        "type": "object",
+        "description": "Same request body as MorphoActionRequest in openapi.yaml",
+        "additionalProperties": true
+      }
+    },
+    {
+      "name": "ardent_morpho_withdraw_collateral_simulate",
+      "description": "Simulate withdrawing Morpho collateral with a projected health-factor guard (default minimum 1.05). Amount=max is allowed only with no debt.",
+      "method": "POST",
+      "path": "/protocols/morpho/withdraw-collateral/simulate",
+      "authRequired": true,
+      "inputSchema": {
+        "type": "object",
+        "description": "Same request body as MorphoActionRequest in openapi.yaml",
+        "additionalProperties": true
+      }
+    },
+    {
+      "name": "ardent_morpho_withdraw_collateral_execute",
+      "description": "Execute withdrawing collateral from a Morpho Blue market with a projected health-factor guard.",
+      "method": "POST",
+      "path": "/protocols/morpho/withdraw-collateral",
+      "authRequired": true,
+      "inputSchema": {
+        "type": "object",
+        "description": "Same request body as MorphoActionRequest in openapi.yaml",
+        "additionalProperties": true
+      }
+    },
+    {
+      "name": "ardent_morpho_borrow_simulate",
+      "description": "Simulate borrowing a Morpho market's loan asset with a projected health-factor guard (default minimum 1.05).",
+      "method": "POST",
+      "path": "/protocols/morpho/borrow/simulate",
+      "authRequired": true,
+      "inputSchema": {
+        "type": "object",
+        "description": "Same request body as MorphoActionRequest in openapi.yaml",
+        "additionalProperties": true
+      }
+    },
+    {
+      "name": "ardent_morpho_borrow_execute",
+      "description": "Execute borrowing a Morpho market's loan asset with a projected health-factor guard.",
+      "method": "POST",
+      "path": "/protocols/morpho/borrow",
+      "authRequired": true,
+      "inputSchema": {
+        "type": "object",
+        "description": "Same request body as MorphoActionRequest in openapi.yaml",
+        "additionalProperties": true
+      }
+    },
+    {
+      "name": "ardent_morpho_repay_simulate",
+      "description": "Simulate repaying Morpho debt. Amount=max repays all borrow shares to avoid debt dust.",
+      "method": "POST",
+      "path": "/protocols/morpho/repay/simulate",
+      "authRequired": true,
+      "inputSchema": {
+        "type": "object",
+        "description": "Same request body as MorphoActionRequest in openapi.yaml",
+        "additionalProperties": true
+      }
+    },
+    {
+      "name": "ardent_morpho_repay_execute",
+      "description": "Execute repaying Morpho debt.",
+      "method": "POST",
+      "path": "/protocols/morpho/repay",
+      "authRequired": true,
+      "inputSchema": {
+        "type": "object",
+        "description": "Same request body as MorphoActionRequest in openapi.yaml",
+        "additionalProperties": true
+      }
+    },
+    {
       "name": "ardent_balancer_swap_quote",
       "description": "Quote a single-pool Balancer V3 swap on Ethereum Sepolia and derive the slippage limit used by execution.",
       "method": "POST",

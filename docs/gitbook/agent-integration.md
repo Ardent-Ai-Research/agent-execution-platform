@@ -94,6 +94,8 @@ ardent aave-position --agent-id <id>                   # Aave account data and h
 ardent compound-balances --agent-id <id>               # Compound wallet/protocol balances
 ardent compound-position --agent-id <id>               # Compound base supply, debt, and collateral
 ardent compound-borrow-capacity --agent-id <id>        # Compound available borrow and rates
+ardent morpho-market                                   # Morpho market parameters and liquidity
+ardent morpho-position --agent-id <id>                 # Morpho balances, health, and capacity
 ardent balancer-pool --pool <pool>                     # Balancer pool state and registered tokens
 ardent balancer-balances --agent-id <id> --pool <pool> # Balancer BPT and pool-token balances
 ardent balancer-quote --agent-id <id> --pool <pool> --token-in <addr> --token-out <addr> --amount-raw <raw>
@@ -150,6 +152,8 @@ The installer configures Codex by default and automatically patches the config f
 
 > *"Show my Compound III supplied balances and debt for agent-001 on Base."*
 
+> *"Show my Morpho collateral, debt, health factor, and available borrow for agent-001."*
+
 > *"Quote and simulate an exact-input Balancer V3 swap for agent-001 on Sepolia."*
 
 > *"Simulate a transfer of 100 USDC from my agent wallet on Base and tell me the gas cost."*
@@ -180,6 +184,11 @@ python3 ~/.ardent/mcp_server.py
 | `ardent_aave_position` | Read Aave account data, borrowing capacity, and health factor |
 | `ardent_compound_balances` | Read Compound wallet and protocol balances |
 | `ardent_compound_position` | Read Compound base supply, base debt, and collateral balances |
+| `ardent_morpho_market` | Read Morpho market parameters, liquidity, utilization, and rate |
+| `ardent_morpho_position` | Read Morpho wallet balances, position, health, and capacity |
+| `ardent_morpho_supply_collateral_simulate` | Simulate supplying Morpho collateral |
+| `ardent_morpho_borrow_simulate` | Simulate borrowing from Morpho |
+| `ardent_morpho_repay_simulate` | Simulate partial or full Morpho repayment |
 | `ardent_balancer_pool` | Read Balancer pool state, registered tokens, balances, and fee |
 | `ardent_balancer_balances` | Read Balancer BPT and pool-token wallet balances |
 | `ardent_balancer_swap_quote` | Quote a Balancer single-pool swap and derive its limit |

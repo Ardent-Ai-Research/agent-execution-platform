@@ -37,6 +37,9 @@ use crate::protocols::gmx_v2::{
     GmxClaimRequest, GmxCreateDepositRequest, GmxCreateOrderRequest, GmxCreateWithdrawalRequest,
     GmxMarketsQuery, GmxUpdateOrderRequest,
 };
+use crate::protocols::morpho::{
+    service as morpho_service, MorphoActionRequest, MorphoMarketQuery, MorphoPositionQuery,
+};
 use crate::relayer::erc4337::BundlerClient;
 use crate::relayer::paymaster::PaymasterSigner;
 use crate::types::*;
@@ -682,6 +685,174 @@ pub async fn compound_borrow_capacity_handler(
     {
         Ok(resp) => (StatusCode::OK, Json(serde_json::to_value(resp).unwrap())).into_response(),
         Err(e) => protocol_error_to_http(e),
+    }
+}
+
+macro_rules! morpho_execute_handler {
+    ($fn_name:ident, $service_fn:path, $log_name:literal) => {
+        pub async fn $fn_name(
+            State(state): State<AppState>,
+            Extension(api_ctx): Extension<ApiKeyContext>,
+            payment_proof: Option<Extension<PaymentProof>>,
+            Json(req): Json<MorphoActionRequest>,
+        ) -> impl IntoResponse {
+            info!(
+                agent_id = %req.agent_id,
+                chain = %req.chain,
+                market_id = %req.market_id,
+                $log_name
+            );
+            let proof_ref = payment_proof.as_ref().map(|proof| &proof.0);
+            let mut redis = state.redis_conn.clone();
+            match $service_fn(
+                &state.engine,
+                &state.db_pool,
+                &mut redis,
+                &state.wallet_registry,
+                &state.bundler_clients,
+                &state.paymaster_signers,
+                api_ctx.api_key_id,
+                api_ctx.payment_mode.clone(),
+                &req,
+                proof_ref,
+            )
+            .await
+            {
+                Ok(resp) => execution_response_to_http(&state, &req.chain, resp),
+                Err(error) => protocol_error_to_http(error),
+            }
+        }
+    };
+}
+
+macro_rules! morpho_simulate_handler {
+    ($fn_name:ident, $service_fn:path, $log_name:literal) => {
+        pub async fn $fn_name(
+            State(state): State<AppState>,
+            Extension(api_ctx): Extension<ApiKeyContext>,
+            Json(req): Json<MorphoActionRequest>,
+        ) -> impl IntoResponse {
+            info!(
+                agent_id = %req.agent_id,
+                chain = %req.chain,
+                market_id = %req.market_id,
+                $log_name
+            );
+            match $service_fn(
+                &state.engine,
+                &state.db_pool,
+                &state.wallet_registry,
+                &state.bundler_clients,
+                &state.paymaster_signers,
+                api_ctx.api_key_id,
+                api_ctx.payment_mode.clone(),
+                &req,
+            )
+            .await
+            {
+                Ok(resp) => {
+                    (StatusCode::OK, Json(serde_json::to_value(resp).unwrap())).into_response()
+                }
+                Err(error) => protocol_error_to_http(error),
+            }
+        }
+    };
+}
+
+morpho_execute_handler!(
+    morpho_supply_handler,
+    morpho_service::handle_supply,
+    "POST /protocols/morpho/supply"
+);
+morpho_simulate_handler!(
+    morpho_supply_simulate_handler,
+    morpho_service::handle_supply_simulate,
+    "POST /protocols/morpho/supply/simulate"
+);
+morpho_execute_handler!(
+    morpho_withdraw_handler,
+    morpho_service::handle_withdraw,
+    "POST /protocols/morpho/withdraw"
+);
+morpho_simulate_handler!(
+    morpho_withdraw_simulate_handler,
+    morpho_service::handle_withdraw_simulate,
+    "POST /protocols/morpho/withdraw/simulate"
+);
+morpho_execute_handler!(
+    morpho_supply_collateral_handler,
+    morpho_service::handle_supply_collateral,
+    "POST /protocols/morpho/supply-collateral"
+);
+morpho_simulate_handler!(
+    morpho_supply_collateral_simulate_handler,
+    morpho_service::handle_supply_collateral_simulate,
+    "POST /protocols/morpho/supply-collateral/simulate"
+);
+morpho_execute_handler!(
+    morpho_withdraw_collateral_handler,
+    morpho_service::handle_withdraw_collateral,
+    "POST /protocols/morpho/withdraw-collateral"
+);
+morpho_simulate_handler!(
+    morpho_withdraw_collateral_simulate_handler,
+    morpho_service::handle_withdraw_collateral_simulate,
+    "POST /protocols/morpho/withdraw-collateral/simulate"
+);
+morpho_execute_handler!(
+    morpho_borrow_handler,
+    morpho_service::handle_borrow,
+    "POST /protocols/morpho/borrow"
+);
+morpho_simulate_handler!(
+    morpho_borrow_simulate_handler,
+    morpho_service::handle_borrow_simulate,
+    "POST /protocols/morpho/borrow/simulate"
+);
+morpho_execute_handler!(
+    morpho_repay_handler,
+    morpho_service::handle_repay,
+    "POST /protocols/morpho/repay"
+);
+morpho_simulate_handler!(
+    morpho_repay_simulate_handler,
+    morpho_service::handle_repay_simulate,
+    "POST /protocols/morpho/repay/simulate"
+);
+
+pub async fn morpho_market_handler(
+    State(state): State<AppState>,
+    Extension(_api_ctx): Extension<ApiKeyContext>,
+    Query(query): Query<MorphoMarketQuery>,
+) -> impl IntoResponse {
+    info!(chain = %query.chain, market_id = %query.market_id, "GET /protocols/morpho/market");
+    match morpho_service::handle_market(&state.engine, &query).await {
+        Ok(resp) => (StatusCode::OK, Json(serde_json::to_value(resp).unwrap())).into_response(),
+        Err(error) => protocol_error_to_http(error),
+    }
+}
+
+pub async fn morpho_position_handler(
+    State(state): State<AppState>,
+    Extension(api_ctx): Extension<ApiKeyContext>,
+    Query(query): Query<MorphoPositionQuery>,
+) -> impl IntoResponse {
+    info!(
+        agent_id = %query.agent_id,
+        chain = %query.chain,
+        market_id = %query.market_id,
+        "GET /protocols/morpho/position"
+    );
+    match morpho_service::handle_position(
+        &state.engine,
+        &state.wallet_registry,
+        api_ctx.api_key_id,
+        &query,
+    )
+    .await
+    {
+        Ok(resp) => (StatusCode::OK, Json(serde_json::to_value(resp).unwrap())).into_response(),
+        Err(error) => protocol_error_to_http(error),
     }
 }
 

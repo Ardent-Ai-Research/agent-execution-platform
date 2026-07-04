@@ -77,6 +77,28 @@ ardent compound-balances --agent-id my-agent-001
 ardent compound-borrow-capacity --agent-id my-agent-001
 ```
 
+### Morpho Blue Base Sepolia
+
+Morpho actions are market-ID driven. The default is an on-chain-checked
+USDC/WETH 86% LLTV test market; pass `--market-id` for another Base Sepolia
+market. This is a convenience default, not a Morpho endorsement or allowlist.
+
+```bash
+ardent morpho-market
+ardent morpho-position --agent-id my-agent-001
+ardent morpho-supply-simulate --agent-id my-agent-001 --amount 10
+ardent morpho-withdraw-simulate --agent-id my-agent-001 --amount max
+ardent morpho-supply-collateral-simulate --agent-id my-agent-001 --amount 0.01
+ardent morpho-borrow-simulate --agent-id my-agent-001 --amount 5 --min-health-factor 1.10
+ardent morpho-repay-simulate --agent-id my-agent-001 --amount max
+ardent morpho-withdraw-collateral-simulate --agent-id my-agent-001 --amount 0.001
+```
+
+Read `morpho-position` before borrow or collateral withdrawal. It returns wallet
+balances, accrued debt, collateral value, LTV, health factor, borrow capacity,
+and available market liquidity. Full repay uses borrow shares to avoid debt
+dust.
+
 ### Balancer V3 Ethereum Sepolia
 
 Balancer pool and token addresses are supplied per request and verified against
@@ -219,4 +241,4 @@ ruby docs/agent-integration/openapi/bundle.rb
 
 ## Notes
 
-- MCP tools available: `ardent_health`, `ardent_feed_recent`, `ardent_get_wallet`, `ardent_wallet_balance`, `ardent_simulate`, `ardent_execute`, Aave tools (`ardent_aave_supply_simulate`, `ardent_aave_supply_execute`, `ardent_aave_withdraw_simulate`, `ardent_aave_withdraw_execute`, `ardent_aave_repay_simulate`, `ardent_aave_repay_execute`, `ardent_aave_borrow_simulate`, `ardent_aave_borrow_execute`, `ardent_aave_position`, `ardent_aave_balances`), Compound tools (`ardent_compound_supply_simulate`, `ardent_compound_supply_execute`, `ardent_compound_withdraw_simulate`, `ardent_compound_withdraw_execute`, `ardent_compound_repay_simulate`, `ardent_compound_repay_execute`, `ardent_compound_borrow_simulate`, `ardent_compound_borrow_execute`, `ardent_compound_position`, `ardent_compound_balances`, `ardent_compound_borrow_capacity`), Balancer swap, liquidity, pool, and balance tools, GMX tools (`ardent_gmx_create_order_simulate`, `ardent_gmx_create_order_execute`, `ardent_gmx_cancel_order_simulate`, `ardent_gmx_cancel_order_execute`), and `ardent_status`
+- MCP tools cover general execution, Aave V3, Compound III, Morpho Blue, Balancer V3, and GMX V2 actions and reads. Every protocol write exposes separate simulation and execution tools.

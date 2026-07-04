@@ -39,8 +39,9 @@ curl -X GET "$BASE_URL/feed/recent?limit=12"
 5. Aave V3 typed protocol endpoints
 6. Compound III typed protocol endpoints
 7. Balancer V3 typed protocol endpoints
-8. GMX V2 typed protocol endpoints
-9. `GET /status/:id`
+8. Morpho Blue typed protocol endpoints
+9. GMX V2 typed protocol endpoints
+10. `GET /status/:id`
 
 Authentication:
 
@@ -153,6 +154,25 @@ See [Aave V3 Sepolia](aave-v3.md).
 11. `POST /protocols/compound-v3/borrow`
 
 See [Compound III Base Sepolia](compound-v3.md).
+
+### Morpho Blue Base Sepolia
+
+1. `GET /protocols/morpho/market`
+2. `GET /protocols/morpho/position`
+3. `POST /protocols/morpho/supply/simulate`
+4. `POST /protocols/morpho/supply`
+5. `POST /protocols/morpho/withdraw/simulate`
+6. `POST /protocols/morpho/withdraw`
+7. `POST /protocols/morpho/supply-collateral/simulate`
+8. `POST /protocols/morpho/supply-collateral`
+9. `POST /protocols/morpho/withdraw-collateral/simulate`
+10. `POST /protocols/morpho/withdraw-collateral`
+11. `POST /protocols/morpho/borrow/simulate`
+12. `POST /protocols/morpho/borrow`
+13. `POST /protocols/morpho/repay/simulate`
+14. `POST /protocols/morpho/repay`
+
+See [Morpho Blue Base Sepolia](morpho.md).
 
 ### GMX V2 Arbitrum Sepolia
 

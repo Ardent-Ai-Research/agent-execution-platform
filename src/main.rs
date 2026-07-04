@@ -637,6 +637,62 @@ async fn main() -> anyhow::Result<()> {
             get(routes::compound_borrow_capacity_handler),
         )
         .route(
+            "/protocols/morpho/supply",
+            post(routes::morpho_supply_handler),
+        )
+        .route(
+            "/protocols/morpho/supply/simulate",
+            post(routes::morpho_supply_simulate_handler),
+        )
+        .route(
+            "/protocols/morpho/withdraw",
+            post(routes::morpho_withdraw_handler),
+        )
+        .route(
+            "/protocols/morpho/withdraw/simulate",
+            post(routes::morpho_withdraw_simulate_handler),
+        )
+        .route(
+            "/protocols/morpho/supply-collateral",
+            post(routes::morpho_supply_collateral_handler),
+        )
+        .route(
+            "/protocols/morpho/supply-collateral/simulate",
+            post(routes::morpho_supply_collateral_simulate_handler),
+        )
+        .route(
+            "/protocols/morpho/withdraw-collateral",
+            post(routes::morpho_withdraw_collateral_handler),
+        )
+        .route(
+            "/protocols/morpho/withdraw-collateral/simulate",
+            post(routes::morpho_withdraw_collateral_simulate_handler),
+        )
+        .route(
+            "/protocols/morpho/borrow",
+            post(routes::morpho_borrow_handler),
+        )
+        .route(
+            "/protocols/morpho/borrow/simulate",
+            post(routes::morpho_borrow_simulate_handler),
+        )
+        .route(
+            "/protocols/morpho/repay",
+            post(routes::morpho_repay_handler),
+        )
+        .route(
+            "/protocols/morpho/repay/simulate",
+            post(routes::morpho_repay_simulate_handler),
+        )
+        .route(
+            "/protocols/morpho/market",
+            get(routes::morpho_market_handler),
+        )
+        .route(
+            "/protocols/morpho/position",
+            get(routes::morpho_position_handler),
+        )
+        .route(
             "/protocols/balancer-v3/swap",
             post(routes::balancer_swap_handler),
         )

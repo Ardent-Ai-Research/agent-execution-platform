@@ -30,6 +30,7 @@ ardent wallet         --agent-id my-agent-001 --chain ethereum
 ardent wallet-balance --agent-id my-agent-001 --chain ethereum
 ardent aave-balances --agent-id my-agent-001
 ardent compound-borrow-capacity --agent-id my-agent-001
+ardent morpho-position --agent-id my-agent-001
 ardent gmx-create-order-simulate --agent-id my-agent-001 --body-file ./gmx-order.json
 ardent simulate --agent-id my-agent-001 --chain ethereum --target-contract 0xTargetContract --calldata 0xCalldata --value 0
 ardent execute --agent-id my-agent-001 --chain ethereum --target-contract 0xTargetContract --calldata 0xCalldata --value 0
@@ -257,6 +258,29 @@ For raw token addresses, use `amount_raw`. Supply, withdraw, and repay support
 `amount: "max"`; borrow requires an explicit `amount` or `amount_raw`. Include
 `market: "usdc"` or `market: "weth"` when the asset alone does not identify the
 intended market.
+
+### Typed Morpho Blue Base Sepolia Flow
+
+Morpho actions are isolated by market ID. Inspect the market and position before
+planning a write:
+
+```bash
+ardent morpho-market
+ardent morpho-position --agent-id my-agent-001
+```
+
+Use the action-specific simulation tool before execution:
+
+```bash
+ardent morpho-supply-collateral-simulate --agent-id my-agent-001 --amount 0.01
+ardent morpho-borrow-simulate --agent-id my-agent-001 --amount 5 --min-health-factor 1.10
+ardent morpho-repay-simulate --agent-id my-agent-001 --amount max
+```
+
+The default market is Base Sepolia USDC/WETH at 86% LLTV. For another market,
+pass its bytes32 ID as `market_id` or `--market-id`; Ardent resolves and verifies
+the complete parameter tuple on-chain. Never infer that a permissionlessly
+created market is trustworthy merely because it exists.
 
 ### Typed Balancer V3 Ethereum Sepolia Flow
 

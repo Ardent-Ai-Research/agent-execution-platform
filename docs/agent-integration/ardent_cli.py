@@ -16,6 +16,14 @@ Commands:
 - compound-position
 - compound-balances
 - compound-borrow-capacity
+- morpho-market
+- morpho-position
+- morpho-supply
+- morpho-withdraw
+- morpho-supply-collateral
+- morpho-withdraw-collateral
+- morpho-borrow
+- morpho-repay
 - balancer-swap
 - balancer-quote
 - balancer-add-liquidity
@@ -48,7 +56,7 @@ from urllib import parse, request
 from urllib.error import HTTPError, URLError
 
 
-VERSION = "0.6.0"
+VERSION = "0.7.0"
 REPO_RAW_BASE = "https://raw.githubusercontent.com/Ardent-Ai-Research/agent-execution-platform/master/docs/agent-integration"
 RUNTIME_DIR = Path(os.getenv("ARDENT_RUNTIME_DIR", str(Path.home() / ".ardent")))
 
@@ -504,6 +512,62 @@ def run_compound_borrow_capacity(args: argparse.Namespace) -> int:
     api_key = require_api_key(args)
     qs = parse.urlencode({"agent_id": args.agent_id, "chain": args.chain, "market": args.market})
     url = f"{build_base_url(args)}/protocols/compound-v3/borrow-capacity?{qs}"
+    status, payload = call_api("GET", url, api_key=api_key)
+    output({"status": status, "data": payload})
+    return 0 if 200 <= status < 300 else 1
+
+
+def resolve_morpho_action_body(args: argparse.Namespace) -> dict[str, Any]:
+    if args.body_file:
+        body = parse_json_file(args.body_file)
+        if not isinstance(body, dict):
+            raise ValueError("body file must contain a JSON object")
+        return body
+
+    body: dict[str, Any] = {
+        "agent_id": args.agent_id,
+        "chain": args.chain,
+        "market_id": args.market_id,
+    }
+    if args.amount is not None:
+        body["amount"] = args.amount
+    if args.amount_raw is not None:
+        body["amount_raw"] = args.amount_raw
+    if getattr(args, "min_health_factor", None) is not None:
+        body["min_health_factor"] = args.min_health_factor
+    if args.strategy_id:
+        body["strategy_id"] = args.strategy_id
+    if args.callback_url:
+        body["callback_url"] = args.callback_url
+    return body
+
+
+def run_morpho_action(args: argparse.Namespace) -> int:
+    api_key = require_api_key(args)
+    body = resolve_morpho_action_body(args)
+    suffix = "" if args.execute else "/simulate"
+    url = f"{build_base_url(args)}/protocols/morpho/{args.endpoint}{suffix}"
+    payment_proof = resolve_payment_proof(args) if args.execute else None
+    status, payload = call_api("POST", url, body=body, api_key=api_key, payment_proof=payment_proof)
+    output({"status": status, "data": payload})
+    return 0 if 200 <= status < 300 else 1
+
+
+def run_morpho_market(args: argparse.Namespace) -> int:
+    api_key = require_api_key(args)
+    qs = parse.urlencode({"chain": args.chain, "market_id": args.market_id})
+    url = f"{build_base_url(args)}/protocols/morpho/market?{qs}"
+    status, payload = call_api("GET", url, api_key=api_key)
+    output({"status": status, "data": payload})
+    return 0 if 200 <= status < 300 else 1
+
+
+def run_morpho_position(args: argparse.Namespace) -> int:
+    api_key = require_api_key(args)
+    qs = parse.urlencode(
+        {"agent_id": args.agent_id, "chain": args.chain, "market_id": args.market_id}
+    )
+    url = f"{build_base_url(args)}/protocols/morpho/position?{qs}"
     status, payload = call_api("GET", url, api_key=api_key)
     output({"status": status, "data": payload})
     return 0 if 200 <= status < 300 else 1
@@ -1121,6 +1185,33 @@ def add_compound_amount_action_flags(parser: argparse.ArgumentParser, *, allow_m
     parser.add_argument("--body-file", help="Path to full request JSON object (overrides payload flags)")
 
 
+def add_morpho_action_flags(
+    parser: argparse.ArgumentParser, *, allow_max: bool, health_guard: bool
+) -> None:
+    parser.add_argument("--agent-id", required=True, help="Agent identifier")
+    parser.add_argument("--chain", default="base", choices=["base"], help="Morpho Base Sepolia chain label")
+    parser.add_argument(
+        "--market-id",
+        default="0xd39b446f5f67c78fa8be78efab5715845290d1cfb12874f5f0b245d638a153a8",
+        help="Morpho Blue market ID; defaults to Ardent's preconfigured USDC/WETH 86%% LLTV test market",
+    )
+    amount_help = "Human-readable action-token amount"
+    raw_help = "Raw action-token base-unit amount"
+    if allow_max:
+        amount_help += "; also supports max"
+        raw_help += "; also supports max"
+    parser.add_argument("--amount", help=amount_help)
+    parser.add_argument("--amount-raw", help=raw_help)
+    if health_guard:
+        parser.add_argument(
+            "--min-health-factor",
+            help="Minimum projected health factor; defaults to 1.05 and must be at least 1.0",
+        )
+    parser.add_argument("--strategy-id", help="Optional strategy ID")
+    parser.add_argument("--callback-url", help="Optional callback webhook URL")
+    parser.add_argument("--body-file", help="Path to full request JSON object (overrides payload flags)")
+
+
 def add_payment_proof_flags(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--payment-proof-json", help="Inline JSON object for X-Payment-Proof")
     parser.add_argument("--payment-proof-file", help="Path to JSON object for X-Payment-Proof")
@@ -1541,6 +1632,53 @@ def build_parser() -> argparse.ArgumentParser:
     p_compound_borrow_capacity.add_argument("--chain", default="base", choices=["base"], help="Compound III Base Sepolia chain label")
     p_compound_borrow_capacity.add_argument("--market", default="usdc", choices=["usdc", "weth"], help="Compound III market")
     p_compound_borrow_capacity.set_defaults(func=run_compound_borrow_capacity)
+
+    morpho_default_market = "0xd39b446f5f67c78fa8be78efab5715845290d1cfb12874f5f0b245d638a153a8"
+    p_morpho_market = subparsers.add_parser("morpho-market", help="GET /protocols/morpho/market")
+    add_global_flags(p_morpho_market)
+    p_morpho_market.add_argument("--chain", default="base", choices=["base"])
+    p_morpho_market.add_argument("--market-id", default=morpho_default_market)
+    p_morpho_market.set_defaults(func=run_morpho_market)
+
+    p_morpho_position = subparsers.add_parser("morpho-position", help="GET /protocols/morpho/position")
+    add_global_flags(p_morpho_position)
+    p_morpho_position.add_argument("--agent-id", required=True, help="Agent identifier")
+    p_morpho_position.add_argument("--chain", default="base", choices=["base"])
+    p_morpho_position.add_argument("--market-id", default=morpho_default_market)
+    p_morpho_position.set_defaults(func=run_morpho_position)
+
+    morpho_actions = [
+        ("supply", True, False),
+        ("withdraw", True, False),
+        ("supply-collateral", True, False),
+        ("withdraw-collateral", True, True),
+        ("borrow", False, True),
+        ("repay", True, False),
+    ]
+    for endpoint, allow_max, health_guard in morpho_actions:
+        command = f"morpho-{endpoint}"
+        simulate = subparsers.add_parser(
+            f"{command}-simulate",
+            help=f"POST /protocols/morpho/{endpoint}/simulate",
+        )
+        add_global_flags(simulate)
+        add_morpho_action_flags(
+            simulate, allow_max=allow_max, health_guard=health_guard
+        )
+        simulate.set_defaults(
+            func=run_morpho_action, endpoint=endpoint, execute=False
+        )
+
+        execute = subparsers.add_parser(
+            command,
+            help=f"POST /protocols/morpho/{endpoint}",
+        )
+        add_global_flags(execute)
+        add_morpho_action_flags(
+            execute, allow_max=allow_max, health_guard=health_guard
+        )
+        add_payment_proof_flags(execute)
+        execute.set_defaults(func=run_morpho_action, endpoint=endpoint, execute=True)
 
     p_balancer_swap_sim = subparsers.add_parser(
         "balancer-swap-simulate",
