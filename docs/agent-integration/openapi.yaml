@@ -1921,8 +1921,10 @@ components:
         amount:
           type:
           - string
+          - number
           - 'null'
-          description: Human-readable token amount, e.g. "1.25".
+          description: Human-readable token amount. JSON numbers are accepted; strings
+            are recommended for precision-sensitive decimals.
         amount_raw:
           type:
           - string
@@ -1971,8 +1973,10 @@ components:
         amount:
           type:
           - string
+          - number
           - 'null'
-          description: Human-readable token amount, or "max".
+          description: Human-readable token amount, or "max". JSON numbers are also
+            accepted.
         amount_raw:
           type:
           - string
@@ -2020,8 +2024,10 @@ components:
         amount:
           type:
           - string
+          - number
           - 'null'
-          description: Human-readable token amount, or "max".
+          description: Human-readable token amount, or "max". JSON numbers are also
+            accepted.
         amount_raw:
           type:
           - string
@@ -2078,8 +2084,10 @@ components:
         amount:
           type:
           - string
+          - number
           - 'null'
-          description: Human-readable token amount, or "max".
+          description: Human-readable token amount, or "max". JSON numbers are also
+            accepted.
         amount_raw:
           type:
           - string
@@ -2108,6 +2116,7 @@ components:
         min_health_factor:
           type:
           - string
+          - number
           - 'null'
           default: '1.05'
           description: Minimum projected health factor after borrow. Must be at least
@@ -2580,8 +2589,11 @@ components:
         amount:
           type:
           - string
+          - number
           - 'null'
-          description: Human-readable token amount. Use amount_raw for raw token addresses.
+          description: Human-readable token amount. JSON numbers are accepted; strings
+            are recommended for precision-sensitive decimals. Use amount_raw for raw
+            token addresses.
         amount_raw:
           type:
           - string
@@ -2622,8 +2634,10 @@ components:
         amount:
           type:
           - string
+          - number
           - 'null'
-          description: Human-readable token amount, or "max".
+          description: Human-readable token amount, or "max". JSON numbers are also
+            accepted.
         amount_raw:
           type:
           - string
@@ -2666,8 +2680,10 @@ components:
         amount:
           type:
           - string
+          - number
           - 'null'
-          description: Human-readable base asset amount, or "max".
+          description: Human-readable base asset amount, or "max". JSON numbers are
+            also accepted.
         amount_raw:
           type:
           - string
@@ -2709,8 +2725,9 @@ components:
         amount:
           type:
           - string
+          - number
           - 'null'
-          description: Human-readable base asset amount.
+          description: Human-readable base asset amount. JSON numbers are also accepted.
         amount_raw:
           type:
           - string
@@ -3311,9 +3328,9 @@ components:
           description: Morpho Blue market ID. The default is Ardent's preconfigured
             Base Sepolia USDC/WETH 86% LLTV test market.
         amount:
-          oneOf:
-          - type: string
-          - type: number
+          type:
+          - string
+          - number
           description: Human-readable amount. JSON numbers are accepted; strings are
             recommended for precision-sensitive decimals. Some actions also support
             max.
@@ -3322,9 +3339,10 @@ components:
           description: Integer amount in native token units. Some actions also support
             max.
         min_health_factor:
-          oneOf:
-          - type: string
-          - type: number
+          type:
+          - string
+          - number
+          - 'null'
           description: Minimum projected health factor for borrow and collateral withdrawal.
             Defaults to 1.05 and must be at least 1.0.
         strategy_id:

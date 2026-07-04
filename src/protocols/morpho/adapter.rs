@@ -4,9 +4,9 @@ use anyhow::{anyhow, Context, Result};
 use ethers::abi::{self, ParamType, Token};
 use ethers::types::{Address, H256, U256};
 use ethers::utils::{id, parse_units};
-use serde::de::Error as DeserializeError;
 use serde::{Deserialize, Serialize};
 
+use super::super::serde_utils::deserialize_optional_decimal;
 use crate::types::{BatchCall, ExecutionRequest};
 
 pub const MORPHO_ADDRESS: &str = "0xBBBBBbbBBb9cC5e90e3b3Af64bdAF62C37EEFFCb";
@@ -114,20 +114,6 @@ fn default_chain() -> String {
 
 fn default_market_id() -> String {
     DEFAULT_MARKET_ID.to_string()
-}
-
-fn deserialize_optional_decimal<'de, D>(
-    deserializer: D,
-) -> std::result::Result<Option<String>, D::Error>
-where
-    D: serde::Deserializer<'de>,
-{
-    match Option::<serde_json::Value>::deserialize(deserializer)? {
-        None => Ok(None),
-        Some(serde_json::Value::String(value)) => Ok(Some(value)),
-        Some(serde_json::Value::Number(value)) => Ok(Some(value.to_string())),
-        Some(_) => Err(D::Error::custom("expected a decimal string or JSON number")),
-    }
 }
 
 pub fn morpho_address() -> Address {

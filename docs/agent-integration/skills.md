@@ -198,7 +198,9 @@ curl -X POST "$BASE_URL/protocols/aave-v3/borrow/simulate" \
 ```
 
 Supported assets: `AAVE`, `DAI`, `EURS`, `GHO`, `LINK`, `USDC`, `USDT`,
-`WBTC`, `WETH`. Use `amount_raw` instead of `amount` for exact base units.
+`WBTC`, `WETH`. Human-readable `amount` values may be JSON strings or numbers;
+prefer strings when exact decimal precision matters. Use `amount_raw` strings
+for exact base units.
 Withdraw, repay, and borrow support `amount: "max"`. Repay max resolves to the
 smaller of selected-rate debt and wallet token balance. Borrow max resolves to
 the largest amount allowed by available borrows and the projected health-factor
@@ -254,8 +256,10 @@ curl -X POST "$BASE_URL/protocols/compound-v3/repay/simulate" \
 ```
 
 Use `USDC`, `base`, `WETH`, or a Comet-supported token address as `asset`.
-For raw token addresses, use `amount_raw`. Supply, withdraw, and repay support
-`amount: "max"`; borrow requires an explicit `amount` or `amount_raw`. Include
+Human-readable `amount` values may be JSON strings or numbers. For raw token
+addresses and exact base units, use an `amount_raw` string. Supply, withdraw,
+and repay support `amount: "max"`; borrow requires an explicit `amount` or
+`amount_raw`. Include
 `market: "usdc"` or `market: "weth"` when the asset alone does not identify the
 intended market.
 

@@ -24,6 +24,11 @@ ardent aave-repay-simulate --agent-id my-agent-001 --asset USDC --amount max
 ardent aave-borrow-simulate --agent-id my-agent-001 --asset USDC --amount max --min-health-factor 1.10
 ```
 
+API requests accept `amount` and `min_health_factor` as either JSON strings or
+JSON numbers. Decimal strings are recommended when exact precision matters.
+Keep `amount_raw` as a string because large base-unit integers can exceed JSON's
+safe numeric range.
+
 ## Read Balances
 
 Use balances before action planning to see what the agent wallet currently holds across Aave-supported reserve assets.

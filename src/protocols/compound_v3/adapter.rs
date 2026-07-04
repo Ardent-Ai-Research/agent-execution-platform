@@ -6,6 +6,7 @@ use ethers::types::{Address, U256};
 use ethers::utils::id;
 use serde::{Deserialize, Serialize};
 
+use super::super::serde_utils::deserialize_optional_decimal;
 use crate::types::{BatchCall, ExecutionRequest};
 
 const BASE_SEPOLIA_COMET_USDC: &str = "0x571621Ce60Cebb0c1D442B5afb38B1663C6Bf017";
@@ -23,7 +24,7 @@ pub struct CompoundSupplyRequest {
     /// Compound III Base Sepolia market: `usdc` or `weth`. Defaults from `asset`.
     #[serde(default)]
     pub market: Option<String>,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_optional_decimal")]
     pub amount: Option<String>,
     #[serde(default)]
     pub amount_raw: Option<String>,
@@ -43,7 +44,7 @@ pub struct CompoundWithdrawRequest {
     #[serde(default)]
     pub market: Option<String>,
     /// Human-readable token amount, or `max`. For raw token addresses, use `amount_raw`.
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_optional_decimal")]
     pub amount: Option<String>,
     #[serde(default)]
     pub amount_raw: Option<String>,
@@ -64,7 +65,7 @@ pub struct CompoundRepayRequest {
     /// Compound III Base Sepolia market: `usdc` or `weth`. Defaults from `asset`.
     #[serde(default)]
     pub market: Option<String>,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_optional_decimal")]
     pub amount: Option<String>,
     #[serde(default)]
     pub amount_raw: Option<String>,
@@ -85,7 +86,7 @@ pub struct CompoundBorrowRequest {
     /// Compound III Base Sepolia market: `usdc` or `weth`. Defaults from `asset`.
     #[serde(default)]
     pub market: Option<String>,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_optional_decimal")]
     pub amount: Option<String>,
     #[serde(default)]
     pub amount_raw: Option<String>,
@@ -932,6 +933,24 @@ fn encode_comet_withdraw(asset: Address, amount: U256) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn action_requests_accept_numeric_human_amounts() {
+        let base = serde_json::json!({
+            "agent_id": "agent-compound",
+            "asset": "USDC",
+            "amount": 1.25
+        });
+        let supply: CompoundSupplyRequest = serde_json::from_value(base.clone()).unwrap();
+        let withdraw: CompoundWithdrawRequest = serde_json::from_value(base.clone()).unwrap();
+        let repay: CompoundRepayRequest = serde_json::from_value(base.clone()).unwrap();
+        let borrow: CompoundBorrowRequest = serde_json::from_value(base).unwrap();
+
+        assert_eq!(supply.amount.as_deref(), Some("1.25"));
+        assert_eq!(withdraw.amount.as_deref(), Some("1.25"));
+        assert_eq!(repay.amount.as_deref(), Some("1.25"));
+        assert_eq!(borrow.amount.as_deref(), Some("1.25"));
+    }
 
     #[test]
     fn encodes_compound_supply_selector() {

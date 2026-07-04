@@ -24,8 +24,9 @@ schemas:
       amount:
         type:
         - string
+        - number
         - 'null'
-        description: Human-readable token amount. Use amount_raw for raw token addresses.
+        description: Human-readable token amount. JSON numbers are accepted; strings are recommended for precision-sensitive decimals. Use amount_raw for raw token addresses.
       amount_raw:
         type:
         - string
@@ -66,8 +67,9 @@ schemas:
       amount:
         type:
         - string
+        - number
         - 'null'
-        description: Human-readable token amount, or "max".
+        description: Human-readable token amount, or "max". JSON numbers are also accepted.
       amount_raw:
         type:
         - string
@@ -110,8 +112,9 @@ schemas:
       amount:
         type:
         - string
+        - number
         - 'null'
-        description: Human-readable base asset amount, or "max".
+        description: Human-readable base asset amount, or "max". JSON numbers are also accepted.
       amount_raw:
         type:
         - string
@@ -153,8 +156,9 @@ schemas:
       amount:
         type:
         - string
+        - number
         - 'null'
-        description: Human-readable base asset amount.
+        description: Human-readable base asset amount. JSON numbers are also accepted.
       amount_raw:
         type:
         - string

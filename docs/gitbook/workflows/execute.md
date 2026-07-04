@@ -235,8 +235,9 @@ ardent aave-supply \
 
 The adapter compiles the request into an atomic `approve -> Pool.supply` batch
 for the agent's ERC-4337 smart wallet and uses full UserOperation simulation.
-Use `amount_raw` instead of `amount` when the caller already has exact token
-base units.
+Human-readable `amount` values may be JSON strings or numbers; prefer strings
+when exact decimal precision matters. Use an `amount_raw` string when the
+caller already has exact token base units.
 
 Withdraw:
 

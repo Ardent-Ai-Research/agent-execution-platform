@@ -318,6 +318,7 @@
           "amount": {
             "type": [
               "string",
+              "number",
               "null"
             ],
             "description": "Human-readable token amount, e.g. 1.25"
@@ -394,6 +395,7 @@
           "amount": {
             "type": [
               "string",
+              "number",
               "null"
             ],
             "description": "Human-readable token amount, e.g. 1.25"
@@ -502,6 +504,7 @@
           "amount": {
             "type": [
               "string",
+              "number",
               "null"
             ],
             "description": "Human-readable amount, or max"
@@ -577,6 +580,7 @@
           "amount": {
             "type": [
               "string",
+              "number",
               "null"
             ],
             "description": "Human-readable amount, or max"
@@ -684,6 +688,7 @@
           "amount": {
             "type": [
               "string",
+              "number",
               "null"
             ],
             "description": "Human-readable amount, or max"
@@ -770,6 +775,7 @@
           "amount": {
             "type": [
               "string",
+              "number",
               "null"
             ],
             "description": "Human-readable amount, or max"
@@ -888,6 +894,7 @@
           "amount": {
             "type": [
               "string",
+              "number",
               "null"
             ],
             "description": "Human-readable amount, or max"
@@ -928,6 +935,7 @@
           "min_health_factor": {
             "type": [
               "string",
+              "number",
               "null"
             ],
             "description": "Minimum projected health factor after borrow; default 1.05; must be at least 1.0"
@@ -989,6 +997,7 @@
           "amount": {
             "type": [
               "string",
+              "number",
               "null"
             ],
             "description": "Human-readable amount, or max"
@@ -1029,6 +1038,7 @@
           "min_health_factor": {
             "type": [
               "string",
+              "number",
               "null"
             ],
             "description": "Minimum projected health factor after borrow; default 1.05; must be at least 1.0"

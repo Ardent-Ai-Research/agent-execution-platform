@@ -17,17 +17,13 @@ schemas:
           default: "0x6143c1e52ed45fb9a0551b349abb4a1b8c5962dd39545ac235a9c98610bf97da"
           description: Morpho Blue market ID. The default is Ardent's preconfigured Base Sepolia USDC/WETH 86% LLTV test market.
         amount:
-          oneOf:
-          - type: string
-          - type: number
+          type: [string, number]
           description: Human-readable amount. JSON numbers are accepted; strings are recommended for precision-sensitive decimals. Some actions also support max.
         amount_raw:
           type: string
           description: Integer amount in native token units. Some actions also support max.
         min_health_factor:
-          oneOf:
-          - type: string
-          - type: number
+          type: [string, number, "null"]
           description: Minimum projected health factor for borrow and collateral withdrawal. Defaults to 1.05 and must be at least 1.0.
         strategy_id:
           type: string

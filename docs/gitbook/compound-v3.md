@@ -32,6 +32,10 @@ ardent compound-position --agent-id my-agent-001 --market weth
 ardent compound-borrow-capacity --agent-id my-agent-001
 ```
 
+API requests accept `amount` as either a JSON string or JSON number. Decimal
+strings are recommended when exact precision matters. Keep `amount_raw` as a
+string because large base-unit integers can exceed JSON's safe numeric range.
+
 ## Read State
 
 ```bash

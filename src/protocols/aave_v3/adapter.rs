@@ -11,6 +11,7 @@ use ethers::utils::id;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
+use super::super::serde_utils::deserialize_optional_decimal;
 use crate::types::{BatchCall, ExecutionRequest};
 
 const AAVE_V3_SEPOLIA_POOL: &str = "0x6Ae43d3271ff6888e7Fc43Fd7321a503ff738951";
@@ -70,7 +71,7 @@ pub struct AaveSupplyRequest {
     /// Asset symbol on Aave V3 Sepolia, e.g. `USDC`, `WETH`, `DAI`.
     pub asset: String,
     /// Human-readable amount, e.g. `"100.5"` for USDC.
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_optional_decimal")]
     pub amount: Option<String>,
     /// Raw token amount in smallest units. Use this for exact machine input.
     #[serde(default)]
@@ -92,7 +93,7 @@ pub struct AaveWithdrawRequest {
     pub chain: String,
     pub asset: String,
     /// Human-readable token amount, or `"max"` to withdraw all available aToken balance.
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_optional_decimal")]
     pub amount: Option<String>,
     #[serde(default)]
     pub amount_raw: Option<String>,
@@ -113,7 +114,7 @@ pub struct AaveRepayRequest {
     pub chain: String,
     pub asset: String,
     /// Human-readable token amount, or `"max"` to repay up to debt and wallet balance.
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_optional_decimal")]
     pub amount: Option<String>,
     #[serde(default)]
     pub amount_raw: Option<String>,
@@ -137,7 +138,7 @@ pub struct AaveBorrowRequest {
     pub chain: String,
     pub asset: String,
     /// Human-readable token amount, or `"max"` to borrow the maximum amount allowed by the health-factor guard.
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_optional_decimal")]
     pub amount: Option<String>,
     #[serde(default)]
     pub amount_raw: Option<String>,
@@ -151,7 +152,7 @@ pub struct AaveBorrowRequest {
     #[serde(default)]
     pub on_behalf_of: Option<String>,
     /// Minimum projected health factor after this borrow. Defaults to 1.05.
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_optional_decimal")]
     pub min_health_factor: Option<String>,
     #[serde(default)]
     pub strategy_id: Option<String>,
@@ -998,6 +999,27 @@ fn selector(signature: &str) -> [u8; 4] {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn action_requests_accept_numeric_human_amounts() {
+        let base = serde_json::json!({
+            "agent_id": "agent-aave",
+            "asset": "USDC",
+            "amount": 1.25
+        });
+        let supply: AaveSupplyRequest = serde_json::from_value(base.clone()).unwrap();
+        let withdraw: AaveWithdrawRequest = serde_json::from_value(base.clone()).unwrap();
+        let repay: AaveRepayRequest = serde_json::from_value(base.clone()).unwrap();
+        let mut borrow_json = base;
+        borrow_json["min_health_factor"] = serde_json::json!(1.1);
+        let borrow: AaveBorrowRequest = serde_json::from_value(borrow_json).unwrap();
+
+        assert_eq!(supply.amount.as_deref(), Some("1.25"));
+        assert_eq!(withdraw.amount.as_deref(), Some("1.25"));
+        assert_eq!(repay.amount.as_deref(), Some("1.25"));
+        assert_eq!(borrow.amount.as_deref(), Some("1.25"));
+        assert_eq!(borrow.min_health_factor.as_deref(), Some("1.1"));
+    }
 
     #[test]
     fn compile_supply_builds_approve_then_supply_batch() {

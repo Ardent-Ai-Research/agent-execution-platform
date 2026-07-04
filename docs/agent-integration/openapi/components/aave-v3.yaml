@@ -26,8 +26,9 @@ schemas:
       amount:
         type:
         - string
+        - number
         - 'null'
-        description: Human-readable token amount, e.g. "1.25".
+        description: Human-readable token amount. JSON numbers are accepted; strings are recommended for precision-sensitive decimals.
       amount_raw:
         type:
         - string
@@ -76,8 +77,9 @@ schemas:
       amount:
         type:
         - string
+        - number
         - 'null'
-        description: Human-readable token amount, or "max".
+        description: Human-readable token amount, or "max". JSON numbers are also accepted.
       amount_raw:
         type:
         - string
@@ -125,8 +127,9 @@ schemas:
       amount:
         type:
         - string
+        - number
         - 'null'
-        description: Human-readable token amount, or "max".
+        description: Human-readable token amount, or "max". JSON numbers are also accepted.
       amount_raw:
         type:
         - string
@@ -183,8 +186,9 @@ schemas:
       amount:
         type:
         - string
+        - number
         - 'null'
-        description: Human-readable token amount, or "max".
+        description: Human-readable token amount, or "max". JSON numbers are also accepted.
       amount_raw:
         type:
         - string
@@ -213,6 +217,7 @@ schemas:
       min_health_factor:
         type:
         - string
+        - number
         - 'null'
         default: '1.05'
         description: Minimum projected health factor after borrow. Must be at least
