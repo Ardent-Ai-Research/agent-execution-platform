@@ -71,6 +71,11 @@ continue to fail closed until the oracle is responsive.
 
 ## Amount behavior
 
+API requests accept `amount` and `min_health_factor` as either JSON strings or
+JSON numbers. Decimal strings are recommended when exact precision matters.
+Keep `amount_raw` as a string because large base-unit integers can exceed JSON's
+safe numeric range.
+
 | Action | Action token | `amount=max` |
 | --- | --- | --- |
 | Supply | Loan token | Entire wallet balance |

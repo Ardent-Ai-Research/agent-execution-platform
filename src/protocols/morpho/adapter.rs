@@ -4,6 +4,7 @@ use anyhow::{anyhow, Context, Result};
 use ethers::abi::{self, ParamType, Token};
 use ethers::types::{Address, H256, U256};
 use ethers::utils::{id, parse_units};
+use serde::de::Error as DeserializeError;
 use serde::{Deserialize, Serialize};
 
 use crate::types::{BatchCall, ExecutionRequest};
@@ -21,13 +22,13 @@ pub struct MorphoActionRequest {
     #[serde(default = "default_market_id")]
     pub market_id: String,
     /// Human-readable token amount. `max` is supported where documented.
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_optional_decimal")]
     pub amount: Option<String>,
     /// Integer amount in the token's native units. `max` is supported where documented.
     #[serde(default)]
     pub amount_raw: Option<String>,
     /// Minimum projected health factor for borrow and collateral withdrawal. Defaults to 1.05.
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_optional_decimal")]
     pub min_health_factor: Option<String>,
     #[serde(default)]
     pub strategy_id: Option<String>,
@@ -113,6 +114,20 @@ fn default_chain() -> String {
 
 fn default_market_id() -> String {
     DEFAULT_MARKET_ID.to_string()
+}
+
+fn deserialize_optional_decimal<'de, D>(
+    deserializer: D,
+) -> std::result::Result<Option<String>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    match Option::<serde_json::Value>::deserialize(deserializer)? {
+        None => Ok(None),
+        Some(serde_json::Value::String(value)) => Ok(Some(value)),
+        Some(serde_json::Value::Number(value)) => Ok(Some(value.to_string())),
+        Some(_) => Err(D::Error::custom("expected a decimal string or JSON number")),
+    }
 }
 
 pub fn morpho_address() -> Address {
@@ -774,6 +789,34 @@ mod tests {
         let mut req = request("1");
         req.amount_raw = Some("1".to_string());
         assert!(validate_action_request(&req).is_err());
+    }
+
+    #[test]
+    fn action_request_accepts_numeric_human_amounts() {
+        let integer: MorphoActionRequest = serde_json::from_value(serde_json::json!({
+            "agent_id": "agent",
+            "amount": 5
+        }))
+        .unwrap();
+        assert_eq!(integer.amount.as_deref(), Some("5"));
+
+        let decimal: MorphoActionRequest = serde_json::from_value(serde_json::json!({
+            "agent_id": "agent",
+            "amount": 0.125,
+            "min_health_factor": 1.1
+        }))
+        .unwrap();
+        assert_eq!(decimal.amount.as_deref(), Some("0.125"));
+        assert_eq!(decimal.min_health_factor.as_deref(), Some("1.1"));
+    }
+
+    #[test]
+    fn raw_amount_remains_string_only_to_preserve_precision() {
+        let result = serde_json::from_value::<MorphoActionRequest>(serde_json::json!({
+            "agent_id": "agent",
+            "amount_raw": 1000000
+        }));
+        assert!(result.is_err());
     }
 
     #[test]
