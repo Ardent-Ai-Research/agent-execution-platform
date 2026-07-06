@@ -7,6 +7,7 @@ pub mod service;
 
 pub use adapter::{
     BalancerAddLiquidityQuoteResponse, BalancerAddLiquidityRequest, BalancerBalancesQuery,
-    BalancerPoolQuery, BalancerQuoteResponse, BalancerRemoveLiquidityQuoteResponse,
-    BalancerRemoveLiquidityRequest, BalancerSwapKind, BalancerSwapRequest,
+    BalancerPoolQuery, BalancerPoolsQuery, BalancerQuoteResponse,
+    BalancerRemoveLiquidityQuoteResponse, BalancerRemoveLiquidityRequest, BalancerSwapKind,
+    BalancerSwapRequest,
 };

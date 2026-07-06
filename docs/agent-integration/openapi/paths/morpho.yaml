@@ -25,6 +25,43 @@
         "$ref": "#/components/responses/ErrorResponse"
       '401':
         "$ref": "#/components/responses/ErrorResponse"
+"/protocols/morpho/markets":
+  get:
+    summary: Discover and rank Morpho Blue Base Sepolia markets
+    description: Discovers CreateMarket events, verifies market parameters and state on-chain, applies explicit risk filters, and recommends the highest-ranked result. Actions still require an explicit market_id.
+    parameters:
+    - in: query
+      name: chain
+      schema: { type: string, enum: [base], default: base }
+    - in: query
+      name: loan_token
+      schema: { type: string }
+    - in: query
+      name: collateral_token
+      schema: { type: string }
+    - in: query
+      name: max_lltv_raw
+      schema: { type: string }
+    - in: query
+      name: min_liquidity_raw
+      schema: { type: string }
+    - in: query
+      name: require_available_oracle
+      schema: { type: boolean, default: true }
+    - in: query
+      name: limit
+      schema: { type: integer, minimum: 1, maximum: 50, default: 20 }
+    responses:
+      '200':
+        description: Filtered and ranked Morpho markets
+        content:
+          application/json:
+            schema:
+              "$ref": "#/components/schemas/MorphoMarketsResponse"
+      '400':
+        "$ref": "#/components/responses/ErrorResponse"
+      '401':
+        "$ref": "#/components/responses/ErrorResponse"
 "/protocols/morpho/position":
   get:
     summary: Read a Morpho Blue position, balances, health, and capacity

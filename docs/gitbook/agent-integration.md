@@ -94,19 +94,26 @@ ardent aave-position --agent-id <id>                   # Aave account data and h
 ardent compound-balances --agent-id <id>               # Compound wallet/protocol balances
 ardent compound-position --agent-id <id>               # Compound base supply, debt, and collateral
 ardent compound-borrow-capacity --agent-id <id>        # Compound available borrow and rates
+ardent compound-markets                                # Verified Base Sepolia Comet registry
+ardent morpho-markets --loan-token <addr>              # Discover risk-filtered Morpho markets
 ardent morpho-market                                   # Morpho market parameters and liquidity
 ardent morpho-position --agent-id <id>                 # Morpho balances, health, and capacity
 ardent balancer-pool --pool <pool>                     # Balancer pool state and registered tokens
+ardent balancer-pools --token-in <addr> --token-out <addr> # Discover matching Balancer pools
 ardent balancer-balances --agent-id <id> --pool <pool> # Balancer BPT and pool-token balances
-ardent balancer-quote --agent-id <id> --pool <pool> --token-in <addr> --token-out <addr> --amount-raw <raw>
-ardent balancer-swap-simulate --agent-id <id> --pool <pool> --token-in <addr> --token-out <addr> --amount-raw <raw>
-ardent balancer-swap --agent-id <id> --pool <pool> --token-in <addr> --token-out <addr> --amount-raw <raw>
+ardent balancer-quote --agent-id <id> --token-in <addr> --token-out <addr> --amount-raw <raw>
+ardent balancer-swap-simulate --agent-id <id> --token-in <addr> --token-out <addr> --amount-raw <raw>
+ardent balancer-swap --agent-id <id> --token-in <addr> --token-out <addr> --amount-raw <raw>
 ardent balancer-add-liquidity-quote --agent-id <id> --pool <pool> --amount-in <token=raw>
 ardent balancer-add-liquidity-simulate --agent-id <id> --pool <pool> --amount-in <token=raw>
 ardent balancer-add-liquidity --agent-id <id> --pool <pool> --amount-in <token=raw>
 ardent balancer-remove-liquidity-quote --agent-id <id> --pool <pool> --bpt-amount-in-raw <raw>
 ardent balancer-remove-liquidity-simulate --agent-id <id> --pool <pool> --bpt-amount-in-raw <raw>
 ardent balancer-remove-liquidity --agent-id <id> --pool <pool> --bpt-amount-in-raw <raw>
+ardent uniswap-v4-pools --token-a <addr> --token-b <addr> # Discover matching V4 pool keys
+ardent uniswap-v4-quote --agent-id <id> --token-in <addr> --token-out <addr> --amount-raw <raw>
+ardent uniswap-v4-swap-simulate --agent-id <id> --token-in <addr> --token-out <addr> --amount-raw <raw>
+ardent uniswap-v4-swap --agent-id <id> --token-in <addr> --token-out <addr> --amount-raw <raw>
 ardent status   --request-id <id>
 ardent self-update                      # updates CLI plus ~/.ardent runtime files
 ardent self-update --cli-only           # updates only the CLI
@@ -184,22 +191,29 @@ python3 ~/.ardent/mcp_server.py
 | `ardent_aave_position` | Read Aave account data, borrowing capacity, and health factor |
 | `ardent_compound_balances` | Read Compound wallet and protocol balances |
 | `ardent_compound_position` | Read Compound base supply, base debt, and collateral balances |
+| `ardent_compound_markets` | List and verify Base Sepolia Comet markets |
+| `ardent_morpho_markets` | Discover and rank filtered Morpho markets |
 | `ardent_morpho_market` | Read Morpho market parameters, liquidity, utilization, and rate |
 | `ardent_morpho_position` | Read Morpho wallet balances, position, health, and capacity |
 | `ardent_morpho_supply_collateral_simulate` | Simulate supplying Morpho collateral |
 | `ardent_morpho_borrow_simulate` | Simulate borrowing from Morpho |
 | `ardent_morpho_repay_simulate` | Simulate partial or full Morpho repayment |
 | `ardent_balancer_pool` | Read Balancer pool state, registered tokens, balances, and fee |
+| `ardent_balancer_pools` | Discover pair-compatible pools and verify Vault state |
 | `ardent_balancer_balances` | Read Balancer BPT and pool-token wallet balances |
-| `ardent_balancer_swap_quote` | Quote a Balancer single-pool swap and derive its limit |
+| `ardent_balancer_swap_quote` | Discover and quote the best Balancer pool or pin an explicit pool |
 | `ardent_balancer_swap_simulate` | Fully simulate the Permit2 plus Router swap batch |
-| `ardent_balancer_swap_execute` | Execute a Balancer single-pool swap |
+| `ardent_balancer_swap_execute` | Execute an automatically selected or explicitly pinned Balancer pool swap |
 | `ardent_balancer_add_liquidity_quote` | Quote BPT output for an unbalanced liquidity addition |
 | `ardent_balancer_add_liquidity_simulate` | Fully simulate liquidity addition and approval cleanup |
 | `ardent_balancer_add_liquidity_execute` | Add liquidity and receive BPT |
 | `ardent_balancer_remove_liquidity_quote` | Quote proportional token outputs for a BPT burn |
 | `ardent_balancer_remove_liquidity_simulate` | Fully simulate proportional liquidity removal |
 | `ardent_balancer_remove_liquidity_execute` | Burn BPT and receive all pool tokens proportionally |
+| `ardent_uniswap_v4_pools` | Discover matching V4 pool keys and current state |
+| `ardent_uniswap_v4_swap_quote` | Discover and quote the best direct V4 pool |
+| `ardent_uniswap_v4_swap_simulate` | Simulate the selected Universal Router swap bundle |
+| `ardent_uniswap_v4_swap_execute` | Execute the selected V4 swap |
 | `ardent_simulate` | Simulate a transaction and return estimated cost |
 | `ardent_execute` | Submit a transaction for execution |
 | `ardent_status` | Poll execution request status |

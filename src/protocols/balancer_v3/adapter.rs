@@ -32,6 +32,8 @@ pub struct BalancerSwapRequest {
     pub agent_id: String,
     #[serde(default = "default_chain")]
     pub chain: String,
+    /// Optional Balancer V3 pool address. Omit for automatic pool discovery.
+    #[serde(default)]
     pub pool: String,
     pub token_in: String,
     pub token_out: String,
@@ -115,6 +117,21 @@ pub struct BalancerBalancesQuery {
     pub pool: String,
 }
 
+#[derive(Debug, Clone, Deserialize)]
+pub struct BalancerPoolsQuery {
+    #[serde(default = "default_chain")]
+    pub chain: String,
+    pub token_in: String,
+    pub token_out: String,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum BalancerPoolSelection {
+    Automatic,
+    Explicit,
+}
+
 #[derive(Debug, Clone, Serialize)]
 pub struct BalancerPoolResponse {
     pub chain: String,
@@ -175,6 +192,9 @@ pub struct BalancerQuoteResponse {
     pub chain: String,
     pub smart_wallet_address: String,
     pub pool_address: String,
+    pub pool_selection: BalancerPoolSelection,
+    pub candidates_discovered: usize,
+    pub candidates_quoted: usize,
     pub token_in: String,
     pub token_out: String,
     pub swap_kind: BalancerSwapKind,
@@ -183,6 +203,36 @@ pub struct BalancerQuoteResponse {
     pub limit_raw: String,
     pub slippage_bps: u16,
     pub deadline: u64,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct BalancerDiscoveredPool {
+    pub pool_address: String,
+    pub name: String,
+    pub symbol: String,
+    pub pool_type: String,
+    pub total_liquidity_usd: Option<String>,
+    pub swap_fee: Option<String>,
+    pub tokens: Vec<BalancerDiscoveredPoolToken>,
+    pub is_initialized: bool,
+    pub is_paused: bool,
+    pub is_in_recovery_mode: bool,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct BalancerDiscoveredPoolToken {
+    pub address: String,
+    pub symbol: String,
+    pub decimals: u8,
+    pub index: usize,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct BalancerPoolsResponse {
+    pub chain: String,
+    pub token_in: String,
+    pub token_out: String,
+    pub pools: Vec<BalancerDiscoveredPool>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -241,10 +291,14 @@ pub fn validate_swap_request(req: &BalancerSwapRequest) -> Result<()> {
         return Err(anyhow!("agent_id is required"));
     }
 
-    let pool = parse_address(&req.pool, "pool")?;
+    let pool = if req.pool.trim().is_empty() {
+        None
+    } else {
+        Some(parse_address(&req.pool, "pool")?)
+    };
     let token_in = parse_address(&req.token_in, "token_in")?;
     let token_out = parse_address(&req.token_out, "token_out")?;
-    if pool == Address::zero() {
+    if pool == Some(Address::zero()) {
         return Err(anyhow!("pool must not be the zero address"));
     }
     if token_in == Address::zero() || token_out == Address::zero() {
@@ -271,6 +325,19 @@ pub fn validate_swap_request(req: &BalancerSwapRequest) -> Result<()> {
         if deadline == 0 || deadline > ((1u64 << 48) - 1) {
             return Err(anyhow!("deadline must fit in uint48"));
         }
+    }
+    Ok(())
+}
+
+pub fn validate_pools_query(query: &BalancerPoolsQuery) -> Result<()> {
+    validate_chain(&query.chain)?;
+    let token_in = parse_address(&query.token_in, "token_in")?;
+    let token_out = parse_address(&query.token_out, "token_out")?;
+    if token_in == Address::zero() || token_out == Address::zero() {
+        return Err(anyhow!("token addresses must not be the zero address"));
+    }
+    if token_in == token_out {
+        return Err(anyhow!("token_in and token_out must be different"));
     }
     Ok(())
 }
@@ -328,6 +395,11 @@ pub fn validate_balances_query(query: &BalancerBalancesQuery) -> Result<()> {
 
 pub fn compile_swap(req: &BalancerSwapRequest) -> Result<ExecutionRequest> {
     validate_swap_request(req)?;
+    if req.pool.trim().is_empty() {
+        return Err(anyhow!(
+            "pool must be resolved before compiling a Balancer swap"
+        ));
+    }
     let pool = parse_address(&req.pool, "pool")?;
     let token_in = parse_address(&req.token_in, "token_in")?;
     let token_out = parse_address(&req.token_out, "token_out")?;
@@ -557,10 +629,12 @@ pub fn compile_remove_liquidity(
 
 pub fn swap_with_resolved_limit(
     req: &BalancerSwapRequest,
+    pool: Address,
     limit: U256,
     deadline: u64,
 ) -> BalancerSwapRequest {
     let mut resolved = req.clone();
+    resolved.pool = format!("{pool:?}");
     resolved.limit_raw = Some(limit.to_string());
     resolved.deadline = Some(deadline);
     resolved
@@ -1109,6 +1183,23 @@ mod tests {
         );
         assert_eq!(calldata_word(&calls[4].calldata, 2), U256::zero());
         assert_eq!(calldata_word(&calls[5].calldata, 1), U256::zero());
+    }
+
+    #[test]
+    fn automatic_swap_request_omits_pool() {
+        let req: BalancerSwapRequest = serde_json::from_value(serde_json::json!({
+            "agent_id": "agent-1",
+            "token_in": "0x7b79995e5f793a07bc00c21412e50ecae098e7f9",
+            "token_out": "0xaa8e23fb1079ea71e0a56f48a2aa51851d8433d0",
+            "amount_raw": "1000000"
+        }))
+        .unwrap();
+        assert!(req.pool.is_empty());
+        validate_swap_request(&req).unwrap();
+        assert!(compile_swap(&req)
+            .unwrap_err()
+            .to_string()
+            .contains("must be resolved"));
     }
 
     #[test]

@@ -1,5 +1,36 @@
 ---
 schemas:
+  CompoundMarketsResponse:
+    type: object
+    properties:
+      chain: { type: string }
+      markets:
+        type: array
+        items:
+          type: object
+          properties:
+            market: { type: string, enum: [usdc, weth] }
+            comet_address: { type: string }
+            verified: { type: boolean }
+            base_token_address: { type: string }
+            base_token_symbol: { type: string }
+            base_token_decimals: { type: integer }
+            utilization_raw: { type: string }
+            utilization_percent: { type: string }
+            supply_apr_percent: { type: string }
+            borrow_apr_percent: { type: string }
+            collateral_assets:
+              type: array
+              items:
+                type: object
+                properties:
+                  symbol: { type: string }
+                  token_address: { type: string }
+                  decimals: { type: integer }
+                  price_feed_address: { type: string }
+                  borrow_collateral_factor_percent: { type: string }
+                  liquidation_collateral_factor_percent: { type: string }
+                  supply_cap_raw: { type: string }
   CompoundSupplyRequest:
     type: object
     properties:

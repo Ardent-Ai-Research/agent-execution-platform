@@ -269,6 +269,7 @@ Morpho actions are isolated by market ID. Inspect the market and position before
 planning a write:
 
 ```bash
+ardent morpho-markets --loan-token 0xYourLoanToken --collateral-token 0xYourCollateralToken
 ardent morpho-market
 ardent morpho-position --agent-id my-agent-001
 ```
@@ -288,11 +289,11 @@ created market is trustworthy merely because it exists.
 
 ### Typed Balancer V3 Ethereum Sepolia Flow
 
-Balancer V3 actions are pool-address driven. Read the executor-selected pool
-first so the agent can use its exact registered token addresses:
+Balancer V3 swaps can discover and quote pair-compatible pools automatically.
+Liquidity actions remain pool-address driven:
 
 ```bash
-curl -X GET "$BASE_URL/protocols/balancer-v3/pool?chain=ethereum&pool=0xYourBalancerV3Pool" \
+curl -X GET "$BASE_URL/protocols/balancer-v3/pools?chain=ethereum&token_in=0xFirstPoolToken&token_out=0xSecondPoolToken" \
   -H "X-API-Key: $API_KEY"
 ```
 
@@ -305,7 +306,6 @@ curl -X POST "$BASE_URL/protocols/balancer-v3/swap/quote" \
   -d '{
     "agent_id": "my-agent-001",
     "chain": "ethereum",
-    "pool": "0xYourBalancerV3Pool",
     "token_in": "0xFirstPoolToken",
     "token_out": "0xSecondPoolToken",
     "swap_kind": "exact_in",
@@ -332,6 +332,34 @@ order. Up to three deposited token addresses are supported per operation. Use
 `ardent_balancer_remove_liquidity_quote`, simulate, then execute with
 `ardent_balancer_remove_liquidity_execute` to burn an exact BPT amount and
 receive every pool token proportionally.
+
+### Typed Uniswap V4 Ethereum Sepolia Flow
+
+Use automatic selection by default: provide the pair and amount while omitting
+fee, tick spacing, and hooks. The API discovers matching pool keys, validates
+initialization, and selects the best successful quote.
+
+```bash
+curl -X POST "$BASE_URL/protocols/uniswap-v4/swap/quote" \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: $API_KEY" \
+  -d '{
+    "agent_id": "my-agent-001",
+    "chain": "ethereum",
+    "token_in": "0xInputCurrency",
+    "token_out": "0xOutputCurrency",
+    "hook_data": "0x",
+    "swap_kind": "exact_in",
+    "amount_raw": "1000000",
+    "slippage_bps": 100
+  }'
+```
+
+Then call `ardent_uniswap_v4_swap_simulate` with the same body. Execute through
+`ardent_uniswap_v4_swap_execute` only after successful simulation and explicit
+user approval. Use the zero address for native ETH. Automatic mode excludes
+hook pools by default. Supply `fee`, `tick_spacing`, and optional `hooks` only
+when intentionally forcing an explicit pool key.
 
 ### Typed GMX V2 Arbitrum Sepolia Flow
 

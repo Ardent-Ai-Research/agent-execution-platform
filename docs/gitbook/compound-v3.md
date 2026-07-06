@@ -13,6 +13,7 @@ Compound III deployments are Comet markets. Base Sepolia currently supports two 
 
 | Action | API | CLI |
 | --- | --- | --- |
+| Discover verified markets | `GET /protocols/compound-v3/markets` | `ardent compound-markets` |
 | Read position | `GET /protocols/compound-v3/position` | `ardent compound-position` |
 | Read balances | `GET /protocols/compound-v3/balances` | `ardent compound-balances` |
 | Read borrow capacity and rates | `GET /protocols/compound-v3/borrow-capacity` | `ardent compound-borrow-capacity` |
@@ -24,6 +25,7 @@ Compound III deployments are Comet markets. Base Sepolia currently supports two 
 Each state-changing action also has a simulation endpoint and CLI command:
 
 ```bash
+ardent compound-markets
 ardent compound-supply-simulate --agent-id my-agent-001 --asset USDC --amount 1.25
 ardent compound-withdraw-simulate --agent-id my-agent-001 --asset USDC --amount max
 ardent compound-repay-simulate --agent-id my-agent-001 --amount max
@@ -39,10 +41,17 @@ string because large base-unit integers can exceed JSON's safe numeric range.
 ## Read State
 
 ```bash
+ardent compound-markets
 ardent compound-position --agent-id my-agent-001
 ardent compound-balances --agent-id my-agent-001
 ardent compound-borrow-capacity --agent-id my-agent-001
 ```
+
+`compound-markets` verifies each maintained Comet proxy by reading its base
+token on-chain, then returns its current utilization, rates, collateral assets,
+factors, price feeds, and supply caps. Actions infer the USDC or WETH market
+from `asset` unless `--market` explicitly selects one, and the same Comet
+identity check runs before every read, simulation, and execution.
 
 `compound-position` returns base supplied balance, base borrow balance, and all collateral balances discovered from `Comet.numAssets()` and `Comet.getAssetInfo(index)` for the selected market.
 

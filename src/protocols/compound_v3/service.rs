@@ -11,7 +11,8 @@ use super::adapter as compound_v3;
 use super::adapter::{
     CompoundAssetBalance, CompoundBalancesQuery, CompoundBalancesResponse,
     CompoundBorrowCapacityCollateral, CompoundBorrowCapacityQuery, CompoundBorrowCapacityResponse,
-    CompoundBorrowRequest, CompoundCollateralBalance, CompoundPositionQuery,
+    CompoundBorrowRequest, CompoundCollateralBalance, CompoundMarketCollateral,
+    CompoundMarketSummary, CompoundMarketsQuery, CompoundMarketsResponse, CompoundPositionQuery,
     CompoundPositionResponse, CompoundRepayRequest, CompoundSupplyRequest, CompoundWithdrawRequest,
 };
 use crate::agent_wallet::AgentWalletRegistry;
@@ -23,6 +24,64 @@ use crate::types::{Chain, ExecutionResponse, PaymentMode, PaymentProof};
 
 const FACTOR_SCALE: u64 = 1_000_000_000_000_000_000;
 const SECONDS_PER_YEAR: u64 = 31_536_000;
+
+pub async fn handle_markets(
+    engine: &ExecutionEngine,
+    query: &CompoundMarketsQuery,
+) -> Result<CompoundMarketsResponse> {
+    compound_v3::validate_markets_query(query)?;
+    let chain = parse_chain(&query.chain)?;
+    let mut markets = Vec::new();
+    for market in compound_v3::CompoundMarket::ALL {
+        if query.base_asset.as_deref().is_some_and(|base| {
+            !base.trim().eq_ignore_ascii_case(market.base_symbol())
+                && !base
+                    .trim()
+                    .eq_ignore_ascii_case(&format!("{:?}", market.base_token()))
+        }) {
+            continue;
+        }
+        let comet = market.comet();
+        let base = verify_market(engine, &chain, market).await?;
+        let (symbol, decimals, utilization, collateral_assets) = tokio::try_join!(
+            token_symbol(engine, &chain, base),
+            token_decimals(engine, &chain, base),
+            call_u256(engine, &chain, comet, compound_v3::encode_get_utilization()),
+            market_collaterals(engine, &chain, comet),
+        )?;
+        let (supply_rate, borrow_rate) = tokio::try_join!(
+            call_u256(
+                engine,
+                &chain,
+                comet,
+                compound_v3::encode_get_supply_rate(utilization)
+            ),
+            call_u256(
+                engine,
+                &chain,
+                comet,
+                compound_v3::encode_get_borrow_rate(utilization)
+            ),
+        )?;
+        markets.push(CompoundMarketSummary {
+            market: market.slug().to_string(),
+            comet_address: format!("{comet:?}"),
+            verified: true,
+            base_token_address: format!("{base:?}"),
+            base_token_symbol: symbol,
+            base_token_decimals: decimals,
+            utilization_raw: utilization.to_string(),
+            utilization_percent: format_percent(utilization, U256::from(FACTOR_SCALE), 4),
+            supply_apr_percent: format_apr_percent(supply_rate, 4),
+            borrow_apr_percent: format_apr_percent(borrow_rate, 4),
+            collateral_assets,
+        });
+    }
+    Ok(CompoundMarketsResponse {
+        chain: query.chain.clone(),
+        markets,
+    })
+}
 
 pub async fn handle_supply(
     engine: &ExecutionEngine,
@@ -323,7 +382,7 @@ pub async fn handle_position(
         resolve_chain_smart_wallet_address(engine, &chain, &agent_wallet).await?;
     let market = compound_v3::market_from_query(query.market.as_deref())?;
     let comet = market.comet();
-    let base = call_address(engine, &chain, comet, compound_v3::encode_base_token()).await?;
+    let base = verify_market(engine, &chain, market).await?;
     let (base_symbol, base_decimals, base_supply_balance, base_borrow_balance, collateral_assets) =
         tokio::try_join!(
             token_symbol(engine, &chain, base),
@@ -374,7 +433,7 @@ pub async fn handle_balances(
         resolve_chain_smart_wallet_address(engine, &chain, &agent_wallet).await?;
     let market = compound_v3::market_from_query(query.market.as_deref())?;
     let comet = market.comet();
-    let base = call_address(engine, &chain, comet, compound_v3::encode_base_token()).await?;
+    let base = verify_market(engine, &chain, market).await?;
     let base_symbol = token_symbol(engine, &chain, base).await?;
     let base_decimals = token_decimals(engine, &chain, base).await?;
     let (base_wallet_balance, base_supply_balance) = tokio::try_join!(
@@ -448,7 +507,7 @@ pub async fn handle_borrow_capacity(
         resolve_chain_smart_wallet_address(engine, &chain, &agent_wallet).await?;
     let market = compound_v3::market_from_query(query.market.as_deref())?;
     let comet = market.comet();
-    let base = call_address(engine, &chain, comet, compound_v3::encode_base_token()).await?;
+    let base = verify_market(engine, &chain, market).await?;
     let base_price_feed = call_address(
         engine,
         &chain,
@@ -588,10 +647,11 @@ async fn resolve_supply_amount(
     req: &CompoundSupplyRequest,
     smart_wallet_address: Address,
 ) -> Result<CompoundSupplyRequest> {
+    let market = compound_v3::market_from_action(&req.asset, req.market.as_deref())?;
+    verify_market(engine, chain, market).await?;
     if !compound_v3::is_amount_max(req.amount.as_deref(), req.amount_raw.as_deref()) {
         return Ok(req.clone());
     }
-    let market = compound_v3::market_from_action(&req.asset, req.market.as_deref())?;
     let asset = action_asset_address(&req.asset, market)?;
     let balance = call_u256(
         engine,
@@ -612,13 +672,13 @@ async fn resolve_withdraw_amount(
     req: &CompoundWithdrawRequest,
     smart_wallet_address: Address,
 ) -> Result<CompoundWithdrawRequest> {
+    let market = compound_v3::market_from_action(&req.asset, req.market.as_deref())?;
+    let base = verify_market(engine, chain, market).await?;
     if !compound_v3::is_amount_max(req.amount.as_deref(), req.amount_raw.as_deref()) {
         return Ok(req.clone());
     }
-    let market = compound_v3::market_from_action(&req.asset, req.market.as_deref())?;
     let comet = market.comet();
     let asset = action_asset_address(&req.asset, market)?;
-    let base = call_address(engine, chain, comet, compound_v3::encode_base_token()).await?;
     let balance = if asset == base {
         call_u256(
             engine,
@@ -648,10 +708,11 @@ async fn resolve_repay_amount(
     req: &CompoundRepayRequest,
     smart_wallet_address: Address,
 ) -> Result<CompoundRepayRequest> {
+    let market = compound_v3::market_from_action(&req.asset, req.market.as_deref())?;
+    verify_market(engine, chain, market).await?;
     if !compound_v3::is_amount_max(req.amount.as_deref(), req.amount_raw.as_deref()) {
         return Ok(req.clone());
     }
-    let market = compound_v3::market_from_action(&req.asset, req.market.as_deref())?;
     let comet = market.comet();
     let base = market.base_token();
     let (debt, wallet_balance) = tokio::try_join!(
@@ -681,11 +742,13 @@ async fn resolve_repay_amount(
 }
 
 async fn resolve_borrow_amount(
-    _engine: &ExecutionEngine,
-    _chain: &Chain,
+    engine: &ExecutionEngine,
+    chain: &Chain,
     req: &CompoundBorrowRequest,
     _smart_wallet_address: Address,
 ) -> Result<CompoundBorrowRequest> {
+    let market = compound_v3::market_from_action(&req.asset, req.market.as_deref())?;
+    verify_market(engine, chain, market).await?;
     if compound_v3::is_amount_max(req.amount.as_deref(), req.amount_raw.as_deref()) {
         anyhow::bail!(
             "Compound III borrow amount max is not supported yet; provide amount or amount_raw"
@@ -727,6 +790,67 @@ async fn collateral_balances(
         });
     }
     Ok(out)
+}
+
+async fn verify_market(
+    engine: &ExecutionEngine,
+    chain: &Chain,
+    market: compound_v3::CompoundMarket,
+) -> Result<Address> {
+    let comet = market.comet();
+    let reported = call_address(engine, chain, comet, compound_v3::encode_base_token())
+        .await
+        .map_err(|error| {
+            anyhow::anyhow!(
+                "Compound III {} registry verification failed for Comet {comet:?}: {error}",
+                market.slug()
+            )
+        })?;
+    if reported != market.base_token() {
+        anyhow::bail!(
+            "Compound III {} registry verification failed: Comet {comet:?} reports base token {reported:?}, expected {:?}",
+            market.slug(),
+            market.base_token()
+        );
+    }
+    Ok(reported)
+}
+
+async fn market_collaterals(
+    engine: &ExecutionEngine,
+    chain: &Chain,
+    comet: Address,
+) -> Result<Vec<CompoundMarketCollateral>> {
+    let count = call_u256(engine, chain, comet, compound_v3::encode_num_assets()).await?;
+    if count > U256::from(u8::MAX) {
+        anyhow::bail!("Compound III market reports too many collateral assets");
+    }
+    let mut assets = Vec::new();
+    for index in 0..count.as_u32() {
+        let info = call_asset_info(engine, chain, comet, index as u8).await?;
+        let (symbol, decimals) = tokio::try_join!(
+            token_symbol(engine, chain, info.asset),
+            token_decimals(engine, chain, info.asset),
+        )?;
+        assets.push(CompoundMarketCollateral {
+            symbol,
+            token_address: format!("{:?}", info.asset),
+            decimals,
+            price_feed_address: format!("{:?}", info.price_feed),
+            borrow_collateral_factor_percent: format_percent(
+                info.borrow_collateral_factor,
+                U256::from(FACTOR_SCALE),
+                4,
+            ),
+            liquidation_collateral_factor_percent: format_percent(
+                info.liquidate_collateral_factor,
+                U256::from(FACTOR_SCALE),
+                4,
+            ),
+            supply_cap_raw: info.supply_cap.to_string(),
+        });
+    }
+    Ok(assets)
 }
 
 async fn call_u256(
@@ -923,5 +1047,18 @@ mod tests {
             format_apr_percent(U256::from(1_000_000_000u64), 4),
             "3.1536"
         );
+    }
+
+    #[tokio::test]
+    #[ignore = "requires configured Base Sepolia RPC"]
+    async fn live_verifies_both_registered_comets() {
+        dotenvy::dotenv().ok();
+        let engine = ExecutionEngine::new(crate::config::AppConfig::from_env().unwrap()).unwrap();
+        for market in compound_v3::CompoundMarket::ALL {
+            assert_eq!(
+                verify_market(&engine, &Chain::Base, market).await.unwrap(),
+                market.base_token()
+            );
+        }
     }
 }

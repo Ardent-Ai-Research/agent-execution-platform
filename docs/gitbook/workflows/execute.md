@@ -382,6 +382,9 @@ curl -X POST "$BASE_URL/protocols/morpho/borrow/simulate" \
 CLI equivalents:
 
 ```bash
+ardent morpho-markets \
+  --loan-token 0xYourLoanToken \
+  --collateral-token 0xYourCollateralToken
 ardent morpho-market
 ardent morpho-position --agent-id my-agent-001
 ardent morpho-supply-collateral-simulate --agent-id my-agent-001 --amount 0.01
@@ -399,10 +402,10 @@ Balancer V3 swaps and liquidity actions should use the typed endpoints instead
 of manually encoding Permit2 and Router calls. See
 [Balancer V3 Ethereum Sepolia](../balancer-v3.md) for the full reference.
 
-Inspect the pool and request a quote:
+Discover pools or request an automatically routed quote:
 
 ```bash
-curl -X GET "$BASE_URL/protocols/balancer-v3/pool?chain=ethereum&pool=0xYourBalancerV3Pool" \
+curl -X GET "$BASE_URL/protocols/balancer-v3/pools?chain=ethereum&token_in=0xFirstPoolToken&token_out=0xSecondPoolToken" \
   -H "X-API-Key: $API_KEY"
 
 curl -X POST "$BASE_URL/protocols/balancer-v3/swap/quote" \
@@ -411,7 +414,6 @@ curl -X POST "$BASE_URL/protocols/balancer-v3/swap/quote" \
   -d '{
     "agent_id": "my-agent-001",
     "chain": "ethereum",
-    "pool": "0xYourBalancerV3Pool",
     "token_in": "0xFirstPoolToken",
     "token_out": "0xSecondPoolToken",
     "swap_kind": "exact_in",
@@ -424,10 +426,10 @@ CLI equivalents:
 
 ```bash
 ardent balancer-pool --pool 0xYourBalancerV3Pool
+ardent balancer-pools --token-in 0xFirstPoolToken --token-out 0xSecondPoolToken
 
 ardent balancer-quote \
   --agent-id my-agent-001 \
-  --pool 0xYourBalancerV3Pool \
   --token-in 0xFirstPoolToken \
   --token-out 0xSecondPoolToken \
   --swap-kind exact_in \
@@ -435,7 +437,6 @@ ardent balancer-quote \
 
 ardent balancer-swap-simulate \
   --agent-id my-agent-001 \
-  --pool 0xYourBalancerV3Pool \
   --token-in 0xFirstPoolToken \
   --token-out 0xSecondPoolToken \
   --swap-kind exact_in \
@@ -443,7 +444,6 @@ ardent balancer-swap-simulate \
 
 ardent balancer-swap \
   --agent-id my-agent-001 \
-  --pool 0xYourBalancerV3Pool \
   --token-in 0xFirstPoolToken \
   --token-out 0xSecondPoolToken \
   --swap-kind exact_in \
@@ -480,6 +480,64 @@ Liquidity additions use the same bounded approval and cleanup pattern.
 They support up to three deposited token addresses per operation. Proportional
 removals use an exact temporary BPT allowance for the Router and clear it after
 the removal inside the same atomic batch.
+
+## Uniswap V4 Ethereum Sepolia
+
+Uniswap V4 pools are identified by a complete pool key, not a pool contract
+address. Ardent discovers matching keys and selects the best successful quote
+when pool-key fields are omitted. See
+[Uniswap V4 Ethereum Sepolia](../uniswap-v4.md) for the complete reference.
+
+```bash
+curl -X POST "$BASE_URL/protocols/uniswap-v4/swap/quote" \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: $API_KEY" \
+  -d '{
+    "agent_id": "my-agent-001",
+    "chain": "ethereum",
+    "token_in": "0xInputCurrency",
+    "token_out": "0xOutputCurrency",
+    "swap_kind": "exact_in",
+    "amount_raw": "1000000",
+    "slippage_bps": 100
+  }'
+```
+
+CLI equivalents:
+
+```bash
+ardent uniswap-v4-pool \
+  --token-a 0xFirstPoolCurrency \
+  --token-b 0xSecondPoolCurrency \
+  --fee 3000 \
+  --tick-spacing 60 \
+  --hooks 0xPoolHooksOrZeroAddress
+
+ardent uniswap-v4-pools \
+  --token-a 0xFirstPoolCurrency \
+  --token-b 0xSecondPoolCurrency
+
+ardent uniswap-v4-quote \
+  --agent-id my-agent-001 \
+  --token-in 0xInputCurrency \
+  --token-out 0xOutputCurrency \
+  --amount-raw 1000000
+
+ardent uniswap-v4-swap-simulate \
+  --agent-id my-agent-001 \
+  --token-in 0xInputCurrency \
+  --token-out 0xOutputCurrency \
+  --amount-raw 1000000
+
+ardent uniswap-v4-swap \
+  --agent-id my-agent-001 \
+  --token-in 0xInputCurrency \
+  --token-out 0xOutputCurrency \
+  --amount-raw 1000000
+```
+
+Use the zero address for native ETH. ERC-20 input uses bounded temporary
+Permit2 approvals that are cleared in the same atomic batch.
 
 ## GMX V2 Arbitrum Sepolia
 

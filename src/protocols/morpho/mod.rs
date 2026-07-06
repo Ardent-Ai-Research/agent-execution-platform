@@ -3,4 +3,6 @@
 pub mod adapter;
 pub mod service;
 
-pub use adapter::{MorphoActionRequest, MorphoMarketQuery, MorphoPositionQuery};
+pub use adapter::{
+    MorphoActionRequest, MorphoMarketQuery, MorphoMarketsQuery, MorphoPositionQuery,
+};

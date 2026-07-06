@@ -74,7 +74,7 @@ class ArdentMcpServer:
         path, remaining = self._render_path(path_template, arguments)
 
         headers: dict[str, str] = {
-            "User-Agent": "ardent-mcp-server/0.6.0",
+            "User-Agent": "ardent-mcp-server/0.9.0",
             "Accept": "application/json",
         }
 
@@ -164,6 +164,7 @@ class ArdentMcpServer:
             "ardent_balancer_swap_execute",
             "ardent_balancer_add_liquidity_execute",
             "ardent_balancer_remove_liquidity_execute",
+            "ardent_uniswap_v4_swap_execute",
         }:
             payment_proof = body.pop("payment_proof", None)
             if payment_proof is not None:
@@ -212,7 +213,7 @@ def handle_request(server: ArdentMcpServer, message: dict[str, Any]) -> None:
             message_id,
             {
                 "protocolVersion": "2024-11-05",
-                "serverInfo": {"name": "ardent-mcp", "version": "0.6.0"},
+                "serverInfo": {"name": "ardent-mcp", "version": "0.9.0"},
                 "capabilities": {"tools": {}},
             },
         )

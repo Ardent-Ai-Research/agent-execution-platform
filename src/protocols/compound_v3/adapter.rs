@@ -126,6 +126,47 @@ pub struct CompoundBorrowCapacityQuery {
     pub market: Option<String>,
 }
 
+#[derive(Debug, Clone, Deserialize)]
+pub struct CompoundMarketsQuery {
+    #[serde(default = "default_chain")]
+    pub chain: String,
+    /// Optional base asset symbol or address.
+    #[serde(default)]
+    pub base_asset: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct CompoundMarketsResponse {
+    pub chain: String,
+    pub markets: Vec<CompoundMarketSummary>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct CompoundMarketSummary {
+    pub market: String,
+    pub comet_address: String,
+    pub verified: bool,
+    pub base_token_address: String,
+    pub base_token_symbol: String,
+    pub base_token_decimals: u8,
+    pub utilization_raw: String,
+    pub utilization_percent: String,
+    pub supply_apr_percent: String,
+    pub borrow_apr_percent: String,
+    pub collateral_assets: Vec<CompoundMarketCollateral>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct CompoundMarketCollateral {
+    pub symbol: String,
+    pub token_address: String,
+    pub decimals: u8,
+    pub price_feed_address: String,
+    pub borrow_collateral_factor_percent: String,
+    pub liquidation_collateral_factor_percent: String,
+    pub supply_cap_raw: String,
+}
+
 #[derive(Debug, Clone, Serialize)]
 pub struct CompoundPositionResponse {
     pub agent_id: String,
@@ -232,6 +273,8 @@ pub enum CompoundMarket {
 }
 
 impl CompoundMarket {
+    pub const ALL: [CompoundMarket; 2] = [CompoundMarket::Usdc, CompoundMarket::Weth];
+
     pub fn slug(self) -> &'static str {
         match self {
             CompoundMarket::Usdc => "usdc",
@@ -382,6 +425,37 @@ pub fn validate_balances_query(query: &CompoundBalancesQuery) -> Result<()> {
 pub fn validate_borrow_capacity_query(query: &CompoundBorrowCapacityQuery) -> Result<()> {
     validate_chain_and_agent(&query.agent_id, &query.chain)?;
     market_from_query(query.market.as_deref())?;
+    Ok(())
+}
+
+pub fn validate_markets_query(query: &CompoundMarketsQuery) -> Result<()> {
+    validate_chain(&query.chain)?;
+    if let Some(base_asset) = query.base_asset.as_deref() {
+        let normalized = base_asset.trim();
+        if normalized.is_empty() {
+            return Err(anyhow!("base_asset must not be empty"));
+        }
+        let matches = CompoundMarket::ALL.iter().any(|market| {
+            normalized.eq_ignore_ascii_case(market.base_symbol())
+                || normalized.eq_ignore_ascii_case(&format!("{:?}", market.base_token()))
+        });
+        if !matches {
+            return Err(anyhow!(
+                "unsupported Compound III Base Sepolia base_asset; supported: USDC, WETH"
+            ));
+        }
+    }
+    Ok(())
+}
+
+fn validate_chain(chain: &str) -> Result<()> {
+    let chain = crate::types::Chain::from_str_loose(chain)
+        .ok_or_else(|| anyhow!("unsupported chain for Compound III: {}", chain))?;
+    if chain != crate::types::Chain::Base {
+        return Err(anyhow!(
+            "Compound III typed adapter currently supports Base Sepolia only; use chain \"base\""
+        ));
+    }
     Ok(())
 }
 
@@ -737,13 +811,7 @@ pub fn decode_asset_info(raw: &[u8]) -> Result<CompoundAssetInfo> {
 }
 
 fn validate_chain_and_agent(agent_id: &str, chain: &str) -> Result<()> {
-    let chain = crate::types::Chain::from_str_loose(chain)
-        .ok_or_else(|| anyhow!("unsupported chain for Compound III: {}", chain))?;
-    if chain != crate::types::Chain::Base {
-        return Err(anyhow!(
-            "Compound III typed adapter currently supports Base Sepolia only; use chain \"base\""
-        ));
-    }
+    validate_chain(chain)?;
     if agent_id.trim().is_empty() {
         return Err(anyhow!("agent_id is required"));
     }
@@ -984,6 +1052,21 @@ mod tests {
             CompoundMarket::Weth.comet(),
             BASE_SEPOLIA_COMET_WETH.parse::<Address>().unwrap()
         );
+    }
+
+    #[test]
+    fn verified_registry_filters_supported_base_assets() {
+        let query = CompoundMarketsQuery {
+            chain: "base".to_string(),
+            base_asset: Some("WETH".to_string()),
+        };
+        validate_markets_query(&query).unwrap();
+
+        let invalid = CompoundMarketsQuery {
+            chain: "base".to_string(),
+            base_asset: Some("DAI".to_string()),
+        };
+        assert!(validate_markets_query(&invalid).is_err());
     }
 
     #[test]

@@ -5,17 +5,22 @@ use ethers::prelude::Middleware;
 use ethers::types::{Address, Bytes, TransactionRequest, U256};
 use ethers::utils::format_units;
 use redis::aio::ConnectionManager;
+use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
 use std::collections::HashMap;
+use std::sync::OnceLock;
+use std::time::{Duration, Instant};
+use tokio::sync::RwLock;
 use uuid::Uuid;
 
 use super::adapter as balancer_v3;
 use super::adapter::{
     BalancerAddLiquidityQuoteResponse, BalancerAddLiquidityRequest, BalancerBalancesQuery,
-    BalancerBalancesResponse, BalancerLiquidityAmount, BalancerPoolQuery, BalancerPoolResponse,
-    BalancerPoolToken, BalancerQuoteResponse, BalancerRemoveLiquidityQuoteResponse,
-    BalancerRemoveLiquidityRequest, BalancerSwapKind, BalancerSwapRequest, BalancerTokenAmount,
-    BalancerTokenBalance,
+    BalancerBalancesResponse, BalancerDiscoveredPool, BalancerDiscoveredPoolToken,
+    BalancerLiquidityAmount, BalancerPoolQuery, BalancerPoolResponse, BalancerPoolSelection,
+    BalancerPoolToken, BalancerPoolsQuery, BalancerPoolsResponse, BalancerQuoteResponse,
+    BalancerRemoveLiquidityQuoteResponse, BalancerRemoveLiquidityRequest, BalancerSwapKind,
+    BalancerSwapRequest, BalancerTokenAmount, BalancerTokenBalance,
 };
 use crate::agent_wallet::AgentWalletRegistry;
 use crate::api::services::{handle_execute, handle_simulate, resolve_chain_smart_wallet_address};
@@ -26,6 +31,21 @@ use crate::types::{Chain, ExecutionResponse, PaymentMode, PaymentProof};
 
 const DEFAULT_DEADLINE_SECS: u64 = 20 * 60;
 const BPS_SCALE: u64 = 10_000;
+const BALANCER_API_URL: &str = "https://api-v3.balancer.fi/graphql";
+const BLOCKSCOUT_LOGS_URL: &str = "https://eth-sepolia.blockscout.com/api";
+const BALANCER_VAULT_ADDRESS: &str = "0xbA1333333333a1BA1108E8412f11850A5C319bA9";
+const POOL_REGISTERED_TOPIC: &str =
+    "0xbc1561eeab9f40962e2fb827a7ff9c7cdb47a9d7c84caeefa4ed90e043842dad";
+const DISCOVERY_CACHE_TTL: Duration = Duration::from_secs(5 * 60);
+
+#[derive(Clone)]
+struct DiscoveryCacheEntry {
+    fetched_at: Instant,
+    pools: Vec<ApiPool>,
+}
+
+static DISCOVERY_CACHE: OnceLock<RwLock<Option<DiscoveryCacheEntry>>> = OnceLock::new();
+static REGISTERED_POOL_CACHE: OnceLock<RwLock<Option<DiscoveryCacheEntry>>> = OnceLock::new();
 
 pub async fn handle_swap(
     engine: &ExecutionEngine,
@@ -40,7 +60,7 @@ pub async fn handle_swap(
     payment_proof: Option<&PaymentProof>,
 ) -> Result<ExecutionResponse> {
     let resolved = resolve_swap(engine, wallet_registry, api_key_id, req).await?;
-    let execution_req = balancer_v3::compile_swap(&resolved)?;
+    let execution_req = balancer_v3::compile_swap(&resolved.request)?;
 
     handle_execute(
         engine,
@@ -69,7 +89,7 @@ pub async fn handle_swap_simulate(
     req: &BalancerSwapRequest,
 ) -> Result<ExecutionResponse> {
     let resolved = resolve_swap(engine, wallet_registry, api_key_id, req).await?;
-    let execution_req = balancer_v3::compile_swap(&resolved)?;
+    let execution_req = balancer_v3::compile_swap(&resolved.request)?;
 
     handle_simulate(
         engine,
@@ -212,37 +232,16 @@ pub async fn handle_quote(
     api_key_id: Uuid,
     req: &BalancerSwapRequest,
 ) -> Result<BalancerQuoteResponse> {
-    balancer_v3::validate_swap_request(req)?;
-    let chain = parse_chain(&req.chain)?;
-    let wallet = wallet_registry
-        .get_or_create(api_key_id, &req.agent_id)
-        .await?;
-    let smart_wallet_address = resolve_chain_smart_wallet_address(engine, &chain, &wallet).await?;
-    validate_pool_for_swap(engine, &chain, req).await?;
-
-    let quoted = quote_swap(engine, &chain, req, smart_wallet_address).await?;
-    let limit = match balancer_v3::explicit_limit(req)? {
-        Some(limit) => {
-            validate_explicit_limit(req.swap_kind, quoted, limit)?;
-            limit
-        }
-        None => limit_from_quote(req.swap_kind, quoted, req.slippage_bps)?,
-    };
-    let max_input = match req.swap_kind {
-        BalancerSwapKind::ExactIn => balancer_v3::amount(req)?,
-        BalancerSwapKind::ExactOut => limit,
-    };
-    balancer_v3::validate_permit2_amount(max_input, "Balancer swap maximum input")?;
-    let deadline = resolve_deadline(req.deadline, "swap")?;
+    let resolved = resolve_swap(engine, wallet_registry, api_key_id, req).await?;
 
     Ok(BalancerQuoteResponse {
         agent_id: req.agent_id.clone(),
         chain: "ethereum".to_string(),
-        smart_wallet_address: format!("{smart_wallet_address:?}"),
-        pool_address: format!(
-            "{:?}",
-            balancer_v3::parse_request_address(&req.pool, "pool")?
-        ),
+        smart_wallet_address: format!("{:?}", resolved.smart_wallet_address),
+        pool_address: format!("{:?}", resolved.pool),
+        pool_selection: resolved.pool_selection,
+        candidates_discovered: resolved.candidates_discovered,
+        candidates_quoted: resolved.candidates_quoted,
         token_in: format!(
             "{:?}",
             balancer_v3::parse_request_address(&req.token_in, "token_in")?
@@ -253,10 +252,38 @@ pub async fn handle_quote(
         ),
         swap_kind: req.swap_kind,
         amount_raw: balancer_v3::amount(req)?.to_string(),
-        quoted_amount_raw: quoted.to_string(),
-        limit_raw: limit.to_string(),
+        quoted_amount_raw: resolved.quoted_amount.to_string(),
+        limit_raw: resolved.limit.to_string(),
         slippage_bps: req.slippage_bps,
-        deadline,
+        deadline: resolved.deadline,
+    })
+}
+
+pub async fn handle_pools(
+    engine: &ExecutionEngine,
+    query: &BalancerPoolsQuery,
+) -> Result<BalancerPoolsResponse> {
+    balancer_v3::validate_pools_query(query)?;
+    let chain = parse_chain(&query.chain)?;
+    let token_in = balancer_v3::parse_request_address(&query.token_in, "token_in")?;
+    let token_out = balancer_v3::parse_request_address(&query.token_out, "token_out")?;
+    let candidates = discover_pair_pools(token_in, token_out).await?;
+    let mut pools = Vec::new();
+    for candidate in candidates {
+        let pool: Address = candidate
+            .address
+            .parse()
+            .map_err(|_| anyhow!("Balancer API returned an invalid pool address"))?;
+        let Ok(state) = load_pool_state(engine, &chain, pool).await else {
+            continue;
+        };
+        pools.push(discovered_pool_response(engine, &chain, candidate, state).await?);
+    }
+    Ok(BalancerPoolsResponse {
+        chain: "ethereum".to_string(),
+        token_in: format!("{token_in:?}"),
+        token_out: format!("{token_out:?}"),
+        pools,
     })
 }
 
@@ -427,20 +454,517 @@ pub async fn handle_balances(
     })
 }
 
+struct ResolvedSwap {
+    request: BalancerSwapRequest,
+    smart_wallet_address: Address,
+    pool: Address,
+    pool_selection: BalancerPoolSelection,
+    quoted_amount: U256,
+    limit: U256,
+    deadline: u64,
+    candidates_discovered: usize,
+    candidates_quoted: usize,
+}
+
 async fn resolve_swap(
     engine: &ExecutionEngine,
     wallet_registry: &AgentWalletRegistry,
     api_key_id: Uuid,
     req: &BalancerSwapRequest,
-) -> Result<BalancerSwapRequest> {
-    let quote = handle_quote(engine, wallet_registry, api_key_id, req).await?;
-    let limit = U256::from_dec_str(&quote.limit_raw)
-        .map_err(|_| anyhow!("failed to parse resolved Balancer swap limit"))?;
-    Ok(balancer_v3::swap_with_resolved_limit(
-        req,
+) -> Result<ResolvedSwap> {
+    balancer_v3::validate_swap_request(req)?;
+    let chain = parse_chain(&req.chain)?;
+    let wallet = wallet_registry
+        .get_or_create(api_key_id, &req.agent_id)
+        .await?;
+    let smart_wallet_address = resolve_chain_smart_wallet_address(engine, &chain, &wallet).await?;
+
+    let (pool, quoted_amount, pool_selection, candidates_discovered, candidates_quoted) =
+        if req.pool.trim().is_empty() {
+            select_best_pool(engine, &chain, req, smart_wallet_address).await?
+        } else {
+            let pool = balancer_v3::parse_request_address(&req.pool, "pool")?;
+            validate_pool_for_swap(engine, &chain, req).await?;
+            let quote = quote_swap(engine, &chain, req, smart_wallet_address).await?;
+            (pool, quote, BalancerPoolSelection::Explicit, 1usize, 1usize)
+        };
+    let limit = match balancer_v3::explicit_limit(req)? {
+        Some(limit) => {
+            validate_explicit_limit(req.swap_kind, quoted_amount, limit)?;
+            limit
+        }
+        None => limit_from_quote(req.swap_kind, quoted_amount, req.slippage_bps)?,
+    };
+    let max_input = match req.swap_kind {
+        BalancerSwapKind::ExactIn => balancer_v3::amount(req)?,
+        BalancerSwapKind::ExactOut => limit,
+    };
+    balancer_v3::validate_permit2_amount(max_input, "Balancer swap maximum input")?;
+    let deadline = resolve_deadline(req.deadline, "swap")?;
+    let request = balancer_v3::swap_with_resolved_limit(req, pool, limit, deadline);
+    Ok(ResolvedSwap {
+        request,
+        smart_wallet_address,
+        pool,
+        pool_selection,
+        quoted_amount,
         limit,
-        quote.deadline,
+        deadline,
+        candidates_discovered,
+        candidates_quoted,
+    })
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ApiPool {
+    address: String,
+    name: String,
+    symbol: String,
+    #[serde(rename = "type")]
+    pool_type: String,
+    pool_tokens: Vec<ApiPoolToken>,
+    dynamic_data: Option<ApiPoolDynamicData>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct ApiPoolToken {
+    address: String,
+    symbol: String,
+    decimals: u8,
+    index: usize,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ApiPoolDynamicData {
+    total_liquidity: Option<String>,
+    swap_fee: Option<String>,
+}
+
+#[derive(Serialize)]
+struct GraphQlRequest<'a> {
+    query: &'a str,
+    variables: serde_json::Value,
+}
+
+#[derive(Deserialize)]
+struct GraphQlResponse {
+    data: Option<GraphQlData>,
+    #[serde(default)]
+    errors: Vec<GraphQlError>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct GraphQlData {
+    pool_get_pools: Vec<ApiPool>,
+}
+
+#[derive(Deserialize)]
+struct GraphQlError {
+    message: String,
+}
+
+async fn discover_pair_pools(token_in: Address, token_out: Address) -> Result<Vec<ApiPool>> {
+    let (api_result, registered_result) =
+        tokio::join!(discover_pools(), discover_registered_pools());
+    let (api_pools, registered) = match (api_result, registered_result) {
+        (Ok(api), Ok(registered)) => (api, registered),
+        (Ok(api), Err(_)) => (api, Vec::new()),
+        (Err(_), Ok(registered)) => (Vec::new(), registered),
+        (Err(api_error), Err(onchain_error)) => {
+            return Err(anyhow!(
+                "Balancer pool discovery failed through both API ({api_error}) and on-chain index ({onchain_error})"
+            ));
+        }
+    };
+    let mut pools = registered
+        .into_iter()
+        .map(|pool| {
+            let address = pool.address.to_ascii_lowercase();
+            (address, pool)
+        })
+        .collect::<HashMap<_, _>>();
+    for pool in api_pools {
+        pools.insert(pool.address.to_ascii_lowercase(), pool);
+    }
+    Ok(pools
+        .into_iter()
+        .map(|(_, pool)| pool)
+        .filter(|pool| {
+            let has_in = pool.pool_tokens.iter().any(|token| {
+                token
+                    .address
+                    .parse::<Address>()
+                    .map(|address| address == token_in)
+                    .unwrap_or(false)
+            });
+            let has_out = pool.pool_tokens.iter().any(|token| {
+                token
+                    .address
+                    .parse::<Address>()
+                    .map(|address| address == token_out)
+                    .unwrap_or(false)
+            });
+            has_in && has_out
+        })
+        .collect())
+}
+
+async fn discover_registered_pools() -> Result<Vec<ApiPool>> {
+    let cache = REGISTERED_POOL_CACHE.get_or_init(|| RwLock::new(None));
+    if let Some(entry) = cache.read().await.as_ref() {
+        if entry.fetched_at.elapsed() < DISCOVERY_CACHE_TTL {
+            return Ok(entry.pools.clone());
+        }
+    }
+    match fetch_registered_pools_from_blockscout().await {
+        Ok(pools) => {
+            *cache.write().await = Some(DiscoveryCacheEntry {
+                fetched_at: Instant::now(),
+                pools: pools.clone(),
+            });
+            Ok(pools)
+        }
+        Err(error) => {
+            if let Some(entry) = cache.read().await.as_ref() {
+                return Ok(entry.pools.clone());
+            }
+            Err(error)
+        }
+    }
+}
+
+async fn discover_pools() -> Result<Vec<ApiPool>> {
+    let cache = DISCOVERY_CACHE.get_or_init(|| RwLock::new(None));
+    if let Some(entry) = cache.read().await.as_ref() {
+        if entry.fetched_at.elapsed() < DISCOVERY_CACHE_TTL {
+            return Ok(entry.pools.clone());
+        }
+    }
+
+    match fetch_pools_from_api().await {
+        Ok(pools) => {
+            *cache.write().await = Some(DiscoveryCacheEntry {
+                fetched_at: Instant::now(),
+                pools: pools.clone(),
+            });
+            Ok(pools)
+        }
+        Err(error) => {
+            if let Some(entry) = cache.read().await.as_ref() {
+                return Ok(entry.pools.clone());
+            }
+            Err(error)
+        }
+    }
+}
+
+async fn fetch_pools_from_api() -> Result<Vec<ApiPool>> {
+    const QUERY: &str = r#"
+        query Pools($where: GqlPoolFilter) {
+          poolGetPools(first: 1000, where: $where) {
+            address name symbol type
+            poolTokens { address symbol decimals index }
+            dynamicData { totalLiquidity swapFee }
+          }
+        }
+    "#;
+    let response = reqwest::Client::new()
+        .post(BALANCER_API_URL)
+        .json(&GraphQlRequest {
+            query: QUERY,
+            variables: serde_json::json!({
+                "where": {
+                    "chainIn": ["SEPOLIA"],
+                    "protocolVersionIn": [3]
+                }
+            }),
+        })
+        .send()
+        .await
+        .map_err(|e| anyhow!("Balancer pool discovery API request failed: {e}"))?;
+    if !response.status().is_success() {
+        return Err(anyhow!(
+            "Balancer pool discovery API returned HTTP {}",
+            response.status()
+        ));
+    }
+    let body: GraphQlResponse = response
+        .json()
+        .await
+        .map_err(|e| anyhow!("Balancer pool discovery API response was invalid: {e}"))?;
+    if !body.errors.is_empty() {
+        return Err(anyhow!(
+            "Balancer pool discovery API error: {}",
+            body.errors
+                .into_iter()
+                .map(|error| error.message)
+                .collect::<Vec<_>>()
+                .join("; ")
+        ));
+    }
+    body.data
+        .map(|data| data.pool_get_pools)
+        .ok_or_else(|| anyhow!("Balancer pool discovery API returned no data"))
+}
+
+#[derive(Deserialize)]
+struct BlockscoutLogsResponse {
+    status: String,
+    message: String,
+    result: Vec<BlockscoutLog>,
+}
+
+#[derive(Deserialize)]
+struct BlockscoutLog {
+    #[serde(rename = "blockNumber")]
+    block_number: String,
+    data: String,
+    topics: Vec<Option<String>>,
+}
+
+async fn fetch_registered_pools_from_blockscout() -> Result<Vec<ApiPool>> {
+    const PAGE_SIZE: usize = 1_000;
+    const MAX_PAGES: usize = 100;
+    let client = reqwest::Client::new();
+    let mut pools = HashMap::new();
+    let mut from_block = 0u64;
+    for page in 1..=MAX_PAGES {
+        let response = client
+            .get(BLOCKSCOUT_LOGS_URL)
+            .query(&[
+                ("module", "logs".to_string()),
+                ("action", "getLogs".to_string()),
+                ("address", BALANCER_VAULT_ADDRESS.to_string()),
+                ("topic0", POOL_REGISTERED_TOPIC.to_string()),
+                ("fromBlock", from_block.to_string()),
+                ("toBlock", "latest".to_string()),
+            ])
+            .send()
+            .await
+            .map_err(|e| anyhow!("Balancer on-chain pool discovery request failed: {e}"))?;
+        if !response.status().is_success() {
+            return Err(anyhow!(
+                "Balancer on-chain pool discovery returned HTTP {}",
+                response.status()
+            ));
+        }
+        let body: BlockscoutLogsResponse = response
+            .json()
+            .await
+            .map_err(|e| anyhow!("Balancer on-chain pool discovery response was invalid: {e}"))?;
+        if body.status != "1" {
+            if page > 1 && body.result.is_empty() {
+                break;
+            }
+            return Err(anyhow!(
+                "Balancer on-chain pool discovery failed: {}",
+                body.message
+            ));
+        }
+        let result_count = body.result.len();
+        let mut highest_block = from_block;
+        for log in body.result {
+            highest_block = highest_block.max(
+                u64::from_str_radix(log.block_number.trim_start_matches("0x"), 16)
+                    .map_err(|_| anyhow!("Balancer discovery returned an invalid block number"))?,
+            );
+            let pool = decode_registered_pool(&log)?;
+            pools.insert(pool.address.to_ascii_lowercase(), pool);
+        }
+        if result_count < PAGE_SIZE {
+            break;
+        }
+        if highest_block <= from_block {
+            return Err(anyhow!(
+                "Balancer on-chain pool discovery block pagination made no progress"
+            ));
+        }
+        // Repeat the boundary block so registrations sharing it cannot be skipped.
+        from_block = highest_block;
+        if page == MAX_PAGES {
+            return Err(anyhow!(
+                "Balancer on-chain pool discovery exceeded {MAX_PAGES} pages"
+            ));
+        }
+    }
+    Ok(pools.into_values().collect())
+}
+
+fn decode_registered_pool(log: &BlockscoutLog) -> Result<ApiPool> {
+    let pool_topic = log
+        .topics
+        .get(1)
+        .and_then(Option::as_deref)
+        .ok_or_else(|| anyhow!("PoolRegistered log omitted indexed pool"))?;
+    let topic = hex::decode(pool_topic.trim_start_matches("0x"))?;
+    if topic.len() != 32 {
+        return Err(anyhow!("PoolRegistered pool topic had invalid length"));
+    }
+    let pool = Address::from_slice(&topic[12..]);
+    let data = hex::decode(log.data.trim_start_matches("0x"))?;
+    if data.len() < 32 {
+        return Err(anyhow!("PoolRegistered data was truncated"));
+    }
+    let offset = U256::from_big_endian(&data[..32]);
+    if offset > U256::from(usize::MAX) {
+        return Err(anyhow!("PoolRegistered token offset overflowed"));
+    }
+    let offset = offset.as_usize();
+    let length_end = offset
+        .checked_add(32)
+        .ok_or_else(|| anyhow!("PoolRegistered token offset overflowed"))?;
+    if length_end > data.len() {
+        return Err(anyhow!("PoolRegistered token array was truncated"));
+    }
+    let count = U256::from_big_endian(&data[offset..length_end]);
+    if count > U256::from(64u64) {
+        return Err(anyhow!("PoolRegistered reported too many tokens"));
+    }
+    let mut pool_tokens = Vec::with_capacity(count.as_usize());
+    for index in 0..count.as_usize() {
+        let start = length_end
+            .checked_add(
+                index
+                    .checked_mul(4 * 32)
+                    .ok_or_else(|| anyhow!("PoolRegistered token index overflowed"))?,
+            )
+            .ok_or_else(|| anyhow!("PoolRegistered token index overflowed"))?;
+        let end = start + 32;
+        if end > data.len() {
+            return Err(anyhow!("PoolRegistered token config was truncated"));
+        }
+        let token = Address::from_slice(&data[start + 12..end]);
+        pool_tokens.push(ApiPoolToken {
+            address: format!("{token:?}"),
+            symbol: String::new(),
+            decimals: 0,
+            index,
+        });
+    }
+    Ok(ApiPool {
+        address: format!("{pool:?}"),
+        name: String::new(),
+        symbol: String::new(),
+        pool_type: "unknown".to_string(),
+        pool_tokens,
+        dynamic_data: None,
+    })
+}
+
+async fn select_best_pool(
+    engine: &ExecutionEngine,
+    chain: &Chain,
+    req: &BalancerSwapRequest,
+    sender: Address,
+) -> Result<(Address, U256, BalancerPoolSelection, usize, usize)> {
+    let token_in = balancer_v3::parse_request_address(&req.token_in, "token_in")?;
+    let token_out = balancer_v3::parse_request_address(&req.token_out, "token_out")?;
+    let candidates = discover_pair_pools(token_in, token_out).await?;
+    let discovered = candidates.len();
+    let mut quoted = 0usize;
+    let mut best: Option<(Address, U256)> = None;
+
+    for candidate in candidates {
+        let Ok(pool) = candidate.address.parse::<Address>() else {
+            continue;
+        };
+        let mut request = req.clone();
+        request.pool = format!("{pool:?}");
+        if validate_pool_for_swap(engine, chain, &request)
+            .await
+            .is_err()
+        {
+            continue;
+        }
+        let Ok(amount) = quote_swap(engine, chain, &request, sender).await else {
+            continue;
+        };
+        if amount.is_zero() {
+            continue;
+        }
+        quoted += 1;
+        let replace = match best {
+            None => true,
+            Some((best_pool, best_amount)) => match req.swap_kind {
+                BalancerSwapKind::ExactIn => {
+                    amount > best_amount || (amount == best_amount && pool < best_pool)
+                }
+                BalancerSwapKind::ExactOut => {
+                    amount < best_amount || (amount == best_amount && pool < best_pool)
+                }
+            },
+        };
+        if replace {
+            best = Some((pool, amount));
+        }
+    }
+
+    let (pool, quote) = best.ok_or_else(|| {
+        anyhow!(
+            "Balancer V3 automatic selection found {discovered} pair-compatible pools, but none produced a valid live quote"
+        )
+    })?;
+    Ok((
+        pool,
+        quote,
+        BalancerPoolSelection::Automatic,
+        discovered,
+        quoted,
     ))
+}
+
+async fn discovered_pool_response(
+    engine: &ExecutionEngine,
+    chain: &Chain,
+    mut pool: ApiPool,
+    state: PoolState,
+) -> Result<BalancerDiscoveredPool> {
+    let pool_address = pool.address.parse::<Address>()?;
+    if pool.symbol.is_empty() {
+        pool.symbol = token_symbol_or_fallback(engine, chain, pool_address).await;
+    }
+    if pool.name.is_empty() {
+        pool.name = token_name_or_fallback(engine, chain, pool_address, &pool.symbol).await;
+    }
+    for token in &mut pool.pool_tokens {
+        let address = token.address.parse::<Address>()?;
+        if token.symbol.is_empty() {
+            token.symbol = token_symbol_or_fallback(engine, chain, address).await;
+        }
+        if token.decimals == 0 {
+            token.decimals = token_decimals(engine, chain, address).await?;
+        }
+    }
+    Ok(BalancerDiscoveredPool {
+        pool_address: pool.address,
+        name: pool.name,
+        symbol: pool.symbol,
+        pool_type: pool.pool_type,
+        total_liquidity_usd: pool
+            .dynamic_data
+            .as_ref()
+            .and_then(|data| data.total_liquidity.clone()),
+        swap_fee: pool
+            .dynamic_data
+            .as_ref()
+            .and_then(|data| data.swap_fee.clone()),
+        tokens: pool
+            .pool_tokens
+            .into_iter()
+            .map(|token| BalancerDiscoveredPoolToken {
+                address: token.address,
+                symbol: token.symbol,
+                decimals: token.decimals,
+                index: token.index,
+            })
+            .collect(),
+        is_initialized: state.is_initialized,
+        is_paused: state.is_paused,
+        is_in_recovery_mode: state.is_in_recovery_mode,
+    })
 }
 
 struct ResolvedAddLiquidity {
@@ -1102,5 +1626,79 @@ mod tests {
             downward_slippage_allow_zero(U256::zero(), 100).unwrap(),
             U256::zero()
         );
+    }
+
+    #[tokio::test]
+    #[ignore = "requires the public Balancer GraphQL API"]
+    async fn live_discovers_sepolia_v3_pools() {
+        let pools = fetch_pools_from_api().await.unwrap();
+        assert!(!pools.is_empty());
+        assert!(pools.iter().all(|pool| !pool.pool_tokens.is_empty()));
+    }
+
+    #[tokio::test]
+    #[ignore = "requires Sepolia Blockscout"]
+    async fn live_onchain_fallback_discovers_ardent_ausd_pool() {
+        let usdc = "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238"
+            .parse::<Address>()
+            .unwrap();
+        let ausd = "0xE9df660c675F6f649677Ae408FCf6665D4F0F5Be"
+            .parse::<Address>()
+            .unwrap();
+        let registered = fetch_registered_pools_from_blockscout().await.unwrap();
+        let known = registered.iter().find(|pool| {
+            pool.address
+                .eq_ignore_ascii_case("0x0c131e566752417dAA7d8a51D1E9ae8c95B52E99")
+        });
+        assert!(
+            known.is_some(),
+            "known pool registration was not decoded among {} pools; sample: {:?}",
+            registered.len(),
+            registered
+                .iter()
+                .take(5)
+                .map(|pool| &pool.address)
+                .collect::<Vec<_>>()
+        );
+        assert_eq!(known.unwrap().pool_tokens.len(), 2);
+        let pools = discover_pair_pools(usdc, ausd).await.unwrap();
+        assert!(pools.iter().any(|pool| {
+            pool.address
+                .eq_ignore_ascii_case("0x0c131e566752417dAA7d8a51D1E9ae8c95B52E99")
+        }));
+    }
+
+    #[tokio::test]
+    #[ignore = "requires configured Sepolia RPC, Balancer API, and Blockscout"]
+    async fn live_automatically_quotes_ardent_ausd_pool() {
+        dotenvy::dotenv().ok();
+        let engine = ExecutionEngine::new(crate::config::AppConfig::from_env().unwrap()).unwrap();
+        let request = BalancerSwapRequest {
+            agent_id: "live-balancer-discovery".to_string(),
+            chain: "ethereum".to_string(),
+            pool: String::new(),
+            token_in: "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238".to_string(),
+            token_out: "0xE9df660c675F6f649677Ae408FCf6665D4F0F5Be".to_string(),
+            swap_kind: BalancerSwapKind::ExactIn,
+            amount_raw: "1000000".to_string(),
+            limit_raw: None,
+            slippage_bps: 100,
+            deadline: None,
+            strategy_id: None,
+            callback_url: None,
+        };
+        let (pool, quote, selection, discovered, quoted) =
+            select_best_pool(&engine, &Chain::Ethereum, &request, Address::zero())
+                .await
+                .unwrap();
+        assert_eq!(
+            pool,
+            "0x0c131e566752417dAA7d8a51D1E9ae8c95B52E99"
+                .parse::<Address>()
+                .unwrap()
+        );
+        assert_eq!(selection, BalancerPoolSelection::Automatic);
+        assert!(!quote.is_zero());
+        assert!(discovered >= quoted && quoted > 0);
     }
 }

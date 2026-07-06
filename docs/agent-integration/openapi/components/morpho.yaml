@@ -85,6 +85,20 @@ schemas:
         fee_raw: { type: string }
         fee_percent: { type: string }
         last_update: { type: string }
+    MorphoMarketsResponse:
+      type: object
+      properties:
+        chain: { type: string }
+        loan_token_filter: { type: [string, "null"] }
+        collateral_token_filter: { type: [string, "null"] }
+        require_available_oracle: { type: boolean }
+        recommended_market_id:
+          type: [string, "null"]
+          description: Highest-ranked market after all caller-supplied filters.
+        ranking: { type: string }
+        markets:
+          type: array
+          items: { "$ref": "#/components/schemas/MorphoMarketResponse" }
     MorphoPositionResponse:
       type: object
       required:

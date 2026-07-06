@@ -637,6 +637,10 @@ async fn main() -> anyhow::Result<()> {
             get(routes::compound_borrow_capacity_handler),
         )
         .route(
+            "/protocols/compound-v3/markets",
+            get(routes::compound_markets_handler),
+        )
+        .route(
             "/protocols/morpho/supply",
             post(routes::morpho_supply_handler),
         )
@@ -689,6 +693,10 @@ async fn main() -> anyhow::Result<()> {
             get(routes::morpho_market_handler),
         )
         .route(
+            "/protocols/morpho/markets",
+            get(routes::morpho_markets_handler),
+        )
+        .route(
             "/protocols/morpho/position",
             get(routes::morpho_position_handler),
         )
@@ -733,8 +741,36 @@ async fn main() -> anyhow::Result<()> {
             get(routes::balancer_pool_handler),
         )
         .route(
+            "/protocols/balancer-v3/pools",
+            get(routes::balancer_pools_handler),
+        )
+        .route(
             "/protocols/balancer-v3/balances",
             get(routes::balancer_balances_handler),
+        )
+        .route(
+            "/protocols/uniswap-v4/swap",
+            post(routes::uniswap_v4_swap_handler),
+        )
+        .route(
+            "/protocols/uniswap-v4/swap/simulate",
+            post(routes::uniswap_v4_swap_simulate_handler),
+        )
+        .route(
+            "/protocols/uniswap-v4/swap/quote",
+            post(routes::uniswap_v4_quote_handler),
+        )
+        .route(
+            "/protocols/uniswap-v4/pool",
+            get(routes::uniswap_v4_pool_handler),
+        )
+        .route(
+            "/protocols/uniswap-v4/pools",
+            get(routes::uniswap_v4_pools_handler),
+        )
+        .route(
+            "/protocols/uniswap-v4/balances",
+            get(routes::uniswap_v4_balances_handler),
         )
         .route(
             "/protocols/gmx-v2/orders/simulate",

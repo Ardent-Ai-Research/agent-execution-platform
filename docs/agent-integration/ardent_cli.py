@@ -16,8 +16,10 @@ Commands:
 - compound-position
 - compound-balances
 - compound-borrow-capacity
+- compound-markets
 - morpho-market
 - morpho-position
+- morpho-markets
 - morpho-supply
 - morpho-withdraw
 - morpho-supply-collateral
@@ -30,6 +32,12 @@ Commands:
 - balancer-remove-liquidity
 - balancer-pool
 - balancer-balances
+- balancer-pools
+- uniswap-v4-swap
+- uniswap-v4-quote
+- uniswap-v4-pool
+- uniswap-v4-pools
+- uniswap-v4-balances
 - gmx-create-order
 - gmx-cancel-order
 - gmx-markets
@@ -56,7 +64,7 @@ from urllib import parse, request
 from urllib.error import HTTPError, URLError
 
 
-VERSION = "0.7.0"
+VERSION = "0.9.0"
 REPO_RAW_BASE = "https://raw.githubusercontent.com/Ardent-Ai-Research/agent-execution-platform/master/docs/agent-integration"
 RUNTIME_DIR = Path(os.getenv("ARDENT_RUNTIME_DIR", str(Path.home() / ".ardent")))
 
@@ -517,6 +525,18 @@ def run_compound_borrow_capacity(args: argparse.Namespace) -> int:
     return 0 if 200 <= status < 300 else 1
 
 
+def run_compound_markets(args: argparse.Namespace) -> int:
+    api_key = require_api_key(args)
+    params = {"chain": args.chain}
+    if args.base_asset:
+        params["base_asset"] = args.base_asset
+    qs = parse.urlencode(params)
+    url = f"{build_base_url(args)}/protocols/compound-v3/markets?{qs}"
+    status, payload = call_api("GET", url, api_key=api_key)
+    output({"status": status, "data": payload})
+    return 0 if 200 <= status < 300 else 1
+
+
 def resolve_morpho_action_body(args: argparse.Namespace) -> dict[str, Any]:
     if args.body_file:
         body = parse_json_file(args.body_file)
@@ -562,6 +582,24 @@ def run_morpho_market(args: argparse.Namespace) -> int:
     return 0 if 200 <= status < 300 else 1
 
 
+def run_morpho_markets(args: argparse.Namespace) -> int:
+    api_key = require_api_key(args)
+    params: dict[str, Any] = {
+        "chain": args.chain,
+        "require_available_oracle": str(args.require_available_oracle).lower(),
+        "limit": args.limit,
+    }
+    for name in ("loan_token", "collateral_token", "max_lltv_raw", "min_liquidity_raw"):
+        value = getattr(args, name)
+        if value is not None:
+            params[name] = value
+    qs = parse.urlencode(params)
+    url = f"{build_base_url(args)}/protocols/morpho/markets?{qs}"
+    status, payload = call_api("GET", url, api_key=api_key)
+    output({"status": status, "data": payload})
+    return 0 if 200 <= status < 300 else 1
+
+
 def run_morpho_position(args: argparse.Namespace) -> int:
     api_key = require_api_key(args)
     qs = parse.urlencode(
@@ -577,13 +615,14 @@ def resolve_balancer_swap_body(args: argparse.Namespace) -> dict[str, Any]:
     body: dict[str, Any] = {
         "agent_id": args.agent_id,
         "chain": args.chain,
-        "pool": args.pool,
         "token_in": args.token_in,
         "token_out": args.token_out,
         "swap_kind": args.swap_kind,
         "amount_raw": args.amount_raw,
         "slippage_bps": args.slippage_bps,
     }
+    if args.pool:
+        body["pool"] = args.pool
     if args.limit_raw is not None:
         body["limit_raw"] = args.limit_raw
     if args.deadline is not None:
@@ -638,12 +677,124 @@ def run_balancer_pool(args: argparse.Namespace) -> int:
     return 0 if 200 <= status < 300 else 1
 
 
+def run_balancer_pools(args: argparse.Namespace) -> int:
+    api_key = require_api_key(args)
+    qs = parse.urlencode(
+        {"chain": args.chain, "token_in": args.token_in, "token_out": args.token_out}
+    )
+    url = f"{build_base_url(args)}/protocols/balancer-v3/pools?{qs}"
+    status, payload = call_api("GET", url, api_key=api_key)
+    output({"status": status, "data": payload})
+    return 0 if 200 <= status < 300 else 1
+
+
 def run_balancer_balances(args: argparse.Namespace) -> int:
     api_key = require_api_key(args)
     qs = parse.urlencode(
         {"agent_id": args.agent_id, "chain": args.chain, "pool": args.pool}
     )
     url = f"{build_base_url(args)}/protocols/balancer-v3/balances?{qs}"
+    status, payload = call_api("GET", url, api_key=api_key)
+    output({"status": status, "data": payload})
+    return 0 if 200 <= status < 300 else 1
+
+
+def resolve_uniswap_v4_swap_body(args: argparse.Namespace) -> dict[str, Any]:
+    body: dict[str, Any] = {
+        "agent_id": args.agent_id,
+        "chain": args.chain,
+        "token_in": args.token_in,
+        "token_out": args.token_out,
+        "hook_data": args.hook_data,
+        "include_hooked_pools": args.include_hooked_pools,
+        "swap_kind": args.swap_kind,
+        "amount_raw": args.amount_raw,
+        "slippage_bps": args.slippage_bps,
+    }
+    if args.fee is not None:
+        body["fee"] = args.fee
+    if args.tick_spacing is not None:
+        body["tick_spacing"] = args.tick_spacing
+    if args.hooks is not None:
+        body["hooks"] = args.hooks
+    if args.limit_raw is not None:
+        body["limit_raw"] = args.limit_raw
+    if args.deadline is not None:
+        body["deadline"] = args.deadline
+    if args.strategy_id:
+        body["strategy_id"] = args.strategy_id
+    if args.callback_url:
+        body["callback_url"] = args.callback_url
+    return body
+
+
+def run_uniswap_v4_swap(args: argparse.Namespace) -> int:
+    api_key = require_api_key(args)
+    body = resolve_uniswap_v4_swap_body(args)
+    suffix = "" if args.execute else "/simulate"
+    url = f"{build_base_url(args)}/protocols/uniswap-v4/swap{suffix}"
+    payment_proof = resolve_payment_proof(args) if args.execute else None
+    status, payload = call_api(
+        "POST", url, body=body, api_key=api_key, payment_proof=payment_proof
+    )
+    output({"status": status, "data": payload})
+    return 0 if 200 <= status < 300 else 1
+
+
+def run_uniswap_v4_quote(args: argparse.Namespace) -> int:
+    api_key = require_api_key(args)
+    body = resolve_uniswap_v4_swap_body(args)
+    url = f"{build_base_url(args)}/protocols/uniswap-v4/swap/quote"
+    status, payload = call_api("POST", url, body=body, api_key=api_key)
+    output({"status": status, "data": payload})
+    return 0 if 200 <= status < 300 else 1
+
+
+def run_uniswap_v4_pool(args: argparse.Namespace) -> int:
+    api_key = require_api_key(args)
+    qs = parse.urlencode(
+        {
+            "chain": args.chain,
+            "token_a": args.token_a,
+            "token_b": args.token_b,
+            "fee": args.fee,
+            "tick_spacing": args.tick_spacing,
+            "hooks": args.hooks,
+        }
+    )
+    url = f"{build_base_url(args)}/protocols/uniswap-v4/pool?{qs}"
+    status, payload = call_api("GET", url, api_key=api_key)
+    output({"status": status, "data": payload})
+    return 0 if 200 <= status < 300 else 1
+
+
+def run_uniswap_v4_pools(args: argparse.Namespace) -> int:
+    api_key = require_api_key(args)
+    qs = parse.urlencode(
+        {
+            "chain": args.chain,
+            "token_a": args.token_a,
+            "token_b": args.token_b,
+            "include_hooked_pools": str(args.include_hooked_pools).lower(),
+        }
+    )
+    url = f"{build_base_url(args)}/protocols/uniswap-v4/pools?{qs}"
+    status, payload = call_api("GET", url, api_key=api_key)
+    output({"status": status, "data": payload})
+    return 0 if 200 <= status < 300 else 1
+
+
+def run_uniswap_v4_balances(args: argparse.Namespace) -> int:
+    api_key = require_api_key(args)
+    qs = parse.urlencode(
+        {
+            "agent_id": args.agent_id,
+            "chain": args.chain,
+            "token_a": args.token_a,
+            "token_b": args.token_b,
+        }
+    )
+    url = f"{build_base_url(args)}/protocols/uniswap-v4/balances?{qs}"
     status, payload = call_api("GET", url, api_key=api_key)
     output({"status": status, "data": payload})
     return 0 if 200 <= status < 300 else 1
@@ -1376,7 +1527,10 @@ def add_balancer_swap_flags(parser: argparse.ArgumentParser) -> None:
         choices=["ethereum"],
         help="Balancer V3 Ethereum Sepolia chain label",
     )
-    parser.add_argument("--pool", required=True, help="Balancer V3 pool address")
+    parser.add_argument(
+        "--pool",
+        help="Optional Balancer V3 pool address; omit for automatic discovery",
+    )
     parser.add_argument("--token-in", required=True, help="Input token address")
     parser.add_argument("--token-out", required=True, help="Output token address")
     parser.add_argument(
@@ -1459,6 +1613,100 @@ def add_balancer_remove_liquidity_flags(parser: argparse.ArgumentParser) -> None
         action="append",
         help="Optional token minimum as TOKEN_ADDRESS=RAW_AMOUNT; repeatable",
     )
+
+
+def parse_uniswap_v4_fee(value: str) -> int:
+    fee = int(value)
+    if 0 <= fee <= 1_000_000 or fee == 0x800000:
+        return fee
+    raise argparse.ArgumentTypeError(
+        "fee must be between 0 and 1000000, or 8388608 for a dynamic-fee pool"
+    )
+
+
+def add_uniswap_v4_pool_key_flags(
+    parser: argparse.ArgumentParser, *, swap: bool, pool_key_required: bool
+) -> None:
+    parser.add_argument(
+        "--chain",
+        default="ethereum",
+        choices=["ethereum"],
+        help="Uniswap V4 Ethereum Sepolia chain label",
+    )
+    if swap:
+        parser.add_argument(
+            "--token-in",
+            required=True,
+            help="Input currency address; use 0x000...000 for native ETH",
+        )
+        parser.add_argument(
+            "--token-out",
+            required=True,
+            help="Output currency address; use 0x000...000 for native ETH",
+        )
+    else:
+        parser.add_argument("--token-a", required=True, help="First pool currency")
+        parser.add_argument("--token-b", required=True, help="Second pool currency")
+    parser.add_argument(
+        "--fee",
+        required=pool_key_required,
+        type=parse_uniswap_v4_fee,
+        help="Pool LP fee; omit with --tick-spacing and --hooks for automatic selection",
+    )
+    parser.add_argument(
+        "--tick-spacing",
+        required=pool_key_required,
+        type=int,
+        help="Pool tick spacing; omit with --fee and --hooks for automatic selection",
+    )
+    parser.add_argument(
+        "--hooks",
+        default=(
+            "0x0000000000000000000000000000000000000000"
+            if pool_key_required
+            else None
+        ),
+        help="Pool hooks contract; defaults to no hooks",
+    )
+
+
+def add_uniswap_v4_swap_flags(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--agent-id", required=True, help="Agent identifier")
+    add_uniswap_v4_pool_key_flags(
+        parser, swap=True, pool_key_required=False
+    )
+    parser.add_argument(
+        "--include-hooked-pools",
+        action="store_true",
+        help="Allow automatic selection to consider hook-enabled pools",
+    )
+    parser.add_argument(
+        "--hook-data", default="0x", help="Hex hook data required by the selected pool"
+    )
+    parser.add_argument(
+        "--swap-kind",
+        default="exact_in",
+        choices=["exact_in", "exact_out"],
+        help="Exact input or exact output swap",
+    )
+    parser.add_argument(
+        "--amount-raw",
+        required=True,
+        help="Exact input for exact_in, or exact output for exact_out, in raw units",
+    )
+    parser.add_argument(
+        "--limit-raw",
+        help="Minimum output for exact_in, or maximum input for exact_out",
+    )
+    parser.add_argument(
+        "--slippage-bps",
+        type=int,
+        default=100,
+        help="Quote-derived slippage limit when --limit-raw is omitted",
+    )
+    parser.add_argument("--deadline", type=int, help="Future Unix timestamp")
+    parser.add_argument("--strategy-id", help="Optional strategy ID")
+    parser.add_argument("--callback-url", help="Optional callback webhook URL")
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -1633,12 +1881,41 @@ def build_parser() -> argparse.ArgumentParser:
     p_compound_borrow_capacity.add_argument("--market", default="usdc", choices=["usdc", "weth"], help="Compound III market")
     p_compound_borrow_capacity.set_defaults(func=run_compound_borrow_capacity)
 
+    p_compound_markets = subparsers.add_parser(
+        "compound-markets", help="GET /protocols/compound-v3/markets"
+    )
+    add_global_flags(p_compound_markets)
+    p_compound_markets.add_argument("--chain", default="base", choices=["base"])
+    p_compound_markets.add_argument(
+        "--base-asset", choices=["USDC", "WETH"], help="Optional base-asset filter"
+    )
+    p_compound_markets.set_defaults(func=run_compound_markets)
+
     morpho_default_market = "0x6143c1e52ed45fb9a0551b349abb4a1b8c5962dd39545ac235a9c98610bf97da"
     p_morpho_market = subparsers.add_parser("morpho-market", help="GET /protocols/morpho/market")
     add_global_flags(p_morpho_market)
     p_morpho_market.add_argument("--chain", default="base", choices=["base"])
     p_morpho_market.add_argument("--market-id", default=morpho_default_market)
     p_morpho_market.set_defaults(func=run_morpho_market)
+
+    p_morpho_markets = subparsers.add_parser(
+        "morpho-markets", help="GET /protocols/morpho/markets"
+    )
+    add_global_flags(p_morpho_markets)
+    p_morpho_markets.add_argument("--chain", default="base", choices=["base"])
+    p_morpho_markets.add_argument("--loan-token", help="Loan-token address filter")
+    p_morpho_markets.add_argument("--collateral-token", help="Collateral-token address filter")
+    p_morpho_markets.add_argument("--max-lltv-raw", help="Maximum LLTV scaled by 1e18")
+    p_morpho_markets.add_argument("--min-liquidity-raw", help="Minimum raw loan-token liquidity")
+    p_morpho_markets.add_argument(
+        "--allow-unavailable-oracle",
+        action="store_false",
+        dest="require_available_oracle",
+        help="Include markets whose oracle is currently stale, unavailable, or zero",
+    )
+    p_morpho_markets.set_defaults(require_available_oracle=True)
+    p_morpho_markets.add_argument("--limit", type=int, default=20)
+    p_morpho_markets.set_defaults(func=run_morpho_markets)
 
     p_morpho_position = subparsers.add_parser("morpho-position", help="GET /protocols/morpho/position")
     add_global_flags(p_morpho_position)
@@ -1778,6 +2055,18 @@ def build_parser() -> argparse.ArgumentParser:
     p_balancer_pool.add_argument("--pool", required=True, help="Balancer V3 pool address")
     p_balancer_pool.set_defaults(func=run_balancer_pool)
 
+    p_balancer_pools = subparsers.add_parser(
+        "balancer-pools",
+        help="GET /protocols/balancer-v3/pools",
+    )
+    add_global_flags(p_balancer_pools)
+    p_balancer_pools.add_argument(
+        "--chain", default="ethereum", choices=["ethereum"], help="Ethereum Sepolia"
+    )
+    p_balancer_pools.add_argument("--token-in", required=True, help="Input token address")
+    p_balancer_pools.add_argument("--token-out", required=True, help="Output token address")
+    p_balancer_pools.set_defaults(func=run_balancer_pools)
+
     p_balancer_balances = subparsers.add_parser(
         "balancer-balances",
         help="GET /protocols/balancer-v3/balances",
@@ -1791,6 +2080,65 @@ def build_parser() -> argparse.ArgumentParser:
         "--pool", required=True, help="Balancer V3 pool address"
     )
     p_balancer_balances.set_defaults(func=run_balancer_balances)
+
+    for command, execute, help_text in [
+        (
+            "uniswap-v4-swap-simulate",
+            False,
+            "POST /protocols/uniswap-v4/swap/simulate",
+        ),
+        ("uniswap-v4-swap", True, "POST /protocols/uniswap-v4/swap"),
+    ]:
+        uniswap_swap = subparsers.add_parser(command, help=help_text)
+        add_global_flags(uniswap_swap)
+        add_uniswap_v4_swap_flags(uniswap_swap)
+        if execute:
+            add_payment_proof_flags(uniswap_swap)
+        uniswap_swap.set_defaults(func=run_uniswap_v4_swap, execute=execute)
+
+    p_uniswap_quote = subparsers.add_parser(
+        "uniswap-v4-quote", help="POST /protocols/uniswap-v4/swap/quote"
+    )
+    add_global_flags(p_uniswap_quote)
+    add_uniswap_v4_swap_flags(p_uniswap_quote)
+    p_uniswap_quote.set_defaults(func=run_uniswap_v4_quote)
+
+    p_uniswap_pool = subparsers.add_parser(
+        "uniswap-v4-pool", help="GET /protocols/uniswap-v4/pool"
+    )
+    add_global_flags(p_uniswap_pool)
+    add_uniswap_v4_pool_key_flags(
+        p_uniswap_pool, swap=False, pool_key_required=True
+    )
+    p_uniswap_pool.set_defaults(func=run_uniswap_v4_pool)
+
+    p_uniswap_pools = subparsers.add_parser(
+        "uniswap-v4-pools", help="GET /protocols/uniswap-v4/pools"
+    )
+    add_global_flags(p_uniswap_pools)
+    p_uniswap_pools.add_argument(
+        "--chain", default="ethereum", choices=["ethereum"]
+    )
+    p_uniswap_pools.add_argument("--token-a", required=True)
+    p_uniswap_pools.add_argument("--token-b", required=True)
+    p_uniswap_pools.add_argument(
+        "--include-hooked-pools", action="store_true"
+    )
+    p_uniswap_pools.set_defaults(func=run_uniswap_v4_pools)
+
+    p_uniswap_balances = subparsers.add_parser(
+        "uniswap-v4-balances", help="GET /protocols/uniswap-v4/balances"
+    )
+    add_global_flags(p_uniswap_balances)
+    p_uniswap_balances.add_argument(
+        "--agent-id", required=True, help="Agent identifier"
+    )
+    p_uniswap_balances.add_argument(
+        "--chain", default="ethereum", choices=["ethereum"]
+    )
+    p_uniswap_balances.add_argument("--token-a", required=True)
+    p_uniswap_balances.add_argument("--token-b", required=True)
+    p_uniswap_balances.set_defaults(func=run_uniswap_v4_balances)
 
     p_gmx_create_order_sim = subparsers.add_parser("gmx-create-order-simulate", help="POST /protocols/gmx-v2/orders/simulate")
     add_global_flags(p_gmx_create_order_sim)

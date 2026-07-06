@@ -10,3 +10,4 @@ pub mod compound_v3;
 pub mod gmx_v2;
 pub mod morpho;
 pub(crate) mod serde_utils;
+pub mod uniswap_v4;

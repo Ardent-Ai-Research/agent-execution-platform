@@ -246,6 +246,28 @@
         "$ref": "#/components/responses/ErrorResponse"
       '401':
         "$ref": "#/components/responses/ErrorResponse"
+"/protocols/compound-v3/markets":
+  get:
+    summary: List and verify Compound III Base Sepolia markets
+    description: Returns the maintained USDC and WETH Comet registry after verifying each proxy's base token on-chain.
+    parameters:
+    - in: query
+      name: chain
+      schema: { type: string, enum: [base], default: base }
+    - in: query
+      name: base_asset
+      schema: { type: string, enum: [USDC, WETH] }
+    responses:
+      '200':
+        description: Verified Comet registry
+        content:
+          application/json:
+            schema:
+              "$ref": "#/components/schemas/CompoundMarketsResponse"
+      '400':
+        "$ref": "#/components/responses/ErrorResponse"
+      '401':
+        "$ref": "#/components/responses/ErrorResponse"
 "/protocols/compound-v3/balances":
   get:
     summary: Read Compound III Base Sepolia wallet and protocol balances

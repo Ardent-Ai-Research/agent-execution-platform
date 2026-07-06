@@ -53,6 +53,24 @@ pub struct MorphoPositionQuery {
     pub market_id: String,
 }
 
+#[derive(Debug, Clone, Deserialize)]
+pub struct MorphoMarketsQuery {
+    #[serde(default = "default_chain")]
+    pub chain: String,
+    #[serde(default)]
+    pub loan_token: Option<String>,
+    #[serde(default)]
+    pub collateral_token: Option<String>,
+    #[serde(default)]
+    pub max_lltv_raw: Option<String>,
+    #[serde(default)]
+    pub min_liquidity_raw: Option<String>,
+    #[serde(default = "default_require_available_oracle")]
+    pub require_available_oracle: bool,
+    #[serde(default = "default_markets_limit")]
+    pub limit: usize,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MorphoAction {
     Supply,
@@ -116,6 +134,14 @@ fn default_market_id() -> String {
     DEFAULT_MARKET_ID.to_string()
 }
 
+fn default_require_available_oracle() -> bool {
+    true
+}
+
+fn default_markets_limit() -> usize {
+    20
+}
+
 pub fn morpho_address() -> Address {
     MORPHO_ADDRESS
         .parse()
@@ -141,6 +167,42 @@ pub fn validate_position_query(query: &MorphoPositionQuery) -> Result<()> {
     Ok(())
 }
 
+pub fn validate_markets_query(query: &MorphoMarketsQuery) -> Result<()> {
+    validate_chain(&query.chain)?;
+    if query.loan_token.is_none() && query.collateral_token.is_none() {
+        return Err(anyhow!(
+            "loan_token or collateral_token is required for Morpho market discovery"
+        ));
+    }
+    for (field, value) in [
+        ("loan_token", query.loan_token.as_deref()),
+        ("collateral_token", query.collateral_token.as_deref()),
+    ] {
+        if let Some(value) = value {
+            let address = value
+                .trim()
+                .parse::<Address>()
+                .with_context(|| format!("{field} must be a valid address"))?;
+            if address == Address::zero() {
+                return Err(anyhow!("{field} must not be the zero address"));
+            }
+        }
+    }
+    for (field, value) in [
+        ("max_lltv_raw", query.max_lltv_raw.as_deref()),
+        ("min_liquidity_raw", query.min_liquidity_raw.as_deref()),
+    ] {
+        if let Some(value) = value {
+            U256::from_dec_str(value.trim())
+                .with_context(|| format!("{field} must be an unsigned base-10 integer"))?;
+        }
+    }
+    if query.limit == 0 || query.limit > 50 {
+        return Err(anyhow!("limit must be between 1 and 50"));
+    }
+    Ok(())
+}
+
 pub fn parse_market_id(raw: &str) -> Result<H256> {
     let raw = raw.trim();
     if !raw.starts_with("0x") || raw.len() != 66 {
@@ -148,6 +210,12 @@ pub fn parse_market_id(raw: &str) -> Result<H256> {
     }
     raw.parse::<H256>()
         .with_context(|| "market_id must be a 32-byte 0x-prefixed hex value")
+}
+
+pub fn derive_market_id(params: &MorphoMarketParams) -> H256 {
+    H256::from(ethers::utils::keccak256(abi::encode(&market_param_tokens(
+        params,
+    ))))
 }
 
 pub fn is_amount_max(req: &MorphoActionRequest) -> bool {
@@ -645,6 +713,35 @@ mod tests {
             &market_params(),
         ))));
         assert_eq!(parse_market_id(DEFAULT_MARKET_ID).unwrap(), derived_id);
+    }
+
+    #[test]
+    fn market_discovery_requires_a_token_filter() {
+        let query = MorphoMarketsQuery {
+            chain: "base".to_string(),
+            loan_token: None,
+            collateral_token: None,
+            max_lltv_raw: None,
+            min_liquidity_raw: None,
+            require_available_oracle: true,
+            limit: 20,
+        };
+        assert!(validate_markets_query(&query)
+            .unwrap_err()
+            .to_string()
+            .contains("loan_token or collateral_token"));
+    }
+
+    #[test]
+    fn create_market_event_data_decodes_to_the_indexed_id() {
+        let params = market_params();
+        let encoded = abi::encode(&market_param_tokens(&params));
+        let decoded = decode_market_params(&encoded).unwrap();
+        assert_eq!(decoded, params);
+        assert_eq!(
+            derive_market_id(&decoded),
+            parse_market_id(DEFAULT_MARKET_ID).unwrap()
+        );
     }
 
     #[test]

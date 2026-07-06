@@ -7,5 +7,6 @@ pub mod service;
 
 pub use adapter::{
     CompoundBalancesQuery, CompoundBorrowCapacityQuery, CompoundBorrowRequest,
-    CompoundPositionQuery, CompoundRepayRequest, CompoundSupplyRequest, CompoundWithdrawRequest,
+    CompoundMarketsQuery, CompoundPositionQuery, CompoundRepayRequest, CompoundSupplyRequest,
+    CompoundWithdrawRequest,
 };

@@ -25,12 +25,12 @@ use crate::protocols::aave_v3::{
 };
 use crate::protocols::balancer_v3::{
     service as balancer_v3_service, BalancerAddLiquidityRequest, BalancerBalancesQuery,
-    BalancerPoolQuery, BalancerRemoveLiquidityRequest, BalancerSwapRequest,
+    BalancerPoolQuery, BalancerPoolsQuery, BalancerRemoveLiquidityRequest, BalancerSwapRequest,
 };
 use crate::protocols::compound_v3::{
     service as compound_v3_service, CompoundBalancesQuery, CompoundBorrowCapacityQuery,
-    CompoundBorrowRequest, CompoundPositionQuery, CompoundRepayRequest, CompoundSupplyRequest,
-    CompoundWithdrawRequest,
+    CompoundBorrowRequest, CompoundMarketsQuery, CompoundPositionQuery, CompoundRepayRequest,
+    CompoundSupplyRequest, CompoundWithdrawRequest,
 };
 use crate::protocols::gmx_v2::{
     service as gmx_v2_service, GmxAccountQuery, GmxCancelOrderRequest, GmxCancelRequest,
@@ -38,7 +38,12 @@ use crate::protocols::gmx_v2::{
     GmxMarketsQuery, GmxUpdateOrderRequest,
 };
 use crate::protocols::morpho::{
-    service as morpho_service, MorphoActionRequest, MorphoMarketQuery, MorphoPositionQuery,
+    service as morpho_service, MorphoActionRequest, MorphoMarketQuery, MorphoMarketsQuery,
+    MorphoPositionQuery,
+};
+use crate::protocols::uniswap_v4::{
+    service as uniswap_v4_service, UniswapBalancesQuery, UniswapPoolQuery, UniswapPoolsQuery,
+    UniswapSwapRequest,
 };
 use crate::relayer::erc4337::BundlerClient;
 use crate::relayer::paymaster::PaymasterSigner;
@@ -688,6 +693,22 @@ pub async fn compound_borrow_capacity_handler(
     }
 }
 
+pub async fn compound_markets_handler(
+    State(state): State<AppState>,
+    Extension(_api_ctx): Extension<ApiKeyContext>,
+    Query(query): Query<CompoundMarketsQuery>,
+) -> impl IntoResponse {
+    info!(
+        chain = %query.chain,
+        base_asset = ?query.base_asset,
+        "GET /protocols/compound-v3/markets"
+    );
+    match compound_v3_service::handle_markets(&state.engine, &query).await {
+        Ok(resp) => (StatusCode::OK, Json(serde_json::to_value(resp).unwrap())).into_response(),
+        Err(error) => protocol_error_to_http(error),
+    }
+}
+
 macro_rules! morpho_execute_handler {
     ($fn_name:ident, $service_fn:path, $log_name:literal) => {
         pub async fn $fn_name(
@@ -827,6 +848,23 @@ pub async fn morpho_market_handler(
 ) -> impl IntoResponse {
     info!(chain = %query.chain, market_id = %query.market_id, "GET /protocols/morpho/market");
     match morpho_service::handle_market(&state.engine, &query).await {
+        Ok(resp) => (StatusCode::OK, Json(serde_json::to_value(resp).unwrap())).into_response(),
+        Err(error) => protocol_error_to_http(error),
+    }
+}
+
+pub async fn morpho_markets_handler(
+    State(state): State<AppState>,
+    Extension(_api_ctx): Extension<ApiKeyContext>,
+    Query(query): Query<MorphoMarketsQuery>,
+) -> impl IntoResponse {
+    info!(
+        chain = %query.chain,
+        loan_token = ?query.loan_token,
+        collateral_token = ?query.collateral_token,
+        "GET /protocols/morpho/markets"
+    );
+    match morpho_service::handle_markets(&state.engine, &query).await {
         Ok(resp) => (StatusCode::OK, Json(serde_json::to_value(resp).unwrap())).into_response(),
         Err(error) => protocol_error_to_http(error),
     }
@@ -1109,6 +1147,27 @@ pub async fn balancer_pool_handler(
     }
 }
 
+pub async fn balancer_pools_handler(
+    State(state): State<AppState>,
+    Extension(_api_ctx): Extension<ApiKeyContext>,
+    Query(query): Query<BalancerPoolsQuery>,
+) -> impl IntoResponse {
+    info!(
+        chain = %query.chain,
+        token_in = %query.token_in,
+        token_out = %query.token_out,
+        "GET /protocols/balancer-v3/pools"
+    );
+    match balancer_v3_service::handle_pools(&state.engine, &query).await {
+        Ok(response) => (
+            StatusCode::OK,
+            Json(serde_json::to_value(response).unwrap()),
+        )
+            .into_response(),
+        Err(error) => protocol_error_to_http(error),
+    }
+}
+
 pub async fn balancer_balances_handler(
     State(state): State<AppState>,
     Extension(api_ctx): Extension<ApiKeyContext>,
@@ -1121,6 +1180,152 @@ pub async fn balancer_balances_handler(
         "GET /protocols/balancer-v3/balances"
     );
     match balancer_v3_service::handle_balances(
+        &state.engine,
+        &state.wallet_registry,
+        api_ctx.api_key_id,
+        &query,
+    )
+    .await
+    {
+        Ok(resp) => (StatusCode::OK, Json(serde_json::to_value(resp).unwrap())).into_response(),
+        Err(e) => protocol_error_to_http(e),
+    }
+}
+
+pub async fn uniswap_v4_swap_handler(
+    State(state): State<AppState>,
+    Extension(api_ctx): Extension<ApiKeyContext>,
+    payment_proof: Option<Extension<PaymentProof>>,
+    Json(req): Json<UniswapSwapRequest>,
+) -> impl IntoResponse {
+    info!(
+        agent_id = %req.agent_id,
+        chain = %req.chain,
+        token_in = %req.token_in,
+        token_out = %req.token_out,
+        "POST /protocols/uniswap-v4/swap"
+    );
+    let proof_ref = payment_proof.as_ref().map(|proof| &proof.0);
+    let mut redis = state.redis_conn.clone();
+    match uniswap_v4_service::handle_swap(
+        &state.engine,
+        &state.db_pool,
+        &mut redis,
+        &state.wallet_registry,
+        &state.bundler_clients,
+        &state.paymaster_signers,
+        api_ctx.api_key_id,
+        api_ctx.payment_mode.clone(),
+        &req,
+        proof_ref,
+    )
+    .await
+    {
+        Ok(resp) => execution_response_to_http(&state, &req.chain, resp),
+        Err(e) => protocol_error_to_http(e),
+    }
+}
+
+pub async fn uniswap_v4_swap_simulate_handler(
+    State(state): State<AppState>,
+    Extension(api_ctx): Extension<ApiKeyContext>,
+    Json(req): Json<UniswapSwapRequest>,
+) -> impl IntoResponse {
+    info!(
+        agent_id = %req.agent_id,
+        chain = %req.chain,
+        token_in = %req.token_in,
+        token_out = %req.token_out,
+        "POST /protocols/uniswap-v4/swap/simulate"
+    );
+    match uniswap_v4_service::handle_swap_simulate(
+        &state.engine,
+        &state.db_pool,
+        &state.wallet_registry,
+        &state.bundler_clients,
+        &state.paymaster_signers,
+        api_ctx.api_key_id,
+        api_ctx.payment_mode.clone(),
+        &req,
+    )
+    .await
+    {
+        Ok(resp) => (StatusCode::OK, Json(serde_json::to_value(resp).unwrap())).into_response(),
+        Err(e) => protocol_error_to_http(e),
+    }
+}
+
+pub async fn uniswap_v4_quote_handler(
+    State(state): State<AppState>,
+    Extension(api_ctx): Extension<ApiKeyContext>,
+    Json(req): Json<UniswapSwapRequest>,
+) -> impl IntoResponse {
+    info!(
+        agent_id = %req.agent_id,
+        chain = %req.chain,
+        token_in = %req.token_in,
+        token_out = %req.token_out,
+        "POST /protocols/uniswap-v4/swap/quote"
+    );
+    match uniswap_v4_service::handle_quote(
+        &state.engine,
+        &state.wallet_registry,
+        api_ctx.api_key_id,
+        &req,
+    )
+    .await
+    {
+        Ok(resp) => (StatusCode::OK, Json(serde_json::to_value(resp).unwrap())).into_response(),
+        Err(e) => protocol_error_to_http(e),
+    }
+}
+
+pub async fn uniswap_v4_pool_handler(
+    State(state): State<AppState>,
+    Query(query): Query<UniswapPoolQuery>,
+) -> impl IntoResponse {
+    info!(
+        chain = %query.chain,
+        token_a = %query.token_a,
+        token_b = %query.token_b,
+        "GET /protocols/uniswap-v4/pool"
+    );
+    match uniswap_v4_service::handle_pool(&state.engine, &query).await {
+        Ok(resp) => (StatusCode::OK, Json(serde_json::to_value(resp).unwrap())).into_response(),
+        Err(e) => protocol_error_to_http(e),
+    }
+}
+
+pub async fn uniswap_v4_pools_handler(
+    State(state): State<AppState>,
+    Query(query): Query<UniswapPoolsQuery>,
+) -> impl IntoResponse {
+    info!(
+        chain = %query.chain,
+        token_a = %query.token_a,
+        token_b = %query.token_b,
+        include_hooked_pools = query.include_hooked_pools,
+        "GET /protocols/uniswap-v4/pools"
+    );
+    match uniswap_v4_service::handle_pools(&state.engine, &query).await {
+        Ok(resp) => (StatusCode::OK, Json(serde_json::to_value(resp).unwrap())).into_response(),
+        Err(e) => protocol_error_to_http(e),
+    }
+}
+
+pub async fn uniswap_v4_balances_handler(
+    State(state): State<AppState>,
+    Extension(api_ctx): Extension<ApiKeyContext>,
+    Query(query): Query<UniswapBalancesQuery>,
+) -> impl IntoResponse {
+    info!(
+        agent_id = %query.agent_id,
+        chain = %query.chain,
+        token_a = %query.token_a,
+        token_b = %query.token_b,
+        "GET /protocols/uniswap-v4/balances"
+    );
+    match uniswap_v4_service::handle_balances(
         &state.engine,
         &state.wallet_registry,
         api_ctx.api_key_id,

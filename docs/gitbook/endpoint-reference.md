@@ -40,8 +40,9 @@ curl -X GET "$BASE_URL/feed/recent?limit=12"
 6. Compound III typed protocol endpoints
 7. Balancer V3 typed protocol endpoints
 8. Morpho Blue typed protocol endpoints
-9. GMX V2 typed protocol endpoints
-10. `GET /status/:id`
+9. Uniswap V4 typed protocol endpoints
+10. GMX V2 typed protocol endpoints
+11. `GET /status/:id`
 
 Authentication:
 
@@ -141,38 +142,68 @@ See [Aave V3 Sepolia](aave-v3.md).
 
 ### Compound III Base Sepolia
 
-1. `GET /protocols/compound-v3/position`
-2. `GET /protocols/compound-v3/balances`
-3. `GET /protocols/compound-v3/borrow-capacity`
-4. `POST /protocols/compound-v3/supply/simulate`
-5. `POST /protocols/compound-v3/supply`
-6. `POST /protocols/compound-v3/withdraw/simulate`
-7. `POST /protocols/compound-v3/withdraw`
-8. `POST /protocols/compound-v3/repay/simulate`
-9. `POST /protocols/compound-v3/repay`
-10. `POST /protocols/compound-v3/borrow/simulate`
-11. `POST /protocols/compound-v3/borrow`
+1. `GET /protocols/compound-v3/markets`
+2. `GET /protocols/compound-v3/position`
+3. `GET /protocols/compound-v3/balances`
+4. `GET /protocols/compound-v3/borrow-capacity`
+5. `POST /protocols/compound-v3/supply/simulate`
+6. `POST /protocols/compound-v3/supply`
+7. `POST /protocols/compound-v3/withdraw/simulate`
+8. `POST /protocols/compound-v3/withdraw`
+9. `POST /protocols/compound-v3/repay/simulate`
+10. `POST /protocols/compound-v3/repay`
+11. `POST /protocols/compound-v3/borrow/simulate`
+12. `POST /protocols/compound-v3/borrow`
 
 See [Compound III Base Sepolia](compound-v3.md).
 
 ### Morpho Blue Base Sepolia
 
-1. `GET /protocols/morpho/market`
-2. `GET /protocols/morpho/position`
-3. `POST /protocols/morpho/supply/simulate`
-4. `POST /protocols/morpho/supply`
-5. `POST /protocols/morpho/withdraw/simulate`
-6. `POST /protocols/morpho/withdraw`
-7. `POST /protocols/morpho/supply-collateral/simulate`
-8. `POST /protocols/morpho/supply-collateral`
-9. `POST /protocols/morpho/withdraw-collateral/simulate`
-10. `POST /protocols/morpho/withdraw-collateral`
-11. `POST /protocols/morpho/borrow/simulate`
-12. `POST /protocols/morpho/borrow`
-13. `POST /protocols/morpho/repay/simulate`
-14. `POST /protocols/morpho/repay`
+1. `GET /protocols/morpho/markets`
+2. `GET /protocols/morpho/market`
+3. `GET /protocols/morpho/position`
+4. `POST /protocols/morpho/supply/simulate`
+5. `POST /protocols/morpho/supply`
+6. `POST /protocols/morpho/withdraw/simulate`
+7. `POST /protocols/morpho/withdraw`
+8. `POST /protocols/morpho/supply-collateral/simulate`
+9. `POST /protocols/morpho/supply-collateral`
+10. `POST /protocols/morpho/withdraw-collateral/simulate`
+11. `POST /protocols/morpho/withdraw-collateral`
+12. `POST /protocols/morpho/borrow/simulate`
+13. `POST /protocols/morpho/borrow`
+14. `POST /protocols/morpho/repay/simulate`
+15. `POST /protocols/morpho/repay`
 
 See [Morpho Blue Base Sepolia](morpho.md).
+
+### Balancer V3 Ethereum Sepolia
+
+1. `GET /protocols/balancer-v3/pools`
+2. `GET /protocols/balancer-v3/pool`
+3. `GET /protocols/balancer-v3/balances`
+4. `POST /protocols/balancer-v3/swap/quote`
+5. `POST /protocols/balancer-v3/swap/simulate`
+6. `POST /protocols/balancer-v3/swap`
+7. `POST /protocols/balancer-v3/liquidity/add/quote`
+8. `POST /protocols/balancer-v3/liquidity/add/simulate`
+9. `POST /protocols/balancer-v3/liquidity/add`
+10. `POST /protocols/balancer-v3/liquidity/remove/quote`
+11. `POST /protocols/balancer-v3/liquidity/remove/simulate`
+12. `POST /protocols/balancer-v3/liquidity/remove`
+
+See [Balancer V3 Ethereum Sepolia](balancer-v3.md).
+
+### Uniswap V4 Ethereum Sepolia
+
+1. `GET /protocols/uniswap-v4/pool`
+2. `GET /protocols/uniswap-v4/pools`
+3. `GET /protocols/uniswap-v4/balances`
+4. `POST /protocols/uniswap-v4/swap/quote`
+5. `POST /protocols/uniswap-v4/swap/simulate`
+6. `POST /protocols/uniswap-v4/swap`
+
+See [Uniswap V4 Ethereum Sepolia](uniswap-v4.md).
 
 ### GMX V2 Arbitrum Sepolia
 

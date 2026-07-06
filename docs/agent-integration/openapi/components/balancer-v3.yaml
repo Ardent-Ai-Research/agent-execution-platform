@@ -11,8 +11,8 @@ schemas:
         - ethereum
         default: ethereum
       pool:
-        type: string
-        description: Registered Balancer V3 Ethereum Sepolia pool address.
+        type: [string, 'null']
+        description: Registered Balancer V3 Ethereum Sepolia pool address. Omit for automatic discovery and best-quote selection.
       token_in:
         type: string
       token_out:
@@ -52,7 +52,6 @@ schemas:
         format: uri
     required:
     - agent_id
-    - pool
     - token_in
     - token_out
     - amount_raw
@@ -67,6 +66,13 @@ schemas:
         type: string
       pool_address:
         type: string
+      pool_selection:
+        type: string
+        enum: [automatic, explicit]
+      candidates_discovered:
+        type: integer
+      candidates_quoted:
+        type: integer
       token_in:
         type: string
       token_out:
@@ -83,6 +89,35 @@ schemas:
         type: integer
       deadline:
         type: integer
+  BalancerPoolsResponse:
+    type: object
+    properties:
+      chain: { type: string }
+      token_in: { type: string }
+      token_out: { type: string }
+      pools:
+        type: array
+        items:
+          type: object
+          properties:
+            pool_address: { type: string }
+            name: { type: string }
+            symbol: { type: string }
+            pool_type: { type: string }
+            total_liquidity_usd: { type: [string, 'null'] }
+            swap_fee: { type: [string, 'null'] }
+            is_initialized: { type: boolean }
+            is_paused: { type: boolean }
+            is_in_recovery_mode: { type: boolean }
+            tokens:
+              type: array
+              items:
+                type: object
+                properties:
+                  address: { type: string }
+                  symbol: { type: string }
+                  decimals: { type: integer }
+                  index: { type: integer }
   BalancerTokenAmount:
     type: object
     properties:

@@ -7,6 +7,7 @@
 * [Payment Modes](payment-modes.md)
 * [Aave V3 Sepolia](aave-v3.md)
 * [Balancer V3 Ethereum Sepolia](balancer-v3.md)
+* [Uniswap V4 Ethereum Sepolia](uniswap-v4.md)
 * [Compound III Base Sepolia](compound-v3.md)
 * [Morpho Blue Base Sepolia](morpho.md)
 * [GMX V2 Arbitrum Sepolia](gmx-v2.md)

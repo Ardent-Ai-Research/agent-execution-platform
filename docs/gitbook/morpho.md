@@ -29,6 +29,11 @@ Base Sepolia USDC is available from Circle's faucet. WETH is obtained by wrappin
 ## Commands
 
 ```bash
+ardent morpho-markets \
+  --loan-token 0x036CbD53842c5426634e7929541eC2318f3dCF7e \
+  --collateral-token 0x4200000000000000000000000000000000000006 \
+  --max-lltv-raw 860000000000000000 \
+  --min-liquidity-raw 1000000
 ardent morpho-market
 ardent morpho-position --agent-id my-agent-001
 
@@ -46,6 +51,19 @@ ardent morpho-withdraw-collateral-simulate --agent-id my-agent-001 --amount 0.00
 ```
 
 Every execute command has a matching `-simulate` command and follows the normal UserOperation simulation path.
+
+## Discover markets safely
+
+`morpho-markets` reads Morpho `CreateMarket` events, recomputes every market ID,
+and verifies the selected candidates against `idToMarketParams` and live market
+state. At least one of `--loan-token` or `--collateral-token` is required.
+Oracle availability is required by default.
+
+Results are ranked by available liquidity descending, LLTV ascending, then
+borrow APR ascending. The response includes `recommended_market_id`, but Ardent
+does not silently route actions to it. Pass that ID explicitly with
+`--market-id` after reviewing its tokens, oracle, IRM, LLTV, liquidity, and
+rate. This prevents an index change from redirecting an existing position.
 
 ## Read market and position
 

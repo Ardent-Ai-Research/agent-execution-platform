@@ -63,6 +63,7 @@ ardent aave-balances --agent-id my-agent-001
 Base Sepolia supports the `usdc` market at `0x571621Ce60Cebb0c1D442B5afb38B1663C6Bf017` and the `weth` market at `0x61490650AbaA31393464C3f34E8B29cd1C44118E`.
 
 ```bash
+ardent compound-markets
 ardent compound-supply-simulate --agent-id my-agent-001 --asset USDC --amount 1.25
 ardent compound-supply --agent-id my-agent-001 --asset USDC --amount 1.25
 ardent compound-withdraw-simulate --agent-id my-agent-001 --asset USDC --amount max
@@ -86,6 +87,9 @@ The default may have no liquidity; supply USDC before borrowing and check
 `morpho-market` first.
 
 ```bash
+ardent morpho-markets \
+  --loan-token 0x036CbD53842c5426634e7929541eC2318f3dCF7e \
+  --collateral-token 0x4200000000000000000000000000000000000006
 ardent morpho-market
 ardent morpho-position --agent-id my-agent-001
 ardent morpho-supply-simulate --agent-id my-agent-001 --amount 10
@@ -104,20 +108,18 @@ readable. Full repay uses borrow shares to avoid debt dust.
 
 ### Balancer V3 Ethereum Sepolia
 
-Balancer pool and token addresses are supplied per request and verified against
-the V3 Vault. `balancer-pool` inspects one provided address; it does not list
-every pool. Find pool addresses through `https://test.balancer.fi/` or
-Balancer's `https://api-v3.balancer.fi/graphql` API. Inspect and quote a pool
-before simulation because pool-specific hooks can disable swaps even when a
-pool is registered.
+Balancer swaps discover pair-compatible pools through Balancer's API, verify
+and on-chain Vault registration events, verify current V3 Vault state, quote
+every viable candidate, and select the best result. Pass `--pool` only to pin
+an explicit pool. Liquidity actions remain pool-address driven.
 
 ```bash
 ardent balancer-pool --pool 0xYourBalancerV3Pool
+ardent balancer-pools --token-in 0xFirstPoolToken --token-out 0xSecondPoolToken
 ardent balancer-balances --agent-id my-agent-001 --pool 0xYourBalancerV3Pool
 
 ardent balancer-quote \
   --agent-id my-agent-001 \
-  --pool 0xYourBalancerV3Pool \
   --token-in 0xFirstPoolToken \
   --token-out 0xSecondPoolToken \
   --swap-kind exact_in \
@@ -125,7 +127,6 @@ ardent balancer-quote \
 
 ardent balancer-swap-simulate \
   --agent-id my-agent-001 \
-  --pool 0xYourBalancerV3Pool \
   --token-in 0xFirstPoolToken \
   --token-out 0xSecondPoolToken \
   --swap-kind exact_in \
@@ -133,7 +134,6 @@ ardent balancer-swap-simulate \
 
 ardent balancer-swap \
   --agent-id my-agent-001 \
-  --pool 0xYourBalancerV3Pool \
   --token-in 0xFirstPoolToken \
   --token-out 0xSecondPoolToken \
   --swap-kind exact_in \
@@ -157,6 +157,47 @@ cleared after swaps and liquidity additions inside the same atomic UserOperation
 batch. Proportional removal grants the Router an exact, temporary BPT allowance,
 executes the removal, and clears the allowance in the same atomic batch.
 Liquidity additions accept up to three deposited token addresses per operation.
+
+### Uniswap V4 Ethereum Sepolia
+
+Uniswap V4 pools live in the singleton PoolManager and do not have individual
+pool contract addresses. Ardent automatically discovers matching pool keys and
+selects the best successful quote when fee, tick spacing, and hooks are omitted.
+
+```bash
+ardent uniswap-v4-pool \
+  --token-a 0xFirstPoolCurrency \
+  --token-b 0xSecondPoolCurrency \
+  --fee 3000 \
+  --tick-spacing 60 \
+  --hooks 0xPoolHooksOrZeroAddress
+
+ardent uniswap-v4-pools \
+  --token-a 0xFirstPoolCurrency \
+  --token-b 0xSecondPoolCurrency
+
+ardent uniswap-v4-balances \
+  --agent-id my-agent-001 \
+  --token-a 0xFirstPoolCurrency \
+  --token-b 0xSecondPoolCurrency
+
+ardent uniswap-v4-quote \
+  --agent-id my-agent-001 \
+  --token-in 0xInputCurrency \
+  --token-out 0xOutputCurrency \
+  --amount-raw 1000000
+
+ardent uniswap-v4-swap-simulate \
+  --agent-id my-agent-001 \
+  --token-in 0xInputCurrency \
+  --token-out 0xOutputCurrency \
+  --amount-raw 1000000
+```
+
+Use the zero address for native ETH. Automatic mode excludes hook pools by
+default, validates candidates through StateView, compares live Quoter results,
+and fully simulates the selected Universal Router bundle. ERC-20 allowances
+are bounded and cleared atomically after a successful swap.
 
 ### GMX V2 Arbitrum Sepolia
 
@@ -244,4 +285,4 @@ ruby docs/agent-integration/openapi/bundle.rb
 
 ## Notes
 
-- MCP tools cover general execution, Aave V3, Compound III, Morpho Blue, Balancer V3, and GMX V2 actions and reads. Every protocol write exposes separate simulation and execution tools.
+- MCP tools cover general execution, Aave V3, Compound III, Morpho Blue, Balancer V3, Uniswap V4, and GMX V2 actions and reads. Every protocol write exposes separate simulation and execution tools.

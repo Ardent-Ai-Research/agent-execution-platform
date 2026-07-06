@@ -8,15 +8,17 @@ Sepolia using the `chain: "ethereum"` label.
 - Exact-input swap
 - Exact-output swap
 - Live swap quote with automatic slippage limit
+- Automatic pair-compatible pool discovery and best-quote selection
 - Unbalanced add liquidity, including balanced and single-token additions
 - Proportional remove liquidity by exact BPT input
 - Liquidity quotes with automatic slippage limits
 - Pool state and registered-token read
 - Agent BPT and pool-token balance read
 
-Balancer pool addresses and token sets are not hardcoded. The API verifies the
-selected pool against the Balancer V3 Vault and reads token registration order
-directly from the Vault Explorer.
+Balancer pool addresses and token sets are not hardcoded. For swaps, the API
+discovers pair-compatible pools, verifies each candidate against the Balancer
+V3 Vault, and selects the best live quote. An explicit pool address pins the
+route. Liquidity actions remain pool-address driven.
 
 ## Contracts
 
@@ -44,10 +46,20 @@ The pool uses 6-decimal tokens, an amplification parameter of `100`, and a
 `0.1%` swap fee. This is testnet liquidity, so request a live quote and
 simulate before every swap.
 
-## Inspect a pool first
+## Discover or inspect pools
 
-`balancer-pool` does not list every Balancer pool. It inspects one pool address
-that you provide and verifies it against the V3 Vault.
+Discover pair-compatible pools:
+
+```bash
+ardent balancer-pools \
+  --token-in 0xFirstPoolToken \
+  --token-out 0xSecondPoolToken
+```
+
+`balancer-pools` merges Balancer's official API metadata with paginated
+`PoolRegistered` events from the Vault, so pools missing from the API are still
+discoverable. Every pair-compatible result is verified against live Vault
+state. `balancer-pool` inspects one explicit pool address:
 
 ```bash
 ardent balancer-pool \
@@ -66,7 +78,7 @@ A registered pool can still reject a swap because of pool-specific hooks or
 rules. For example, an LBP may disable swaps outside its active sale window.
 Always request a quote and simulate the action.
 
-## Find Sepolia pools
+## External pool discovery
 
 The simplest option is Balancer's testnet application:
 
@@ -171,7 +183,6 @@ All amounts are raw token base units.
 ```bash
 ardent balancer-quote \
   --agent-id my-agent-001 \
-  --pool 0xYourBalancerV3Pool \
   --token-in 0xFirstPoolToken \
   --token-out 0xSecondPoolToken \
   --swap-kind exact_in \
@@ -179,7 +190,9 @@ ardent balancer-quote \
   --slippage-bps 100
 ```
 
-The response returns `quoted_amount_raw`, `limit_raw`, and `deadline`.
+The response returns the selected `pool_address`, `pool_selection`, candidate
+counts, `quoted_amount_raw`, `limit_raw`, and `deadline`. Pass the returned pool
+with `--pool` on later calls when you need to pin that exact route.
 For `exact_in`, `limit_raw` is the minimum output amount.
 
 ## Quote an exact-output swap
@@ -187,7 +200,6 @@ For `exact_in`, `limit_raw` is the minimum output amount.
 ```bash
 ardent balancer-quote \
   --agent-id my-agent-001 \
-  --pool 0xYourBalancerV3Pool \
   --token-in 0xFirstPoolToken \
   --token-out 0xSecondPoolToken \
   --swap-kind exact_out \
@@ -203,7 +215,6 @@ the maximum input amount.
 ```bash
 ardent balancer-swap-simulate \
   --agent-id my-agent-001 \
-  --pool 0xYourBalancerV3Pool \
   --token-in 0xFirstPoolToken \
   --token-out 0xSecondPoolToken \
   --swap-kind exact_in \
@@ -212,7 +223,6 @@ ardent balancer-swap-simulate \
 
 ardent balancer-swap \
   --agent-id my-agent-001 \
-  --pool 0xYourBalancerV3Pool \
   --token-in 0xFirstPoolToken \
   --token-out 0xSecondPoolToken \
   --swap-kind exact_in \

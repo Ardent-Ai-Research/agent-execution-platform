@@ -16,6 +16,7 @@ x-ardent-bundle:
   - paths/compound-v3.yaml
   - paths/gmx-v2.yaml
   - paths/morpho.yaml
+  - paths/uniswap-v4.yaml
   components:
   - components/common.yaml
   - components/aave-v3.yaml
@@ -23,3 +24,4 @@ x-ardent-bundle:
   - components/compound-v3.yaml
   - components/gmx-v2.yaml
   - components/morpho.yaml
+  - components/uniswap-v4.yaml

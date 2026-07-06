@@ -1,8 +1,8 @@
 ---
 "/protocols/balancer-v3/swap/quote":
   post:
-    summary: Quote a Balancer V3 Ethereum Sepolia single-pool swap
-    description: Verifies the pool and tokens on-chain, queries the Balancer Router, and returns the quote plus the slippage-derived execution limit.
+    summary: Discover and quote a Balancer V3 Ethereum Sepolia swap
+    description: When pool is omitted, discovers pair-compatible pools, verifies Vault state, quotes each viable pool, and selects the best result. A supplied pool pins explicit mode.
     requestBody:
       required: true
       content:
@@ -245,6 +245,32 @@
           application/json:
             schema:
               "$ref": "#/components/schemas/BalancerPoolResponse"
+      '400':
+        "$ref": "#/components/responses/ErrorResponse"
+      '401':
+        "$ref": "#/components/responses/ErrorResponse"
+"/protocols/balancer-v3/pools":
+  get:
+    summary: Discover Balancer V3 Ethereum Sepolia pools for a token pair
+    parameters:
+    - in: query
+      name: chain
+      schema: { type: string, enum: [ethereum], default: ethereum }
+    - in: query
+      name: token_in
+      required: true
+      schema: { type: string }
+    - in: query
+      name: token_out
+      required: true
+      schema: { type: string }
+    responses:
+      '200':
+        description: Pair-compatible pools with verified Vault state
+        content:
+          application/json:
+            schema:
+              "$ref": "#/components/schemas/BalancerPoolsResponse"
       '400':
         "$ref": "#/components/responses/ErrorResponse"
       '401':
