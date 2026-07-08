@@ -48,7 +48,7 @@ A production-hardened Rust backend that enables **AI agents to execute on-chain 
 
 ## About Ardent Research
 
-Ardent Research builds infrastructure for AI agents that need to reason about, prepare, simulate, and execute blockchain transactions safely. This repository contains the core execution service behind Ardent's hosted API, developer CLI, MCP tools, OpenAPI integration pack, and typed protocol actions across supported testnets.
+Ardent Research builds infrastructure for AI agents that need to reason about, prepare, simulate, and execute blockchain transactions safely. This repository contains the core execution service behind Ardent's hosted API, developer CLI, MCP tools, OpenAPI integration pack, and typed protocol actions across supported chains.
 
 The platform is designed around one principle: agents should be able to act on-chain without directly holding private keys, guessing calldata, or blindly broadcasting transactions. Ardent handles wallet provisioning, simulation, gas/payment flows, protocol-specific action building, and transaction lifecycle tracking.
 
