@@ -83,8 +83,7 @@ pub async fn run_worker(mut redis_conn: ConnectionManager, ctx: WorkerContext, w
                 request_id,
                 &ExecutionStatus::Failed,
                 None,
-                Some(&format!("exceeded {} execution attempts", MAX_JOB_ATTEMPTS)),
-                None,
+                Some(&format!("exceeded {MAX_JOB_ATTEMPTS} execution attempts")),
                 None,
             )
             .await;
@@ -95,8 +94,7 @@ pub async fn run_worker(mut redis_conn: ConnectionManager, ctx: WorkerContext, w
                 &job,
                 &ExecutionStatus::Failed,
                 None,
-                None,
-                Some(&format!("exceeded {} execution attempts", MAX_JOB_ATTEMPTS)),
+                Some(&format!("exceeded {MAX_JOB_ATTEMPTS} execution attempts")),
             )
             .await;
 
@@ -118,7 +116,6 @@ pub async fn run_worker(mut redis_conn: ConnectionManager, ctx: WorkerContext, w
             &ctx.db_pool,
             request_id,
             &ExecutionStatus::Broadcasting,
-            None,
             None,
             None,
             None,
@@ -158,22 +155,11 @@ pub async fn run_worker(mut redis_conn: ConnectionManager, ctx: WorkerContext, w
                 "execution confirmed on-chain ✓"
             );
 
-            let persisted_cost_usd = match db::get_execution_request(&ctx.db_pool, request_id).await
-            {
-                Ok(Some(row)) => row.cost_usd,
-                Ok(None) => None,
-                Err(e) => {
-                    warn!(request_id = %request_id, error = %e, "failed to read persisted cost_usd before webhook");
-                    None
-                }
-            };
-
             if let Err(e) = db::update_execution_status(
                 &ctx.db_pool,
                 request_id,
                 &ExecutionStatus::Confirmed,
                 Some(&result.tx_hash),
-                None,
                 None,
                 None,
             )
@@ -212,7 +198,6 @@ pub async fn run_worker(mut redis_conn: ConnectionManager, ctx: WorkerContext, w
                 &job,
                 &ExecutionStatus::Confirmed,
                 Some(&result.tx_hash),
-                persisted_cost_usd,
                 None,
             )
             .await;
@@ -248,7 +233,6 @@ pub async fn run_worker(mut redis_conn: ConnectionManager, ctx: WorkerContext, w
                     },
                     Some(err_msg),
                     None,
-                    None,
                 )
                 .await
                 {
@@ -269,7 +253,6 @@ pub async fn run_worker(mut redis_conn: ConnectionManager, ctx: WorkerContext, w
                     } else {
                         Some(&result.tx_hash)
                     },
-                    None,
                     Some(err_msg),
                 )
                 .await;
@@ -379,54 +362,68 @@ async fn execute_erc4337(ctx: &WorkerContext, job: &ExecutionJob) -> RelayerResu
     //    - sign the draft UserOp with the agent key before estimation
     //    - estimate gas and apply final gas fields
     //    - re-sign paymaster data over final gas fields
-    let paymaster_signer = ctx.paymaster_signers.get(&job.chain);
-    let estimation_paymaster = match paymaster_signer {
-        Some(signer) => {
-            let mut draft_op = match bundler_client
-                .build_user_op_draft(job, smart_wallet, Vec::new())
-                .await
-            {
-                Ok(op) => op,
-                Err(e) => {
-                    return RelayerResult {
-                        tx_hash: String::new(),
-                        success: false,
-                        error: Some(format!("failed to build draft UserOperation: {e:#}")),
-                        block_number: None,
-                        gas_used: None,
-                    };
-                }
+    let paymaster_signer = match ctx.paymaster_signers.get(&job.chain) {
+        Some(signer) => signer,
+        None => {
+            return RelayerResult {
+                tx_hash: String::new(),
+                success: false,
+                error: Some(format!(
+                    "testnet gas sponsorship is not configured for chain {}",
+                    &job.chain
+                )),
+                block_number: None,
+                gas_used: None,
             };
-
-            if let Err(e) = bundler_client
-                .apply_estimation_fee_hints(&mut draft_op)
-                .await
-            {
+        }
+    };
+    let estimation_paymaster = {
+        let mut draft_op = match bundler_client
+            .build_user_op_draft(job, smart_wallet, Vec::new())
+            .await
+        {
+            Ok(op) => op,
+            Err(e) => {
                 return RelayerResult {
                     tx_hash: String::new(),
                     success: false,
-                    error: Some(format!("failed to apply estimation fee hints: {e:#}")),
+                    error: Some(format!("failed to build draft UserOperation: {e:#}")),
                     block_number: None,
                     gas_used: None,
                 };
             }
+        };
 
-            match signer.sign_paymaster_data(&draft_op, chain_id).await {
-                Ok(data) => data,
-                Err(e) => {
-                    return RelayerResult {
-                        tx_hash: String::new(),
-                        success: false,
-                        error: Some(format!(
-                            "paymaster pre-signing failed for estimation: {e:#}"
-                        )),
-                        block_number: None,
-                        gas_used: None,
-                    };
-                }
+        if let Err(e) = bundler_client
+            .apply_estimation_fee_hints(&mut draft_op)
+            .await
+        {
+            return RelayerResult {
+                tx_hash: String::new(),
+                success: false,
+                error: Some(format!("failed to apply estimation fee hints: {e:#}")),
+                block_number: None,
+                gas_used: None,
+            };
+        }
+
+        match paymaster_signer
+            .sign_paymaster_data(&draft_op, chain_id)
+            .await
+        {
+            Ok(data) => data,
+            Err(e) => {
+                return RelayerResult {
+                    tx_hash: String::new(),
+                    success: false,
+                    error: Some(format!(
+                        "paymaster pre-signing failed for estimation: {e:#}"
+                    )),
+                    block_number: None,
+                    gas_used: None,
+                };
             }
         }
-        None => Vec::new(),
     };
 
     let mut user_op = match bundler_client
@@ -533,7 +530,7 @@ async fn execute_erc4337(ctx: &WorkerContext, job: &ExecutionJob) -> RelayerResu
     match submit_user_operation_with_pre_verification_retry(
         ctx,
         bundler_client,
-        paymaster_signer,
+        Some(paymaster_signer),
         chain_id,
         &agent_wallet,
         user_op,
@@ -558,14 +555,6 @@ async fn execute_erc4337(ctx: &WorkerContext, job: &ExecutionJob) -> RelayerResu
             gas_used: None,
         },
     }
-}
-
-/// Execute a single ERC-4337 job immediately using the same logic as workers.
-///
-/// Useful for service-layer flows that need a pre-step onchain action
-/// (for example, internal auto-payment) before enqueueing the primary job.
-pub async fn execute_erc4337_now(ctx: &WorkerContext, job: &ExecutionJob) -> RelayerResult {
-    execute_erc4337(ctx, job).await
 }
 
 async fn submit_user_operation_with_pre_verification_retry(
@@ -676,7 +665,7 @@ fn parse_required_pre_verification_gas(error: &str) -> Option<U256> {
     error
         .split(|c: char| c == ':' || c == ',' || c == ';' || c.is_whitespace())
         .filter_map(parse_u256_token)
-        .last()
+        .next_back()
 }
 
 fn parse_u256_token(token: &str) -> Option<U256> {
@@ -752,7 +741,6 @@ async fn fire_webhook(
     job: &ExecutionJob,
     status: &ExecutionStatus,
     tx_hash: Option<&str>,
-    cost_usd: Option<f64>,
     error_msg: Option<&str>,
 ) {
     let callback_url = match &job.callback_url {
@@ -760,7 +748,13 @@ async fn fire_webhook(
         _ => return, // No callback — nothing to do
     };
 
-    let signing_secret = job.api_key_hash.clone().unwrap_or_default();
+    let Some(signing_secret) = job.api_key_hash.clone().filter(|hash| !hash.is_empty()) else {
+        error!(
+            request_id = %job.request_id,
+            "webhook skipped because its signing secret is unavailable"
+        );
+        return;
+    };
 
     let payload = webhook::WebhookPayload {
         event_id: uuid::Uuid::new_v4(),
@@ -769,7 +763,6 @@ async fn fire_webhook(
         status: status.clone(),
         chain: job.chain.to_string(),
         tx_hash: tx_hash.map(String::from),
-        cost_usd,
         error: error_msg.map(String::from),
         created_at: job.created_at,
         completed_at: chrono::Utc::now(),
@@ -820,10 +813,8 @@ async fn re_enqueue_with_bump(
             &ExecutionStatus::Failed,
             None,
             Some(&format!(
-                "exhausted {} attempts, moved to dead-letter queue",
-                MAX_JOB_ATTEMPTS
+                "exhausted {MAX_JOB_ATTEMPTS} attempts, moved to dead-letter queue"
             )),
-            None,
             None,
         )
         .await
@@ -841,10 +832,8 @@ async fn re_enqueue_with_bump(
             job,
             &ExecutionStatus::Failed,
             None,
-            None,
             Some(&format!(
-                "exhausted {} attempts, moved to dead-letter queue",
-                MAX_JOB_ATTEMPTS
+                "exhausted {MAX_JOB_ATTEMPTS} attempts, moved to dead-letter queue"
             )),
         )
         .await;
@@ -987,17 +976,22 @@ mod tests {
     }
 
     #[tokio::test]
+    #[ignore = "requires PostgreSQL and Redis"]
     async fn test_reenqueue_with_bump_requeues_job_with_incremented_attempt() {
-        let _guard = queue::TEST_QUEUE_LOCK.lock().expect("queue test lock");
+        let _guard = queue::TEST_QUEUE_LOCK.lock().await;
         let pool = setup_db_pool().await;
         let mut redis_conn = setup_redis().await;
         let worker_id = 901u32;
         clear_queue_keys(&mut redis_conn, worker_id).await;
 
         let ctx = make_worker_context(pool.clone());
+        let (api_key, _) = db::create_api_key(&pool, Some("worker-requeue"))
+            .await
+            .expect("create API key");
 
         let row = db::insert_execution_request(
             &pool,
+            api_key.id,
             &sample_request("worker-requeue"),
             &ExecutionStatus::Queued,
             None,
@@ -1032,17 +1026,22 @@ mod tests {
     }
 
     #[tokio::test]
+    #[ignore = "requires PostgreSQL and Redis"]
     async fn test_reenqueue_with_bump_moves_to_dlq_at_max_attempts() {
-        let _guard = queue::TEST_QUEUE_LOCK.lock().expect("queue test lock");
+        let _guard = queue::TEST_QUEUE_LOCK.lock().await;
         let pool = setup_db_pool().await;
         let mut redis_conn = setup_redis().await;
         let worker_id = 902u32;
         clear_queue_keys(&mut redis_conn, worker_id).await;
 
         let ctx = make_worker_context(pool.clone());
+        let (api_key, _) = db::create_api_key(&pool, Some("worker-dlq"))
+            .await
+            .expect("create API key");
 
         let row = db::insert_execution_request(
             &pool,
+            api_key.id,
             &sample_request("worker-dlq"),
             &ExecutionStatus::Queued,
             None,

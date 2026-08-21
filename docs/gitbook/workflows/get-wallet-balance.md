@@ -1,6 +1,6 @@
 # Get Wallet Balance
 
-Use this endpoint to check the native token and ERC-20 payment token balances of an agent's smart wallet.
+Use this endpoint to check the native token and configured ERC-20 balances of an agent's smart wallet.
 
 ## Endpoint
 
@@ -57,13 +57,6 @@ Example:
       "raw": "0",
       "formatted": "0",
       "decimals": 6
-    },
-    {
-      "symbol": "aUSD",
-      "contract_address": "0xE9df660c675F6f649677Ae408FCf6665D4F0F5Be",
-      "raw": "25000000",
-      "formatted": "25",
-      "decimals": 6
     }
   ]
 }
@@ -78,7 +71,7 @@ Example:
 | `chain` | string | The chain queried |
 | `native_balance_wei` | string | Native token balance in wei (ETH on Ethereum, Base, and Arbitrum) |
 | `native_balance_formatted` | string | Native balance formatted in the chain's base unit (e.g. `"0.005"` ETH) |
-| `tokens` | array | One entry per accepted payment token configured on the chain |
+| `tokens` | array | One entry per tracked token configured on the chain |
 | `tokens[].symbol` | string | Token symbol, e.g. `"USDC"` |
 | `tokens[].contract_address` | string | Token contract address on the queried chain |
 | `tokens[].raw` | string | Raw on-chain balance in the token's smallest unit (e.g. `"10000000"` for 10 USDC at 6 decimals) |
@@ -87,6 +80,6 @@ Example:
 
 ## Practical usage
 
-1. Call after `GET /wallet` to confirm funding before executing.
-2. Use `tokens[].raw` values to cross-check against `required_amount_raw` in a `402 Payment Required` response.
-3. All accepted payment tokens for the chain are always returned, even when the balance is zero.
+1. Call after `GET /wallet` to confirm the wallet holds assets needed by an action.
+2. Use `tokens[].raw` when exact base-unit balances matter.
+3. All configured tracked tokens for the chain are returned, even when the balance is zero.

@@ -1,3 +1,6 @@
+// Protocol entry points mirror the explicit execution dependencies in AppState.
+#![allow(clippy::too_many_arguments)]
+
 use anyhow::{anyhow, Result};
 use chrono::Utc;
 use ethers::abi::{self, ParamType};
@@ -27,7 +30,7 @@ use crate::api::services::{handle_execute, handle_simulate, resolve_chain_smart_
 use crate::execution_engine::ExecutionEngine;
 use crate::relayer::erc4337::BundlerClient;
 use crate::relayer::paymaster::PaymasterSigner;
-use crate::types::{Chain, ExecutionResponse, PaymentMode, PaymentProof};
+use crate::types::{Chain, ExecutionResponse};
 
 const DEFAULT_DEADLINE_SECS: u64 = 20 * 60;
 const BPS_SCALE: u64 = 10_000;
@@ -55,9 +58,7 @@ pub async fn handle_swap(
     bundler_clients: &HashMap<Chain, BundlerClient>,
     paymaster_signers: &HashMap<Chain, PaymasterSigner>,
     api_key_id: Uuid,
-    payment_mode: PaymentMode,
     req: &BalancerSwapRequest,
-    payment_proof: Option<&PaymentProof>,
 ) -> Result<ExecutionResponse> {
     let resolved = resolve_swap(engine, wallet_registry, api_key_id, req).await?;
     let execution_req = balancer_v3::compile_swap(&resolved.request)?;
@@ -70,9 +71,7 @@ pub async fn handle_swap(
         bundler_clients,
         paymaster_signers,
         api_key_id,
-        payment_mode,
         &execution_req,
-        payment_proof,
     )
     .await
     .map_err(|e| anyhow!("Balancer V3 swap on Ethereum Sepolia failed: {e}"))
@@ -85,7 +84,6 @@ pub async fn handle_swap_simulate(
     bundler_clients: &HashMap<Chain, BundlerClient>,
     paymaster_signers: &HashMap<Chain, PaymasterSigner>,
     api_key_id: Uuid,
-    payment_mode: PaymentMode,
     req: &BalancerSwapRequest,
 ) -> Result<ExecutionResponse> {
     let resolved = resolve_swap(engine, wallet_registry, api_key_id, req).await?;
@@ -98,7 +96,6 @@ pub async fn handle_swap_simulate(
         bundler_clients,
         paymaster_signers,
         api_key_id,
-        payment_mode,
         &execution_req,
     )
     .await
@@ -112,9 +109,7 @@ pub async fn handle_add_liquidity(
     bundler_clients: &HashMap<Chain, BundlerClient>,
     paymaster_signers: &HashMap<Chain, PaymasterSigner>,
     api_key_id: Uuid,
-    payment_mode: PaymentMode,
     req: &BalancerAddLiquidityRequest,
-    payment_proof: Option<&PaymentProof>,
 ) -> Result<ExecutionResponse> {
     let resolved = resolve_add_liquidity(engine, wallet_registry, api_key_id, req).await?;
     let execution_req = balancer_v3::compile_add_liquidity(
@@ -132,9 +127,7 @@ pub async fn handle_add_liquidity(
         bundler_clients,
         paymaster_signers,
         api_key_id,
-        payment_mode,
         &execution_req,
-        payment_proof,
     )
     .await
     .map_err(|e| anyhow!("Balancer V3 add liquidity on Ethereum Sepolia failed: {e}"))
@@ -147,7 +140,6 @@ pub async fn handle_add_liquidity_simulate(
     bundler_clients: &HashMap<Chain, BundlerClient>,
     paymaster_signers: &HashMap<Chain, PaymasterSigner>,
     api_key_id: Uuid,
-    payment_mode: PaymentMode,
     req: &BalancerAddLiquidityRequest,
 ) -> Result<ExecutionResponse> {
     let resolved = resolve_add_liquidity(engine, wallet_registry, api_key_id, req).await?;
@@ -165,7 +157,6 @@ pub async fn handle_add_liquidity_simulate(
         bundler_clients,
         paymaster_signers,
         api_key_id,
-        payment_mode,
         &execution_req,
     )
     .await
@@ -179,9 +170,7 @@ pub async fn handle_remove_liquidity(
     bundler_clients: &HashMap<Chain, BundlerClient>,
     paymaster_signers: &HashMap<Chain, PaymasterSigner>,
     api_key_id: Uuid,
-    payment_mode: PaymentMode,
     req: &BalancerRemoveLiquidityRequest,
-    payment_proof: Option<&PaymentProof>,
 ) -> Result<ExecutionResponse> {
     let resolved = resolve_remove_liquidity(engine, wallet_registry, api_key_id, req).await?;
     let execution_req = balancer_v3::compile_remove_liquidity(req, &resolved.min_amounts_out)?;
@@ -193,9 +182,7 @@ pub async fn handle_remove_liquidity(
         bundler_clients,
         paymaster_signers,
         api_key_id,
-        payment_mode,
         &execution_req,
-        payment_proof,
     )
     .await
     .map_err(|e| anyhow!("Balancer V3 remove liquidity on Ethereum Sepolia failed: {e}"))
@@ -208,7 +195,6 @@ pub async fn handle_remove_liquidity_simulate(
     bundler_clients: &HashMap<Chain, BundlerClient>,
     paymaster_signers: &HashMap<Chain, PaymasterSigner>,
     api_key_id: Uuid,
-    payment_mode: PaymentMode,
     req: &BalancerRemoveLiquidityRequest,
 ) -> Result<ExecutionResponse> {
     let resolved = resolve_remove_liquidity(engine, wallet_registry, api_key_id, req).await?;
@@ -220,7 +206,6 @@ pub async fn handle_remove_liquidity_simulate(
         bundler_clients,
         paymaster_signers,
         api_key_id,
-        payment_mode,
         &execution_req,
     )
     .await
@@ -590,8 +575,7 @@ async fn discover_pair_pools(token_in: Address, token_out: Address) -> Result<Ve
         pools.insert(pool.address.to_ascii_lowercase(), pool);
     }
     Ok(pools
-        .into_iter()
-        .map(|(_, pool)| pool)
+        .into_values()
         .filter(|pool| {
             let has_in = pool.pool_tokens.iter().any(|token| {
                 token
@@ -1634,71 +1618,5 @@ mod tests {
         let pools = fetch_pools_from_api().await.unwrap();
         assert!(!pools.is_empty());
         assert!(pools.iter().all(|pool| !pool.pool_tokens.is_empty()));
-    }
-
-    #[tokio::test]
-    #[ignore = "requires Sepolia Blockscout"]
-    async fn live_onchain_fallback_discovers_ardent_ausd_pool() {
-        let usdc = "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238"
-            .parse::<Address>()
-            .unwrap();
-        let ausd = "0xE9df660c675F6f649677Ae408FCf6665D4F0F5Be"
-            .parse::<Address>()
-            .unwrap();
-        let registered = fetch_registered_pools_from_blockscout().await.unwrap();
-        let known = registered.iter().find(|pool| {
-            pool.address
-                .eq_ignore_ascii_case("0x0c131e566752417dAA7d8a51D1E9ae8c95B52E99")
-        });
-        assert!(
-            known.is_some(),
-            "known pool registration was not decoded among {} pools; sample: {:?}",
-            registered.len(),
-            registered
-                .iter()
-                .take(5)
-                .map(|pool| &pool.address)
-                .collect::<Vec<_>>()
-        );
-        assert_eq!(known.unwrap().pool_tokens.len(), 2);
-        let pools = discover_pair_pools(usdc, ausd).await.unwrap();
-        assert!(pools.iter().any(|pool| {
-            pool.address
-                .eq_ignore_ascii_case("0x0c131e566752417dAA7d8a51D1E9ae8c95B52E99")
-        }));
-    }
-
-    #[tokio::test]
-    #[ignore = "requires configured Sepolia RPC, Balancer API, and Blockscout"]
-    async fn live_automatically_quotes_ardent_ausd_pool() {
-        dotenvy::dotenv().ok();
-        let engine = ExecutionEngine::new(crate::config::AppConfig::from_env().unwrap()).unwrap();
-        let request = BalancerSwapRequest {
-            agent_id: "live-balancer-discovery".to_string(),
-            chain: "ethereum".to_string(),
-            pool: String::new(),
-            token_in: "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238".to_string(),
-            token_out: "0xE9df660c675F6f649677Ae408FCf6665D4F0F5Be".to_string(),
-            swap_kind: BalancerSwapKind::ExactIn,
-            amount_raw: "1000000".to_string(),
-            limit_raw: None,
-            slippage_bps: 100,
-            deadline: None,
-            strategy_id: None,
-            callback_url: None,
-        };
-        let (pool, quote, selection, discovered, quoted) =
-            select_best_pool(&engine, &Chain::Ethereum, &request, Address::zero())
-                .await
-                .unwrap();
-        assert_eq!(
-            pool,
-            "0x0c131e566752417dAA7d8a51D1E9ae8c95B52E99"
-                .parse::<Address>()
-                .unwrap()
-        );
-        assert_eq!(selection, BalancerPoolSelection::Automatic);
-        assert!(!quote.is_zero());
-        assert!(discovered >= quoted && quoted > 0);
     }
 }

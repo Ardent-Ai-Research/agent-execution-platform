@@ -7,7 +7,7 @@ It includes a one-line installer, a zero-dependency CLI, an MCP server for AI de
 Run the installer once to get everything:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/Ardent-Ai-Research/agent-execution-platform/master/docs/agent-integration/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/ardentairesearch/agent-execution-platform/master/docs/agent-integration/install.sh | bash
 ```
 
 Then set your key:
@@ -63,21 +63,6 @@ ardent execute \
 ardent status --request-id your_request_id
 ```
 
-**Example: manual payment mode re-submit after `402 payment_required`**
-
-```bash
-ardent execute \
-  --agent-id my-agent-001 \
-  --chain ethereum \
-  --target-contract 0xTargetContract \
-  --calldata 0xCalldata \
-  --value 0 \
-  --proof-request-id your_request_id \
-  --proof-payer 0xYourPayer \
-  --proof-token USDC \
-  --proof-chain ethereum \
-  --proof-tx-hash 0xYourPaymentTxHash
-```
 
 **Full command reference:**
 
@@ -85,6 +70,7 @@ ardent execute \
 ardent --version
 ardent health
 ardent feed                             # public activity feed
+ardent api-key-create --label <label>      # public self-service key generation
 ardent wallet         --agent-id <id> --chain <chain>
 ardent wallet-balance --agent-id <id> --chain <chain>   # native + ERC-20 token balances
 ardent simulate --agent-id <id> --chain <chain> --target-contract <addr> --calldata <hex> --value <wei>
@@ -256,11 +242,10 @@ In your GPT configuration, upload `openapi.yaml` under Actions. The GPT will aut
 The `skills.md` file is designed to be loaded as a system prompt or injected as context. It covers:
 
 1. The canonical simulate → execute → status loop.
-2. How to handle `402 payment_required` correctly.
-3. Guardrails that prevent common agent mistakes (inventing payment amounts, changing `request_id` between calls, executing without simulating).
+2. Guardrails that prevent common agent mistakes, including executing without simulating or assuming a wallet is funded.
 
 Full skills file:
-`https://raw.githubusercontent.com/Ardent-Ai-Research/agent-execution-platform/master/docs/agent-integration/skills.md`
+`https://raw.githubusercontent.com/ardentairesearch/agent-execution-platform/master/docs/agent-integration/skills.md`
 
 ---
 

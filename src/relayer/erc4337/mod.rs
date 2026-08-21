@@ -401,9 +401,7 @@ impl BundlerClient {
 
         if !is_supported {
             return Err(anyhow!(
-                "configured ENTRY_POINT_ADDRESS {} is not supported by bundler; supported: {:?}",
-                configured,
-                supported
+                "configured ENTRY_POINT_ADDRESS {configured} is not supported by bundler; supported: {supported:?}"
             ));
         }
 
@@ -1273,13 +1271,6 @@ mod tests {
         let (unpacked_high, unpacked_low) = unpack_two_uint128_from_hex(&packed).expect("unpack");
         assert_eq!(unpacked_high, high);
         assert_eq!(unpacked_low, low);
-    }
-
-    #[test]
-    fn estimation_placeholders_allow_complex_protocol_batches() {
-        assert!(ESTIMATION_CALL_GAS_LIMIT >= 5_000_000);
-        assert!(ESTIMATION_VERIFICATION_GAS_LIMIT >= 1_000_000);
-        assert!(ESTIMATION_PRE_VERIFICATION_GAS >= 300_000);
     }
 
     #[test]

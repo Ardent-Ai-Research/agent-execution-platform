@@ -1,3 +1,6 @@
+// Protocol entry points mirror the explicit execution dependencies in AppState.
+#![allow(clippy::too_many_arguments)]
+
 use anyhow::{anyhow, Result};
 use chrono::Utc;
 use ethers::abi::{self, ParamType};
@@ -25,7 +28,7 @@ use crate::api::services::{handle_execute, handle_simulate, resolve_chain_smart_
 use crate::execution_engine::ExecutionEngine;
 use crate::relayer::erc4337::BundlerClient;
 use crate::relayer::paymaster::PaymasterSigner;
-use crate::types::{Chain, ExecutionResponse, PaymentMode, PaymentProof};
+use crate::types::{Chain, ExecutionResponse};
 
 const DEFAULT_DEADLINE_SECS: u64 = 20 * 60;
 const BPS_SCALE: u64 = 10_000;
@@ -53,9 +56,7 @@ pub async fn handle_swap(
     bundler_clients: &HashMap<Chain, BundlerClient>,
     paymaster_signers: &HashMap<Chain, PaymasterSigner>,
     api_key_id: Uuid,
-    payment_mode: PaymentMode,
     req: &UniswapSwapRequest,
-    payment_proof: Option<&PaymentProof>,
 ) -> Result<ExecutionResponse> {
     let resolved = resolve_swap(engine, wallet_registry, api_key_id, req).await?;
     let execution_req = uniswap_v4::compile_swap(&resolved.request)?;
@@ -67,9 +68,7 @@ pub async fn handle_swap(
         bundler_clients,
         paymaster_signers,
         api_key_id,
-        payment_mode,
         &execution_req,
-        payment_proof,
     )
     .await
     .map_err(|e| anyhow!("Uniswap V4 swap on Ethereum Sepolia failed: {e}"))
@@ -82,7 +81,6 @@ pub async fn handle_swap_simulate(
     bundler_clients: &HashMap<Chain, BundlerClient>,
     paymaster_signers: &HashMap<Chain, PaymasterSigner>,
     api_key_id: Uuid,
-    payment_mode: PaymentMode,
     req: &UniswapSwapRequest,
 ) -> Result<ExecutionResponse> {
     let resolved = resolve_swap(engine, wallet_registry, api_key_id, req).await?;
@@ -94,7 +92,6 @@ pub async fn handle_swap_simulate(
         bundler_clients,
         paymaster_signers,
         api_key_id,
-        payment_mode,
         &execution_req,
     )
     .await

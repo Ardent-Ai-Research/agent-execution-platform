@@ -716,7 +716,7 @@ pub fn asset_address_and_decimals(symbol: &str) -> Result<(Address, u8)> {
     let assets = sepolia_assets();
     let asset = assets
         .get(symbol.trim().to_uppercase().as_str())
-        .ok_or_else(|| anyhow!("unsupported Aave V3 Sepolia asset '{}'", symbol))?;
+        .ok_or_else(|| anyhow!("unsupported Aave V3 Sepolia asset '{symbol}'"))?;
     Ok((asset.underlying.parse()?, asset.decimals))
 }
 
@@ -828,7 +828,7 @@ fn validate_common_action(agent_id: &str, chain: &str, asset: &str) -> Result<Aa
 
 fn validate_chain_and_agent(agent_id: &str, chain: &str) -> Result<()> {
     let chain = crate::types::Chain::from_str_loose(chain)
-        .ok_or_else(|| anyhow!("unsupported chain for Aave V3: {}", chain))?;
+        .ok_or_else(|| anyhow!("unsupported chain for Aave V3: {chain}"))?;
 
     if chain != crate::types::Chain::Ethereum {
         return Err(anyhow!(
@@ -904,8 +904,7 @@ fn parse_decimal_amount(raw: &str, decimals: u8) -> Result<U256> {
     }
     if fractional.len() > decimals as usize {
         return Err(anyhow!(
-            "amount has too many decimal places for asset decimals {}",
-            decimals
+            "amount has too many decimal places for asset decimals {decimals}"
         ));
     }
 

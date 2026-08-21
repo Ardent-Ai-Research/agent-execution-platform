@@ -37,15 +37,6 @@ impl Chain {
             _ => None,
         }
     }
-
-    /// Return the EVM chain ID.
-    pub fn chain_id(&self) -> u64 {
-        match self {
-            Chain::Ethereum => 1,
-            Chain::Base => 8453,
-            Chain::Arbitrum => 42161,
-        }
-    }
 }
 
 /// Lifecycle of an execution request.
@@ -54,8 +45,6 @@ impl Chain {
 #[serde(rename_all = "snake_case")]
 pub enum ExecutionStatus {
     Pending,
-    PaymentRequired,
-    PaymentVerified,
     Queued,
     Broadcasting,
     Confirmed,
@@ -63,43 +52,13 @@ pub enum ExecutionStatus {
     Reverted,
 }
 
-/// Billing policy for an API key.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "lowercase")]
-pub enum PaymentMode {
-    Manual,
-    Auto,
-    Sponsored,
-}
-
-impl std::fmt::Display for PaymentMode {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            PaymentMode::Manual => write!(f, "manual"),
-            PaymentMode::Auto => write!(f, "auto"),
-            PaymentMode::Sponsored => write!(f, "sponsored"),
-        }
-    }
-}
-
-impl PaymentMode {
-    pub fn from_str_loose(s: &str) -> Option<Self> {
-        match s.to_lowercase().as_str() {
-            "manual" => Some(PaymentMode::Manual),
-            "auto" => Some(PaymentMode::Auto),
-            "sponsored" => Some(PaymentMode::Sponsored),
-            _ => None,
-        }
-    }
-}
-
 impl std::fmt::Display for ExecutionStatus {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let s = serde_json::to_value(self)
             .ok()
             .and_then(|v| v.as_str().map(String::from))
-            .unwrap_or_else(|| format!("{:?}", self));
-        write!(f, "{}", s)
+            .unwrap_or_else(|| format!("{self:?}"));
+        write!(f, "{s}")
     }
 }
 
@@ -167,7 +126,6 @@ pub struct ExecutionResponse {
     /// Always included so the agent knows where to send tokens before executing.
     pub smart_wallet_address: Option<String>,
     pub estimated_gas: Option<u64>,
-    pub estimated_cost_usd: Option<f64>,
     pub tx_hash: Option<String>,
     pub message: String,
 }
@@ -198,7 +156,6 @@ pub struct StatusResponse {
     pub status: ExecutionStatus,
     pub chain: String,
     pub tx_hash: Option<String>,
-    pub cost_usd: Option<f64>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
@@ -228,7 +185,7 @@ pub struct WalletBalanceResponse {
     pub native_balance_wei: String,
     /// Native balance formatted in the chain's base unit (e.g. ETH).
     pub native_balance_formatted: String,
-    /// Balances for each accepted payment token configured on this chain.
+    /// Balances for each token configured for wallet-balance tracking.
     pub tokens: Vec<TokenBalance>,
 }
 
@@ -287,28 +244,6 @@ pub struct SimulationResult {
     pub error: Option<String>,
 }
 
-/// Payment metadata attached after x402 verification.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct PaymentProof {
-    pub payment_id: Uuid,
-    /// Optional original quote request ID from a prior 402 response.
-    /// When present, server can lock required payment to that quote.
-    pub quote_request_id: Option<Uuid>,
-    pub payer: String,
-    pub amount_usd: f64,
-    pub token: String,
-    pub chain: String,
-    pub tx_hash: String,
-    pub verified: bool,
-    pub verified_at: DateTime<Utc>,
-    /// The on-chain amount transferred (in token-native units, e.g. 6-decimal USDC).
-    pub confirmed_amount_raw: Option<String>,
-    /// Block confirmations at verification time.
-    pub block_confirmations: Option<u64>,
-    /// The token contract address that was verified on-chain.
-    pub token_contract: Option<String>,
-}
-
 // ──────────────────────── API Key Context ─────────────────────────────
 
 /// Authenticated API key context, attached to requests by the API key middleware.
@@ -316,7 +251,6 @@ pub struct PaymentProof {
 pub struct ApiKeyContext {
     pub api_key_id: Uuid,
     pub label: Option<String>,
-    pub payment_mode: PaymentMode,
 }
 
 #[cfg(test)]
@@ -345,23 +279,8 @@ mod tests {
     }
 
     #[test]
-    fn test_chain_ids() {
-        assert_eq!(Chain::Ethereum.chain_id(), 1);
-        assert_eq!(Chain::Base.chain_id(), 8453);
-        assert_eq!(Chain::Arbitrum.chain_id(), 42161);
-    }
-
-    #[test]
     fn test_execution_status_display() {
         assert_eq!(ExecutionStatus::Pending.to_string(), "pending");
-        assert_eq!(
-            ExecutionStatus::PaymentRequired.to_string(),
-            "payment_required"
-        );
-        assert_eq!(
-            ExecutionStatus::PaymentVerified.to_string(),
-            "payment_verified"
-        );
         assert_eq!(ExecutionStatus::Queued.to_string(), "queued");
         assert_eq!(ExecutionStatus::Broadcasting.to_string(), "broadcasting");
         assert_eq!(ExecutionStatus::Confirmed.to_string(), "confirmed");
@@ -419,30 +338,6 @@ mod tests {
         assert!(value.get("callData").is_some());
         assert!(value.get("accountGasLimits").is_some());
         assert!(value.get("gasFees").is_some());
-    }
-
-    #[test]
-    fn test_payment_proof_serde() {
-        let proof = PaymentProof {
-            payment_id: Uuid::new_v4(),
-            quote_request_id: None,
-            payer: "0x1234".into(),
-            amount_usd: 1.5,
-            token: "USDC".into(),
-            chain: "ethereum".into(),
-            tx_hash: "0xabcd".into(),
-            verified: true,
-            verified_at: Utc::now(),
-            confirmed_amount_raw: Some("1500000".into()),
-            block_confirmations: Some(12),
-            token_contract: Some("0x5678".into()),
-        };
-
-        let json = serde_json::to_string(&proof).expect("serialize payment proof");
-        let round_trip: PaymentProof =
-            serde_json::from_str(&json).expect("deserialize payment proof");
-        assert_eq!(round_trip.amount_usd, 1.5);
-        assert!(round_trip.verified);
     }
 }
 

@@ -116,11 +116,6 @@
 "/protocols/morpho/supply":
   post:
     summary: Supply loan assets to Morpho
-    parameters: &paymentProofHeader
-    - in: header
-      name: X-Payment-Proof
-      required: false
-      schema: { type: string }
     requestBody: *morphoRequest
     responses: &morphoExecutionResponses
       '200':
@@ -133,8 +128,6 @@
         "$ref": "#/components/responses/ErrorResponse"
       '401':
         "$ref": "#/components/responses/ErrorResponse"
-      '402':
-        description: Payment required for manual mode
 "/protocols/morpho/withdraw/simulate":
   post:
     summary: Simulate withdrawing supplied loan assets from Morpho
@@ -143,7 +136,6 @@
 "/protocols/morpho/withdraw":
   post:
     summary: Withdraw supplied loan assets from Morpho
-    parameters: *paymentProofHeader
     requestBody: *morphoRequest
     responses: *morphoExecutionResponses
 "/protocols/morpho/supply-collateral/simulate":
@@ -154,7 +146,6 @@
 "/protocols/morpho/supply-collateral":
   post:
     summary: Supply collateral to Morpho
-    parameters: *paymentProofHeader
     requestBody: *morphoRequest
     responses: *morphoExecutionResponses
 "/protocols/morpho/withdraw-collateral/simulate":
@@ -165,7 +156,6 @@
 "/protocols/morpho/withdraw-collateral":
   post:
     summary: Withdraw Morpho collateral
-    parameters: *paymentProofHeader
     requestBody: *morphoRequest
     responses: *morphoExecutionResponses
 "/protocols/morpho/borrow/simulate":
@@ -176,7 +166,6 @@
 "/protocols/morpho/borrow":
   post:
     summary: Borrow from Morpho
-    parameters: *paymentProofHeader
     requestBody: *morphoRequest
     responses: *morphoExecutionResponses
 "/protocols/morpho/repay/simulate":
@@ -187,6 +176,5 @@
 "/protocols/morpho/repay":
   post:
     summary: Repay Morpho debt
-    parameters: *paymentProofHeader
     requestBody: *morphoRequest
     responses: *morphoExecutionResponses

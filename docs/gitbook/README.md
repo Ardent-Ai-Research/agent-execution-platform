@@ -1,16 +1,16 @@
-# Ardent Research Documentation
+# Ardent AI Research Testnet Documentation
 
-Welcome to the official user documentation for Ardent Research.
+Welcome to the official Testnet documentation from Ardent AI Research.
 
 This guide is written for teams integrating with the hosted Ardent API at `https://api.ardentresearch.xyz`.
 
 ## Who we are
 
-Ardent Research is an R&D lab focused on AI infrastructure for a permissionless autonomous economy.
+Ardent AI Research is an R&D lab building infrastructure for agent autonomy.
 
 Our vision is to make it easy for AI agents to securely execute real tasks such as payments, on-chain actions, and service calls without centralized gatekeepers.
 
-We build execution infrastructure that helps teams move from agent demos to production systems with strong safety guarantees and operational visibility.
+Our first product, Jusso, is a new generation of autonomous infrastructure for onchain action. The Jusso Beta is coming soon on Base; the platform documented here is the deployed Testnet preview.
 
 ## What is an AI agent blockchain execution platform
 
@@ -20,7 +20,7 @@ In practice, it provides:
 
 1. Wallet abstraction and account lifecycle management.
 2. Deterministic execution and transaction routing across chains.
-3. Payment rails and proof verification for autonomous API usage.
+3. Sponsored testnet execution through ERC-4337 paymasters.
 4. Policy, observability, and status tracking for async execution.
 
 Without this layer, teams typically stitch together fragile components and inherit security and reliability risk at the exact point where agents touch value.
@@ -33,7 +33,7 @@ Common blockers include:
 
 1. Wallet lifecycle complexity and signing constraints.
 2. Non-deterministic transaction handling across chains and RPC environments.
-3. Payment handling and verification for API-triggered execution.
+3. Safe gas sponsorship for API-triggered execution.
 4. Poor observability across asynchronous execution flows and retries.
 5. Security boundaries between agent logic, keys, relayers, and external services.
 
@@ -41,7 +41,7 @@ Common blockers include:
 
 Our goal is to make autonomous execution safe by default, programmable, and easy to integrate.
 
-Teams should focus on product logic and agent behavior while Ardent handles execution correctness, payment verification, and lifecycle reliability.
+Teams should focus on product logic and agent behavior while Ardent handles execution correctness, gas sponsorship, and lifecycle reliability.
 
 ## AI agent blockchain execution platform
 
@@ -53,13 +53,13 @@ At a high level, the platform provides:
 
 1. Deterministic smart wallet resolution per agent.
 2. Pre-flight simulation before broadcast.
-3. Manual, auto, and sponsored payment modes.
+3. Paymaster-sponsored UserOperation gas on supported testnets.
 4. Standardized request lifecycle tracking via `request_id` and `GET /status/:id`.
 5. Hosted API ergonomics with webhook-friendly asynchronous completion.
 
 For hosted users, the integration flow is straightforward:
 
-1. Request API access.
+1. Generate a public self-service API key.
 2. Resolve or provision an agent wallet address.
 3. Fund the agent wallet as needed.
 4. Simulate or execute transactions.
@@ -79,9 +79,8 @@ Before you begin, keep these platform concepts in mind:
 
 1. API keys are customer scoped and required for protected endpoints.
 2. Every agent is mapped to a deterministic smart wallet.
-3. Execution supports three payment modes: manual, auto, and sponsored.
-4. `POST /execute` can return `402 Payment Required` depending on payment mode and proof.
-5. `GET /status/:id` is the source of truth for lifecycle state.
+3. Every execution is simulated before it can enter the queue.
+4. `GET /status/:id` is the source of truth for lifecycle state.
 
 ## Base URL
 
@@ -93,7 +92,7 @@ https://api.ardentresearch.xyz
 
 ## Agent integration
 
-Ardent Research ships an integration pack that makes it fast to connect any developer, script, or AI tool to the platform.
+Ardent AI Research ships an integration pack that makes it fast to connect any developer, script, or AI tool to the Testnet.
 
 It includes:
 

@@ -39,12 +39,12 @@ pub async fn simulate_transaction(
     match call_result {
         Err(e) => {
             warn!(error = %e, "eth_call simulation failed");
-            return Ok(SimulationResult {
+            Ok(SimulationResult {
                 success: false,
                 gas_estimate: 0,
                 return_data: None,
                 error: Some(format!("simulation reverted: {e}")),
-            });
+            })
         }
         Ok(data) => {
             info!(return_bytes = data.len(), "eth_call succeeded");

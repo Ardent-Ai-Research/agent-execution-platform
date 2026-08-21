@@ -1,5 +1,4 @@
-//! API module — routes, middleware, services.
+//! API module — routes and services.
 
-pub mod middleware;
 pub mod routes;
 pub mod services;

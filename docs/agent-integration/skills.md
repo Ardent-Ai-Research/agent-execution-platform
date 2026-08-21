@@ -9,16 +9,19 @@ This file covers everything needed to get started with AI Agent Blockchain Execu
 ### 1) Install CLI
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/Ardent-Ai-Research/agent-execution-platform/master/docs/agent-integration/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/ardentairesearch/agent-execution-platform/master/docs/agent-integration/install.sh | bash
 ```
 
 This installs an `ardent` command in `~/.local/bin` and downloads runtime files (MCP server, OpenAPI spec) into `~/.ardent/`.
 
-### 2) Set credentials
+### 2) Generate and set credentials
 
 ```bash
-export ARDENT_API_KEY="your_api_key"
+export ARDENT_API_KEY="$(ardent api-key-create --label my-agent | python3 -c 'import json,sys; print(json.load(sys.stdin)["api_key"])')"
 ```
+
+The API key is shown only once. Store it in your secret manager or local
+environment; never place it in source control.
 
 ### 3) Quick commands
 
@@ -37,23 +40,7 @@ ardent execute --agent-id my-agent-001 --chain ethereum --target-contract 0xTarg
 ardent status --request-id your_request_id
 ```
 
-### 4) Manual payment re-submit (after a `402 payment_required` response)
-
-```bash
-ardent execute \
-  --agent-id my-agent-001 \
-  --chain ethereum \
-  --target-contract 0xTargetContract \
-  --calldata 0xCalldata \
-  --value 0 \
-  --proof-request-id your_request_id \
-  --proof-payer 0xYourPayer \
-  --proof-token USDC \
-  --proof-chain ethereum \
-  --proof-tx-hash 0xYourPaymentTxHash
-```
-
-### 5) Update later
+### 4) Update later
 
 ```bash
 ardent self-update              # updates CLI plus ~/.ardent runtime files
@@ -83,7 +70,7 @@ _This section is written for LLM agents that have direct HTTP/tool access to Ard
 
 - API base URL: `https://api.ardentresearch.xyz`
 - Required auth header: `X-API-Key`
-- Optional payment proof header (manual mode): `X-Payment-Proof`
+- API-key generation endpoint: `POST /api-keys` (public and rate limited)
 
 ### Variables
 
@@ -100,8 +87,10 @@ REQUEST_ID="your_request_id"
 2. Confirm funding with `GET /wallet/balance` — verify the wallet holds enough tokens before executing.
 3. Simulate with `POST /simulate`.
 4. Execute with `POST /execute`.
-5. If `402 payment_required`, pay exact `required_amount_raw` to `payment_address`, then resubmit with `X-Payment-Proof`.
-6. Track completion with `GET /status/:id` (or callback webhook if configured).
+5. Track completion with `GET /status/:id` (or callback webhook if configured).
+
+Ardent does not charge an execution fee on this testnet service. Native gas is
+sponsored by the configured ERC-4337 paymaster after successful simulation.
 
 ### Typed Aave V3 Sepolia Flow
 
@@ -480,22 +469,6 @@ curl -X POST "$BASE_URL/execute" \
   }'
 ```
 
-#### Execute Re-submit (Manual Mode After 402)
-
-```bash
-curl -X POST "$BASE_URL/execute" \
-  -H "Content-Type: application/json" \
-  -H "X-API-Key: $API_KEY" \
-  -H 'X-Payment-Proof: {"request_id":"your_request_id","payer":"0xYourPayer","token":"USDC","chain":"ethereum","tx_hash":"0xYourPaymentTxHash"}' \
-  -d '{
-    "agent_id": "my-agent-001",
-    "chain": "ethereum",
-    "target_contract": "0xTargetContract",
-    "calldata": "0xCalldata",
-    "value": "0"
-  }'
-```
-
 #### Status
 
 ```bash
@@ -506,8 +479,6 @@ curl -X GET "$BASE_URL/status/$REQUEST_ID" \
 ### Guardrails For Agents
 
 1. Always use placeholders like `your_request_id` in generated examples.
-2. Never invent token amounts for manual payment; always read `required_amount_raw` from the `402` response.
-3. Never change `request_id`, `payment_address`, or `chain` between `402` and re-submit.
-4. Prefer `simulate` before `execute` when action safety is uncertain.
-5. Use `GET /wallet/balance` to verify sufficient token balance before attempting execution — do not assume the wallet is funded.
-6. Treat `GET /status/:id` as source of truth for terminal result (`confirmed`, `failed`, `reverted`).
+2. Prefer `simulate` before `execute` when action safety is uncertain.
+3. Use `GET /wallet/balance` to verify sufficient protocol assets before attempting execution — do not assume the wallet is funded.
+4. Treat `GET /status/:id` as source of truth for terminal result (`confirmed`, `failed`, `reverted`).

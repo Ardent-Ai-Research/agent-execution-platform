@@ -1,3 +1,6 @@
+// Protocol entry points mirror the explicit execution dependencies in AppState.
+#![allow(clippy::too_many_arguments)]
+
 use anyhow::Result;
 use ethers::prelude::Middleware;
 use ethers::types::{Address, Bytes, TransactionRequest, U256};
@@ -19,7 +22,7 @@ use crate::api::services::{handle_execute, handle_simulate, resolve_chain_smart_
 use crate::execution_engine::ExecutionEngine;
 use crate::relayer::erc4337::BundlerClient;
 use crate::relayer::paymaster::PaymasterSigner;
-use crate::types::{Chain, ExecutionResponse, PaymentMode, PaymentProof};
+use crate::types::{Chain, ExecutionResponse};
 
 async fn call_reader(engine: &ExecutionEngine, chain: &Chain, calldata: String) -> Result<Bytes> {
     let provider = engine.provider_for_chain(chain)?;
@@ -366,7 +369,7 @@ pub async fn handle_positions(
     Ok(GmxPositionsResponse {
         agent_id: query.agent_id.clone(),
         chain: query.chain.clone(),
-        smart_wallet_address: format!("{:?}", smart_wallet_address),
+        smart_wallet_address: format!("{smart_wallet_address:?}"),
         start,
         end,
         positions,
@@ -403,7 +406,7 @@ pub async fn handle_orders(
     Ok(GmxOrdersResponse {
         agent_id: query.agent_id.clone(),
         chain: query.chain.clone(),
-        smart_wallet_address: format!("{:?}", smart_wallet_address),
+        smart_wallet_address: format!("{smart_wallet_address:?}"),
         start,
         end,
         orders,
@@ -525,7 +528,7 @@ pub async fn handle_balances(
     Ok(GmxBalancesResponse {
         agent_id: query.agent_id.clone(),
         chain: query.chain.clone(),
-        smart_wallet_address: format!("{:?}", smart_wallet_address),
+        smart_wallet_address: format!("{smart_wallet_address:?}"),
         balances,
         token_balances,
     })
@@ -555,9 +558,7 @@ pub async fn handle_create_order(
     bundler_clients: &HashMap<Chain, BundlerClient>,
     paymaster_signers: &HashMap<Chain, PaymasterSigner>,
     api_key_id: Uuid,
-    payment_mode: PaymentMode,
     req: &GmxCreateOrderRequest,
-    payment_proof: Option<&PaymentProof>,
 ) -> Result<ExecutionResponse> {
     let chain = Chain::from_str_loose(&req.chain)
         .ok_or_else(|| anyhow::anyhow!("unsupported chain: {}", req.chain))?;
@@ -578,12 +579,10 @@ pub async fn handle_create_order(
         bundler_clients,
         paymaster_signers,
         api_key_id,
-        payment_mode,
         &execution_req,
-        payment_proof,
     )
     .await
-    .map_err(|e| anyhow::anyhow!("GMX V2 create order on {} failed: {}", chain, e))
+    .map_err(|e| anyhow::anyhow!("GMX V2 create order on {chain} failed: {e}"))
 }
 
 pub async fn handle_create_order_simulate(
@@ -593,7 +592,6 @@ pub async fn handle_create_order_simulate(
     bundler_clients: &HashMap<Chain, BundlerClient>,
     paymaster_signers: &HashMap<Chain, PaymasterSigner>,
     api_key_id: Uuid,
-    payment_mode: PaymentMode,
     req: &GmxCreateOrderRequest,
 ) -> Result<ExecutionResponse> {
     gmx_v2::validate_create_order_request(req)?;
@@ -614,7 +612,6 @@ pub async fn handle_create_order_simulate(
         bundler_clients,
         paymaster_signers,
         api_key_id,
-        payment_mode,
         &execution_req,
     )
     .await
@@ -628,9 +625,7 @@ pub async fn handle_cancel_order(
     bundler_clients: &HashMap<Chain, BundlerClient>,
     paymaster_signers: &HashMap<Chain, PaymasterSigner>,
     api_key_id: Uuid,
-    payment_mode: PaymentMode,
     req: &GmxCancelOrderRequest,
-    payment_proof: Option<&PaymentProof>,
 ) -> Result<ExecutionResponse> {
     let chain = Chain::from_str_loose(&req.chain)
         .ok_or_else(|| anyhow::anyhow!("unsupported chain: {}", req.chain))?;
@@ -648,12 +643,10 @@ pub async fn handle_cancel_order(
         bundler_clients,
         paymaster_signers,
         api_key_id,
-        payment_mode,
         &execution_req,
-        payment_proof,
     )
     .await
-    .map_err(|e| anyhow::anyhow!("GMX V2 cancel order on {} failed: {}", chain, e))
+    .map_err(|e| anyhow::anyhow!("GMX V2 cancel order on {chain} failed: {e}"))
 }
 
 pub async fn handle_cancel_order_simulate(
@@ -663,7 +656,6 @@ pub async fn handle_cancel_order_simulate(
     bundler_clients: &HashMap<Chain, BundlerClient>,
     paymaster_signers: &HashMap<Chain, PaymasterSigner>,
     api_key_id: Uuid,
-    payment_mode: PaymentMode,
     req: &GmxCancelOrderRequest,
 ) -> Result<ExecutionResponse> {
     gmx_v2::validate_cancel_order_request(req)?;
@@ -679,7 +671,6 @@ pub async fn handle_cancel_order_simulate(
         bundler_clients,
         paymaster_signers,
         api_key_id,
-        payment_mode,
         &execution_req,
     )
     .await
@@ -693,9 +684,7 @@ pub async fn handle_update_order(
     bundler_clients: &HashMap<Chain, BundlerClient>,
     paymaster_signers: &HashMap<Chain, PaymasterSigner>,
     api_key_id: Uuid,
-    payment_mode: PaymentMode,
     req: &GmxUpdateOrderRequest,
-    payment_proof: Option<&PaymentProof>,
 ) -> Result<ExecutionResponse> {
     let chain = Chain::from_str_loose(&req.chain)
         .ok_or_else(|| anyhow::anyhow!("unsupported chain: {}", req.chain))?;
@@ -712,12 +701,10 @@ pub async fn handle_update_order(
         bundler_clients,
         paymaster_signers,
         api_key_id,
-        payment_mode,
         &execution_req,
-        payment_proof,
     )
     .await
-    .map_err(|e| anyhow::anyhow!("GMX V2 update order on {} failed: {}", chain, e))
+    .map_err(|e| anyhow::anyhow!("GMX V2 update order on {chain} failed: {e}"))
 }
 
 pub async fn handle_update_order_simulate(
@@ -727,7 +714,6 @@ pub async fn handle_update_order_simulate(
     bundler_clients: &HashMap<Chain, BundlerClient>,
     paymaster_signers: &HashMap<Chain, PaymasterSigner>,
     api_key_id: Uuid,
-    payment_mode: PaymentMode,
     req: &GmxUpdateOrderRequest,
 ) -> Result<ExecutionResponse> {
     gmx_v2::validate_update_order_request(req)?;
@@ -742,7 +728,6 @@ pub async fn handle_update_order_simulate(
         bundler_clients,
         paymaster_signers,
         api_key_id,
-        payment_mode,
         &execution_req,
     )
     .await
@@ -756,9 +741,7 @@ pub async fn handle_create_deposit(
     bundler_clients: &HashMap<Chain, BundlerClient>,
     paymaster_signers: &HashMap<Chain, PaymasterSigner>,
     api_key_id: Uuid,
-    payment_mode: PaymentMode,
     req: &GmxCreateDepositRequest,
-    payment_proof: Option<&PaymentProof>,
 ) -> Result<ExecutionResponse> {
     let chain = Chain::from_str_loose(&req.chain)
         .ok_or_else(|| anyhow::anyhow!("unsupported chain: {}", req.chain))?;
@@ -778,12 +761,10 @@ pub async fn handle_create_deposit(
         bundler_clients,
         paymaster_signers,
         api_key_id,
-        payment_mode,
         &execution_req,
-        payment_proof,
     )
     .await
-    .map_err(|e| anyhow::anyhow!("GMX V2 create deposit on {} failed: {}", chain, e))
+    .map_err(|e| anyhow::anyhow!("GMX V2 create deposit on {chain} failed: {e}"))
 }
 
 pub async fn handle_create_deposit_simulate(
@@ -793,7 +774,6 @@ pub async fn handle_create_deposit_simulate(
     bundler_clients: &HashMap<Chain, BundlerClient>,
     paymaster_signers: &HashMap<Chain, PaymasterSigner>,
     api_key_id: Uuid,
-    payment_mode: PaymentMode,
     req: &GmxCreateDepositRequest,
 ) -> Result<ExecutionResponse> {
     gmx_v2::validate_create_deposit_request(req)?;
@@ -813,7 +793,6 @@ pub async fn handle_create_deposit_simulate(
         bundler_clients,
         paymaster_signers,
         api_key_id,
-        payment_mode,
         &execution_req,
     )
     .await
@@ -827,9 +806,7 @@ pub async fn handle_create_withdrawal(
     bundler_clients: &HashMap<Chain, BundlerClient>,
     paymaster_signers: &HashMap<Chain, PaymasterSigner>,
     api_key_id: Uuid,
-    payment_mode: PaymentMode,
     req: &GmxCreateWithdrawalRequest,
-    payment_proof: Option<&PaymentProof>,
 ) -> Result<ExecutionResponse> {
     let chain = Chain::from_str_loose(&req.chain)
         .ok_or_else(|| anyhow::anyhow!("unsupported chain: {}", req.chain))?;
@@ -849,12 +826,10 @@ pub async fn handle_create_withdrawal(
         bundler_clients,
         paymaster_signers,
         api_key_id,
-        payment_mode,
         &execution_req,
-        payment_proof,
     )
     .await
-    .map_err(|e| anyhow::anyhow!("GMX V2 create withdrawal on {} failed: {}", chain, e))
+    .map_err(|e| anyhow::anyhow!("GMX V2 create withdrawal on {chain} failed: {e}"))
 }
 
 pub async fn handle_create_withdrawal_simulate(
@@ -864,7 +839,6 @@ pub async fn handle_create_withdrawal_simulate(
     bundler_clients: &HashMap<Chain, BundlerClient>,
     paymaster_signers: &HashMap<Chain, PaymasterSigner>,
     api_key_id: Uuid,
-    payment_mode: PaymentMode,
     req: &GmxCreateWithdrawalRequest,
 ) -> Result<ExecutionResponse> {
     gmx_v2::validate_create_withdrawal_request(req)?;
@@ -884,7 +858,6 @@ pub async fn handle_create_withdrawal_simulate(
         bundler_clients,
         paymaster_signers,
         api_key_id,
-        payment_mode,
         &execution_req,
     )
     .await
@@ -898,9 +871,7 @@ pub async fn handle_cancel(
     bundler_clients: &HashMap<Chain, BundlerClient>,
     paymaster_signers: &HashMap<Chain, PaymasterSigner>,
     api_key_id: Uuid,
-    payment_mode: PaymentMode,
     req: &GmxCancelRequest,
-    payment_proof: Option<&PaymentProof>,
 ) -> Result<ExecutionResponse> {
     let chain = Chain::from_str_loose(&req.chain)
         .ok_or_else(|| anyhow::anyhow!("unsupported chain: {}", req.chain))?;
@@ -917,12 +888,10 @@ pub async fn handle_cancel(
         bundler_clients,
         paymaster_signers,
         api_key_id,
-        payment_mode,
         &execution_req,
-        payment_proof,
     )
     .await
-    .map_err(|e| anyhow::anyhow!("GMX V2 cancel request on {} failed: {}", chain, e))
+    .map_err(|e| anyhow::anyhow!("GMX V2 cancel request on {chain} failed: {e}"))
 }
 
 pub async fn handle_cancel_simulate(
@@ -932,7 +901,6 @@ pub async fn handle_cancel_simulate(
     bundler_clients: &HashMap<Chain, BundlerClient>,
     paymaster_signers: &HashMap<Chain, PaymasterSigner>,
     api_key_id: Uuid,
-    payment_mode: PaymentMode,
     req: &GmxCancelRequest,
 ) -> Result<ExecutionResponse> {
     gmx_v2::validate_cancel_request(req)?;
@@ -947,7 +915,6 @@ pub async fn handle_cancel_simulate(
         bundler_clients,
         paymaster_signers,
         api_key_id,
-        payment_mode,
         &execution_req,
     )
     .await
@@ -961,9 +928,7 @@ pub async fn handle_claim(
     bundler_clients: &HashMap<Chain, BundlerClient>,
     paymaster_signers: &HashMap<Chain, PaymasterSigner>,
     api_key_id: Uuid,
-    payment_mode: PaymentMode,
     req: &GmxClaimRequest,
-    payment_proof: Option<&PaymentProof>,
 ) -> Result<ExecutionResponse> {
     let chain = Chain::from_str_loose(&req.chain)
         .ok_or_else(|| anyhow::anyhow!("unsupported chain: {}", req.chain))?;
@@ -982,12 +947,10 @@ pub async fn handle_claim(
         bundler_clients,
         paymaster_signers,
         api_key_id,
-        payment_mode,
         &execution_req,
-        payment_proof,
     )
     .await
-    .map_err(|e| anyhow::anyhow!("GMX V2 claim on {} failed: {}", chain, e))
+    .map_err(|e| anyhow::anyhow!("GMX V2 claim on {chain} failed: {e}"))
 }
 
 pub async fn handle_claim_simulate(
@@ -997,7 +960,6 @@ pub async fn handle_claim_simulate(
     bundler_clients: &HashMap<Chain, BundlerClient>,
     paymaster_signers: &HashMap<Chain, PaymasterSigner>,
     api_key_id: Uuid,
-    payment_mode: PaymentMode,
     req: &GmxClaimRequest,
 ) -> Result<ExecutionResponse> {
     gmx_v2::validate_claim_request(req)?;
@@ -1016,7 +978,6 @@ pub async fn handle_claim_simulate(
         bundler_clients,
         paymaster_signers,
         api_key_id,
-        payment_mode,
         &execution_req,
     )
     .await

@@ -1,10 +1,9 @@
 //! Execution Engine — the brain of the platform.
 //!
-//! Orchestrates: validation → simulation → pricing → payment check → queue.
+//! Orchestrates validation and simulation before requests enter the queue.
 //! Now supports ERC-4337 Account Abstraction — agents are identified by
 //! `agent_id` and execute through platform-managed smart wallets.
 
-pub mod pricing;
 pub mod simulation;
 
 use anyhow::{anyhow, Result};
@@ -15,48 +14,30 @@ use std::sync::Arc;
 use tracing::info;
 
 use crate::config::AppConfig;
-use crate::relayer::erc4337::BundlerClient;
 use crate::types::{Chain, ExecutionRequest, SimulationResult};
-use pricing::NativeTokenPriceCache;
 
-/// Shared state for the execution engine, holding per-chain providers
-/// and native-token/USD price caches.
+/// Shared state for the execution engine, holding per-chain providers.
 #[derive(Clone)]
 pub struct ExecutionEngine {
     pub config: AppConfig,
     /// Per-chain JSON-RPC providers.
     providers: HashMap<Chain, Arc<Provider<Http>>>,
-    /// Per-chain native-token/USD price caches.
-    price_caches: HashMap<Chain, Arc<NativeTokenPriceCache>>,
 }
 
 impl ExecutionEngine {
     /// Boot the execution engine for all configured chains.
     pub fn new(config: AppConfig) -> Result<Self> {
         let mut providers = HashMap::new();
-        let mut price_caches = HashMap::new();
-
         for (chain, chain_cfg) in &config.chains {
             let provider = Provider::<Http>::try_from(&chain_cfg.rpc_url)
-                .map_err(|e| anyhow!("failed to create provider for {}: {}", chain, e))?;
+                .map_err(|_| anyhow!("invalid RPC URL configured for {chain}"))?;
             let provider = Arc::new(provider);
-            providers.insert(chain.clone(), provider.clone());
+            providers.insert(chain.clone(), provider);
 
-            let cache = Arc::new(NativeTokenPriceCache::new(
-                chain_cfg.price_feed_url.clone(),
-                config.price_cache_ttl_secs,
-                provider,
-            ));
-            price_caches.insert(chain.clone(), cache);
-
-            info!(chain = %chain, rpc = %chain_cfg.rpc_url, "provider initialized");
+            info!(chain = %chain, "provider initialized");
         }
 
-        Ok(Self {
-            config,
-            providers,
-            price_caches,
-        })
+        Ok(Self { config, providers })
     }
 
     /// Resolve the provider for a given chain.
@@ -64,15 +45,7 @@ impl ExecutionEngine {
         self.providers
             .get(chain)
             .cloned()
-            .ok_or_else(|| anyhow!("chain {} is not configured", chain))
-    }
-
-    /// Resolve the price cache for a given chain.
-    pub fn price_cache_for_chain(&self, chain: &Chain) -> Result<Arc<NativeTokenPriceCache>> {
-        self.price_caches
-            .get(chain)
-            .cloned()
-            .ok_or_else(|| anyhow!("price cache not configured for chain {}", chain))
+            .ok_or_else(|| anyhow!("chain {chain} is not configured"))
     }
 
     // ────────────────────── Validation ────────────────────────────────
@@ -201,59 +174,5 @@ impl ExecutionEngine {
             simulation::simulate_transaction(provider, smart_wallet_address, to, calldata, value)
                 .await
         }
-    }
-
-    // ────────────────────── Pricing ──────────────────────────────────
-
-    /// Calculate execution cost in USD based on gas estimate.
-    ///
-    /// Gas prices are resolved by `BundlerClient::get_gas_prices()` via
-    /// Candide Voltaire's `voltaire_feesPerGas` method.
-    ///
-    /// For ERC-4337, the total gas includes the UserOp overhead (verification
-    /// gas + pre-verification gas) on top of the call gas. We add a buffer
-    /// to account for this.
-    pub async fn estimate_cost(
-        &self,
-        chain: &Chain,
-        gas_estimate: u64,
-        bundler_client: &BundlerClient,
-    ) -> Result<f64> {
-        self.estimate_cost_with_mode(chain, gas_estimate, bundler_client, true)
-            .await
-    }
-
-    /// Calculate execution cost in USD with optional platform fee.
-    ///
-    /// `include_platform_fee = false` keeps gas pricing/markup but removes the
-    /// fixed platform fee component from the payable amount.
-    pub async fn estimate_cost_with_mode(
-        &self,
-        chain: &Chain,
-        gas_estimate: u64,
-        bundler_client: &BundlerClient,
-        include_platform_fee: bool,
-    ) -> Result<f64> {
-        let (max_fee_per_gas, _max_priority_fee) = bundler_client.get_gas_prices().await?;
-
-        // ERC-4337 overhead: ~100k gas for verification + pre-verification.
-        let total_gas_with_aa_overhead = gas_estimate.saturating_add(100_000);
-
-        let price_cache = self.price_cache_for_chain(chain)?;
-
-        let platform_fee = if include_platform_fee {
-            self.config.platform_fee_usd
-        } else {
-            0.0
-        };
-
-        pricing::calculate_cost(
-            max_fee_per_gas,
-            total_gas_with_aa_overhead,
-            self.config.gas_price_markup_pct,
-            platform_fee,
-            &price_cache,
-        )
-        .await
     }
 }

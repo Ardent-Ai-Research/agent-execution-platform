@@ -56,7 +56,6 @@ import "@openzeppelin/contracts/utils/cryptography/MessageHashUtils.sol";
  * - The owner can change the `verifyingSigner` and withdraw funds.
  * - `validUntil` / `validAfter` provide time-bounded sponsorship.
  *
- * @custom:security-contact security@platform.example
  */
 contract VerifyingPaymaster is BasePaymaster {
     using UserOperationLib for PackedUserOperation;
@@ -65,10 +64,7 @@ contract VerifyingPaymaster is BasePaymaster {
     address public verifyingSigner;
 
     /// Emitted when the verifying signer is changed.
-    event VerifyingSignerChanged(
-        address indexed oldSigner,
-        address indexed newSigner
-    );
+    event VerifyingSignerChanged(address indexed oldSigner, address indexed newSigner);
 
     /**
      * @param _entryPoint     The EntryPoint v0.9 contract.
@@ -77,11 +73,7 @@ contract VerifyingPaymaster is BasePaymaster {
      *                         Can be `address(0)` — sponsorship stays inactive
      *                         until `setVerifyingSigner()` is called.
      */
-    constructor(
-        IEntryPoint _entryPoint,
-        address _owner,
-        address _verifyingSigner
-    ) BasePaymaster(_entryPoint, _owner) {
+    constructor(IEntryPoint _entryPoint, address _owner, address _verifyingSigner) BasePaymaster(_entryPoint, _owner) {
         verifyingSigner = _verifyingSigner;
         emit VerifyingSignerChanged(address(0), _verifyingSigner);
     }
@@ -92,10 +84,7 @@ contract VerifyingPaymaster is BasePaymaster {
      * @param _newSigner The new signer address.
      */
     function setVerifyingSigner(address _newSigner) external onlyOwner {
-        require(
-            _newSigner != address(0),
-            "VerifyingPaymaster: signer is zero"
-        );
+        require(_newSigner != address(0), "VerifyingPaymaster: signer is zero");
         address old = verifyingSigner;
         verifyingSigner = _newSigner;
         emit VerifyingSignerChanged(old, _newSigner);
@@ -114,27 +103,26 @@ contract VerifyingPaymaster is BasePaymaster {
      * @param validAfter Sponsorship is not valid before this timestamp.
      * @return The keccak256 hash to sign.
      */
-    function getHash(
-        PackedUserOperation calldata userOp,
-        uint48 validUntil,
-        uint48 validAfter
-    ) public view returns (bytes32) {
-        return
-            keccak256(
-                abi.encode(
-                    userOp.sender,
-                    userOp.nonce,
-                    keccak256(userOp.initCode),
-                    keccak256(userOp.callData),
-                    keccak256(abi.encode(userOp.accountGasLimits)),
-                    userOp.preVerificationGas,
-                    keccak256(abi.encode(userOp.gasFees)),
-                    block.chainid,
-                    address(this),
-                    validUntil,
-                    validAfter
-                )
-            );
+    function getHash(PackedUserOperation calldata userOp, uint48 validUntil, uint48 validAfter)
+        public
+        view
+        returns (bytes32)
+    {
+        return keccak256(
+            abi.encode(
+                userOp.sender,
+                userOp.nonce,
+                keccak256(userOp.initCode),
+                keccak256(userOp.callData),
+                keccak256(abi.encode(userOp.accountGasLimits)),
+                userOp.preVerificationGas,
+                keccak256(abi.encode(userOp.gasFees)),
+                block.chainid,
+                address(this),
+                validUntil,
+                validAfter
+            )
+        );
     }
 
     /**
@@ -150,59 +138,39 @@ contract VerifyingPaymaster is BasePaymaster {
      * @return context        Empty bytes (no post-op context needed).
      * @return validationData Packed (aggregator=0, validAfter, validUntil).
      */
-    function _validatePaymasterUserOp(
-        PackedUserOperation calldata userOp,
-        bytes32 userOpHash,
-        uint256 maxCost
-    )
+    function _validatePaymasterUserOp(PackedUserOperation calldata userOp, bytes32 userOpHash, uint256 maxCost)
         internal
         virtual
         override
         returns (bytes memory context, uint256 validationData)
     {
         (userOpHash); // silence unused warning
-        (maxCost);    // silence unused warning
+        (maxCost); // silence unused warning
 
         // paymasterData layout:
         //   abi.encode(validUntil, validAfter) = 64 bytes
         //   signature = 65 bytes
         // Total: 129 bytes minimum
-        bytes calldata paymasterData = userOp.paymasterAndData[
-            UserOperationLib.PAYMASTER_DATA_OFFSET:
-        ];
-        require(
-            paymasterData.length >= 129,
-            "VerifyingPaymaster: invalid paymasterData length"
-        );
+        bytes calldata paymasterData = userOp.paymasterAndData[UserOperationLib.PAYMASTER_DATA_OFFSET:];
+        require(paymasterData.length >= 129, "VerifyingPaymaster: invalid paymasterData length");
 
         // Decode time validity window
-        (uint48 validUntil, uint48 validAfter) = abi.decode(
-            paymasterData[:64],
-            (uint48, uint48)
-        );
+        (uint48 validUntil, uint48 validAfter) = abi.decode(paymasterData[:64], (uint48, uint48));
 
         // Extract signature (last 65 bytes of paymasterData's first 129 bytes)
         bytes calldata signature = paymasterData[64:129];
 
         // Compute the hash and verify the signature
-        bytes32 hash = MessageHashUtils.toEthSignedMessageHash(
-            getHash(userOp, validUntil, validAfter)
-        );
+        bytes32 hash = MessageHashUtils.toEthSignedMessageHash(getHash(userOp, validUntil, validAfter));
         address recovered = ECDSA.recover(hash, signature);
 
         if (recovered != verifyingSigner) {
             // Signature mismatch — return SIG_VALIDATION_FAILED
             // (address(1) signals signature failure to the EntryPoint)
-            return (
-                "",
-                _packValidationData(true, validUntil, validAfter)
-            );
+            return ("", _packValidationData(true, validUntil, validAfter));
         }
 
         // Valid signature — return packed validation data with time bounds
-        return (
-            "",
-            _packValidationData(false, validUntil, validAfter)
-        );
+        return ("", _packValidationData(false, validUntil, validAfter));
     }
 }

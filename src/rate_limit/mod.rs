@@ -126,16 +126,20 @@ pub async fn rate_limit_middleware(
     req: Request,
     next: axum::middleware::Next,
 ) -> impl IntoResponse {
-    // Extract the API key identity set by the auth middleware.
-    // If missing (shouldn't happen — auth middleware runs first), let through
-    // and rely on downstream handlers to reject.
+    // Extract the API key identity set by the auth middleware. Missing context
+    // indicates a middleware ordering/configuration error, so fail closed.
     let api_key_id = req
         .extensions()
         .get::<ApiKeyContext>()
         .map(|ctx| ctx.api_key_id);
 
     let Some(key_id) = api_key_id else {
-        return next.run(req).await.into_response();
+        tracing::error!("rate limiter invoked without authenticated API key context");
+        return (
+            StatusCode::UNAUTHORIZED,
+            axum::Json(serde_json::json!({ "error": "authentication_required" })),
+        )
+            .into_response();
     };
 
     match limiter.check(key_id) {
@@ -164,6 +168,8 @@ pub async fn rate_limit_middleware(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use axum::{middleware, routing::get, Router};
+    use tower::ServiceExt;
 
     #[test]
     fn test_rate_limiter_allows_burst() {
@@ -202,5 +208,26 @@ mod tests {
         let limiter = RateLimiter::new(1000.0, 1.0);
         limiter.check(Uuid::new_v4()).expect("initial check");
         limiter.evict_stale();
+    }
+
+    #[tokio::test]
+    async fn middleware_fails_closed_without_auth_context() {
+        let app = Router::new()
+            .route("/", get(|| async { StatusCode::OK }))
+            .layer(middleware::from_fn_with_state(
+                RateLimiter::new(10.0, 10.0),
+                rate_limit_middleware,
+            ));
+
+        let response = app
+            .oneshot(
+                axum::http::Request::get("/")
+                    .body(axum::body::Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .expect("middleware response");
+
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
     }
 }

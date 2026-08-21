@@ -93,9 +93,7 @@ class ArdentMcpServer:
             if remaining:
                 final_url = f"{final_url}?{parse.urlencode(remaining, doseq=True)}"
         elif method == "POST":
-            body, extra_headers = self._build_post_body(tool_name=name, tool=tool, args=remaining)
-            headers.update(extra_headers)
-            data = json.dumps(body).encode("utf-8")
+            data = json.dumps(remaining).encode("utf-8")
             headers["Content-Type"] = "application/json"
         else:
             raise ValueError(f"unsupported method in tool config: {method}")
@@ -140,37 +138,6 @@ class ArdentMcpServer:
             raise ValueError(f"missing required path params: {', '.join(unresolved)}")
 
         return path, remaining
-
-    def _build_post_body(self, tool_name: str, tool: dict[str, Any], args: dict[str, Any]) -> tuple[dict[str, Any], dict[str, str]]:
-        body = dict(args)
-        headers: dict[str, str] = {}
-
-        if tool_name in {
-            "ardent_execute",
-            "ardent_aave_supply_execute",
-            "ardent_aave_withdraw_execute",
-            "ardent_aave_repay_execute",
-            "ardent_aave_borrow_execute",
-            "ardent_compound_supply_execute",
-            "ardent_compound_withdraw_execute",
-            "ardent_compound_repay_execute",
-            "ardent_compound_borrow_execute",
-            "ardent_morpho_supply_execute",
-            "ardent_morpho_withdraw_execute",
-            "ardent_morpho_supply_collateral_execute",
-            "ardent_morpho_withdraw_collateral_execute",
-            "ardent_morpho_borrow_execute",
-            "ardent_morpho_repay_execute",
-            "ardent_balancer_swap_execute",
-            "ardent_balancer_add_liquidity_execute",
-            "ardent_balancer_remove_liquidity_execute",
-            "ardent_uniswap_v4_swap_execute",
-        }:
-            payment_proof = body.pop("payment_proof", None)
-            if payment_proof is not None:
-                headers["X-Payment-Proof"] = json.dumps(payment_proof, separators=(",", ":"))
-
-        return body, headers
 
     @staticmethod
     def _safe_json_parse(body_text: str) -> Any | None:

@@ -1,3 +1,6 @@
+// Protocol entry points mirror the explicit execution dependencies in AppState.
+#![allow(clippy::too_many_arguments)]
+
 use anyhow::Result;
 use ethers::prelude::Middleware;
 use ethers::types::{Address, Bytes, TransactionRequest, U256, U512};
@@ -20,7 +23,7 @@ use crate::api::services::{handle_execute, handle_simulate, resolve_chain_smart_
 use crate::execution_engine::ExecutionEngine;
 use crate::relayer::erc4337::BundlerClient;
 use crate::relayer::paymaster::PaymasterSigner;
-use crate::types::{Chain, ExecutionResponse, PaymentMode, PaymentProof};
+use crate::types::{Chain, ExecutionResponse};
 
 const FACTOR_SCALE: u64 = 1_000_000_000_000_000_000;
 const SECONDS_PER_YEAR: u64 = 31_536_000;
@@ -91,9 +94,7 @@ pub async fn handle_supply(
     bundler_clients: &HashMap<Chain, BundlerClient>,
     paymaster_signers: &HashMap<Chain, PaymasterSigner>,
     api_key_id: Uuid,
-    payment_mode: PaymentMode,
     req: &CompoundSupplyRequest,
-    payment_proof: Option<&PaymentProof>,
 ) -> Result<ExecutionResponse> {
     compound_v3::validate_supply_request(req)?;
     let chain = parse_chain(&req.chain)?;
@@ -113,12 +114,10 @@ pub async fn handle_supply(
         bundler_clients,
         paymaster_signers,
         api_key_id,
-        payment_mode,
         &execution_req,
-        payment_proof,
     )
     .await
-    .map_err(|e| anyhow::anyhow!("Compound III supply on {} failed: {}", chain, e))
+    .map_err(|e| anyhow::anyhow!("Compound III supply on {chain} failed: {e}"))
 }
 
 pub async fn handle_supply_simulate(
@@ -128,7 +127,6 @@ pub async fn handle_supply_simulate(
     bundler_clients: &HashMap<Chain, BundlerClient>,
     paymaster_signers: &HashMap<Chain, PaymasterSigner>,
     api_key_id: Uuid,
-    payment_mode: PaymentMode,
     req: &CompoundSupplyRequest,
 ) -> Result<ExecutionResponse> {
     compound_v3::validate_supply_request(req)?;
@@ -148,7 +146,6 @@ pub async fn handle_supply_simulate(
         bundler_clients,
         paymaster_signers,
         api_key_id,
-        payment_mode,
         &execution_req,
     )
     .await
@@ -162,9 +159,7 @@ pub async fn handle_withdraw(
     bundler_clients: &HashMap<Chain, BundlerClient>,
     paymaster_signers: &HashMap<Chain, PaymasterSigner>,
     api_key_id: Uuid,
-    payment_mode: PaymentMode,
     req: &CompoundWithdrawRequest,
-    payment_proof: Option<&PaymentProof>,
 ) -> Result<ExecutionResponse> {
     compound_v3::validate_withdraw_request(req)?;
     let chain = parse_chain(&req.chain)?;
@@ -184,12 +179,10 @@ pub async fn handle_withdraw(
         bundler_clients,
         paymaster_signers,
         api_key_id,
-        payment_mode,
         &execution_req,
-        payment_proof,
     )
     .await
-    .map_err(|e| anyhow::anyhow!("Compound III withdraw on {} failed: {}", chain, e))
+    .map_err(|e| anyhow::anyhow!("Compound III withdraw on {chain} failed: {e}"))
 }
 
 pub async fn handle_withdraw_simulate(
@@ -199,7 +192,6 @@ pub async fn handle_withdraw_simulate(
     bundler_clients: &HashMap<Chain, BundlerClient>,
     paymaster_signers: &HashMap<Chain, PaymasterSigner>,
     api_key_id: Uuid,
-    payment_mode: PaymentMode,
     req: &CompoundWithdrawRequest,
 ) -> Result<ExecutionResponse> {
     compound_v3::validate_withdraw_request(req)?;
@@ -219,7 +211,6 @@ pub async fn handle_withdraw_simulate(
         bundler_clients,
         paymaster_signers,
         api_key_id,
-        payment_mode,
         &execution_req,
     )
     .await
@@ -233,9 +224,7 @@ pub async fn handle_repay(
     bundler_clients: &HashMap<Chain, BundlerClient>,
     paymaster_signers: &HashMap<Chain, PaymasterSigner>,
     api_key_id: Uuid,
-    payment_mode: PaymentMode,
     req: &CompoundRepayRequest,
-    payment_proof: Option<&PaymentProof>,
 ) -> Result<ExecutionResponse> {
     compound_v3::validate_repay_request(req)?;
     let chain = parse_chain(&req.chain)?;
@@ -255,12 +244,10 @@ pub async fn handle_repay(
         bundler_clients,
         paymaster_signers,
         api_key_id,
-        payment_mode,
         &execution_req,
-        payment_proof,
     )
     .await
-    .map_err(|e| anyhow::anyhow!("Compound III repay on {} failed: {}", chain, e))
+    .map_err(|e| anyhow::anyhow!("Compound III repay on {chain} failed: {e}"))
 }
 
 pub async fn handle_repay_simulate(
@@ -270,7 +257,6 @@ pub async fn handle_repay_simulate(
     bundler_clients: &HashMap<Chain, BundlerClient>,
     paymaster_signers: &HashMap<Chain, PaymasterSigner>,
     api_key_id: Uuid,
-    payment_mode: PaymentMode,
     req: &CompoundRepayRequest,
 ) -> Result<ExecutionResponse> {
     compound_v3::validate_repay_request(req)?;
@@ -290,7 +276,6 @@ pub async fn handle_repay_simulate(
         bundler_clients,
         paymaster_signers,
         api_key_id,
-        payment_mode,
         &execution_req,
     )
     .await
@@ -304,9 +289,7 @@ pub async fn handle_borrow(
     bundler_clients: &HashMap<Chain, BundlerClient>,
     paymaster_signers: &HashMap<Chain, PaymasterSigner>,
     api_key_id: Uuid,
-    payment_mode: PaymentMode,
     req: &CompoundBorrowRequest,
-    payment_proof: Option<&PaymentProof>,
 ) -> Result<ExecutionResponse> {
     compound_v3::validate_borrow_request(req)?;
     let chain = parse_chain(&req.chain)?;
@@ -326,12 +309,10 @@ pub async fn handle_borrow(
         bundler_clients,
         paymaster_signers,
         api_key_id,
-        payment_mode,
         &execution_req,
-        payment_proof,
     )
     .await
-    .map_err(|e| anyhow::anyhow!("Compound III borrow on {} failed: {}", chain, e))
+    .map_err(|e| anyhow::anyhow!("Compound III borrow on {chain} failed: {e}"))
 }
 
 pub async fn handle_borrow_simulate(
@@ -341,7 +322,6 @@ pub async fn handle_borrow_simulate(
     bundler_clients: &HashMap<Chain, BundlerClient>,
     paymaster_signers: &HashMap<Chain, PaymasterSigner>,
     api_key_id: Uuid,
-    payment_mode: PaymentMode,
     req: &CompoundBorrowRequest,
 ) -> Result<ExecutionResponse> {
     compound_v3::validate_borrow_request(req)?;
@@ -361,7 +341,6 @@ pub async fn handle_borrow_simulate(
         bundler_clients,
         paymaster_signers,
         api_key_id,
-        payment_mode,
         &execution_req,
     )
     .await
@@ -940,7 +919,7 @@ fn action_asset_address(asset: &str, market: compound_v3::CompoundMarket) -> Res
 }
 
 fn parse_chain(chain: &str) -> Result<Chain> {
-    Chain::from_str_loose(chain).ok_or_else(|| anyhow::anyhow!("unsupported chain: {}", chain))
+    Chain::from_str_loose(chain).ok_or_else(|| anyhow::anyhow!("unsupported chain: {chain}"))
 }
 
 fn min_u256(a: U256, b: U256) -> U256 {

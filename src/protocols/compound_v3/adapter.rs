@@ -450,7 +450,7 @@ pub fn validate_markets_query(query: &CompoundMarketsQuery) -> Result<()> {
 
 fn validate_chain(chain: &str) -> Result<()> {
     let chain = crate::types::Chain::from_str_loose(chain)
-        .ok_or_else(|| anyhow!("unsupported chain for Compound III: {}", chain))?;
+        .ok_or_else(|| anyhow!("unsupported chain for Compound III: {chain}"))?;
     if chain != crate::types::Chain::Base {
         return Err(anyhow!(
             "Compound III typed adapter currently supports Base Sepolia only; use chain \"base\""
@@ -903,8 +903,7 @@ fn parse_market(raw: Option<&str>, default: CompoundMarket) -> Result<CompoundMa
         _ if raw.eq_ignore_ascii_case(BASE_SEPOLIA_COMET_USDC) => Ok(CompoundMarket::Usdc),
         _ if raw.eq_ignore_ascii_case(BASE_SEPOLIA_COMET_WETH) => Ok(CompoundMarket::Weth),
         _ => Err(anyhow!(
-            "unsupported Compound III Base Sepolia market '{}'; supported: usdc, weth",
-            raw
+            "unsupported Compound III Base Sepolia market '{raw}'; supported: usdc, weth"
         )),
     }
 }
@@ -960,8 +959,7 @@ fn parse_decimal_amount(raw: &str, decimals: u8) -> Result<U256> {
     }
     if fractional.len() > decimals as usize {
         return Err(anyhow!(
-            "amount has too many decimal places for asset decimals {}",
-            decimals
+            "amount has too many decimal places for asset decimals {decimals}"
         ));
     }
 

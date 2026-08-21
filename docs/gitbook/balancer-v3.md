@@ -31,21 +31,6 @@ route. Liquidity actions remain pool-address driven.
 
 These addresses come from Balancer's official deployment repository.
 
-## Ardent aUSD/USDC test pool
-
-Ardent maintains an initialized Balancer V3 Stable Pool for testing swaps
-between Circle USDC and Ardent USD:
-
-| Asset | Ethereum Sepolia address |
-|---|---|
-| Stable Pool | `0x0c131e566752417dAA7d8a51D1E9ae8c95B52E99` |
-| USDC | `0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238` |
-| aUSD | `0xE9df660c675F6f649677Ae408FCf6665D4F0F5Be` |
-
-The pool uses 6-decimal tokens, an amplification parameter of `100`, and a
-`0.1%` swap fee. This is testnet liquidity, so request a live quote and
-simulate before every swap.
-
 ## Discover or inspect pools
 
 Discover pair-compatible pools:

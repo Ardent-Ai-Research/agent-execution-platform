@@ -31,15 +31,13 @@ use uuid::Uuid;
 
 use agent_execution_platform::{
     agent_wallet::AgentWalletRegistry,
-    api::{
-        middleware::{x402_middleware, PaymentVerifierState},
-        routes::{self, AppState},
-    },
+    api::routes::{self, AppState},
     config::AppConfig,
     db,
     execution_engine::ExecutionEngine,
     queue,
     rate_limit::RateLimiter,
+    relayer::paymaster::PaymasterSigner,
     types::*,
 };
 
@@ -74,16 +72,27 @@ async fn setup_redis(config: &AppConfig) -> redis::aio::ConnectionManager {
 ///
 /// The middleware stack is identical to the production `main.rs`:
 ///   CORS → ConcurrencyLimit → BodySizeLimit →
-///   [public routes] + [admin bearer routes] + [protected API key → rate limit → x402 routes]
+///   [public routes] + [protected API key → rate limit routes]
 async fn spawn_app() -> (String, String, tokio::task::JoinHandle<()>) {
-    let config = test_config();
+    spawn_app_with_api_key_issuance(1_000_000, None).await
+}
+
+async fn spawn_app_with_api_key_issuance(
+    public_api_key_limit: u64,
+    client_ip_header: Option<&str>,
+) -> (String, String, tokio::task::JoinHandle<()>) {
+    let mut config = test_config();
+    // Public issuance behavior is covered explicitly below. Keep repeated test
+    // runs from exhausting the production-oriented per-IP allowance in Redis.
+    config.public_api_key_limit = public_api_key_limit;
+    config.public_api_key_client_ip_header = client_ip_header.map(str::to_string);
     let db_pool = setup_db(&config).await;
     let redis_conn = setup_redis(&config).await;
 
     let engine = ExecutionEngine::new(config.clone()).expect("engine init");
 
     // Create a test API key
-    let (_, api_key) = db::create_api_key(&db_pool, Some("integration-test"), None)
+    let (_, api_key) = db::create_api_key(&db_pool, Some("integration-test"))
         .await
         .expect("create API key");
 
@@ -124,6 +133,23 @@ async fn spawn_app() -> (String, String, tokio::task::JoinHandle<()>) {
         bundler_clients.insert(chain.clone(), bc);
     }
 
+    let mut paymaster_signers = HashMap::new();
+    for (chain, chain_cfg) in &config.chains {
+        let paymaster_address = chain_cfg
+            .paymaster_address
+            .parse()
+            .expect("test paymaster address");
+        // Deterministic test-only key; production keys are generated, encrypted,
+        // and loaded by main.rs.
+        let signer = PaymasterSigner::new(
+            paymaster_address,
+            "0000000000000000000000000000000000000000000000000000000000000001",
+            300,
+        )
+        .expect("test paymaster signer");
+        paymaster_signers.insert(chain.clone(), signer);
+    }
+
     let state = AppState {
         db_pool: db_pool.clone(),
         redis_conn: redis_conn.clone(),
@@ -131,7 +157,7 @@ async fn spawn_app() -> (String, String, tokio::task::JoinHandle<()>) {
         config: config.clone(),
         wallet_registry,
         bundler_clients,
-        paymaster_signers: HashMap::new(),
+        paymaster_signers,
     };
 
     let rate_limiter = if config.per_key_rate_limit_rps > 0.0 {
@@ -143,24 +169,7 @@ async fn spawn_app() -> (String, String, tokio::task::JoinHandle<()>) {
         None
     };
 
-    let mut pv_providers = HashMap::new();
-    for chain in config.chains.keys() {
-        if let Ok(p) = engine.provider_for_chain(chain) {
-            pv_providers.insert(chain.clone(), p);
-        }
-    }
-    let payment_verifier = PaymentVerifierState {
-        config: config.clone(),
-        providers: pv_providers,
-        db_pool: db_pool.clone(),
-    };
-
     let api_key_db_pool = db_pool.clone();
-
-    let admin_router = Router::new()
-        .route("/api-keys", post(routes::create_api_key_handler))
-        .layer(middleware::from_fn(routes::admin_auth_middleware))
-        .with_state(state.clone());
 
     let protected_api_router = Router::new()
         .route("/execute", post(routes::execute_handler))
@@ -200,10 +209,6 @@ async fn spawn_app() -> (String, String, tokio::task::JoinHandle<()>) {
             "/protocols/aave-v3/position",
             get(routes::aave_position_handler),
         )
-        .layer(middleware::from_fn_with_state(
-            payment_verifier,
-            x402_middleware,
-        ))
         .layer({
             let rl = rate_limiter.clone();
             middleware::from_fn(move |req: Request, next: axum::middleware::Next| {
@@ -230,7 +235,7 @@ async fn spawn_app() -> (String, String, tokio::task::JoinHandle<()>) {
     let app = Router::new()
         .route("/health", get(routes::health_handler))
         .route("/feed/recent", get(routes::public_feed_handler))
-        .nest("/admin", admin_router)
+        .route("/api-keys", post(routes::create_api_key_handler))
         .merge(protected_api_router)
         .layer(RequestBodyLimitLayer::new(1024 * 1024))
         .layer(tower::limit::ConcurrencyLimitLayer::new(200))
@@ -244,7 +249,12 @@ async fn spawn_app() -> (String, String, tokio::task::JoinHandle<()>) {
     let base_url = format!("http://{addr}");
 
     let handle = tokio::spawn(async move {
-        axum::serve(listener, app).await.unwrap();
+        axum::serve(
+            listener,
+            app.into_make_service_with_connect_info::<std::net::SocketAddr>(),
+        )
+        .await
+        .unwrap();
     });
 
     tokio::time::sleep(std::time::Duration::from_millis(50)).await;
@@ -258,19 +268,6 @@ async fn api_key_auth_middleware_test(
     mut req: Request,
     next: axum::middleware::Next,
 ) -> impl IntoResponse {
-    let auth_disabled = std::env::var("API_KEY_AUTH_DISABLED")
-        .map(|v| v == "true")
-        .unwrap_or(false);
-
-    if auth_disabled {
-        req.extensions_mut().insert(ApiKeyContext {
-            api_key_id: Uuid::nil(),
-            label: Some("dev-bypass".into()),
-            payment_mode: PaymentMode::Sponsored,
-        });
-        return next.run(req).await.into_response();
-    }
-
     let provided = req
         .headers()
         .get("x-api-key")
@@ -285,12 +282,9 @@ async fn api_key_auth_middleware_test(
             .into_response(),
         Some(raw_key) => match db::get_api_key_by_raw(&db_pool, &raw_key).await {
             Ok(Some(api_key_row)) => {
-                let payment_mode = PaymentMode::from_str_loose(&api_key_row.payment_mode)
-                    .unwrap_or(PaymentMode::Manual);
                 req.extensions_mut().insert(ApiKeyContext {
                     api_key_id: api_key_row.id,
                     label: api_key_row.label,
-                    payment_mode,
                 });
                 next.run(req).await.into_response()
             }
@@ -389,67 +383,84 @@ async fn test_valid_api_key_passes_auth() {
     assert_eq!(resp.status(), 200);
 }
 
-// ────────────────── Admin API key creation ───────────────────────────
+// ────────────────── Public API key creation ──────────────────────────
 
 #[tokio::test]
-async fn test_admin_create_api_key_without_bearer_returns_error() {
+async fn test_public_create_api_key_success() {
     let (base, _key, _h) = spawn_app().await;
     let c = http_client();
 
     let resp = c
-        .post(format!("{base}/admin/api-keys"))
-        .json(&json!({ "label": "test" }))
-        .send()
-        .await
-        .unwrap();
-
-    // Admin uses bearer auth, not X-API-Key. Without bearer → 403 or 401.
-    let s = resp.status().as_u16();
-    assert!(s == 401 || s == 403, "expected 401 or 403, got {s}");
-}
-
-#[tokio::test]
-async fn test_admin_create_api_key_wrong_token_returns_401() {
-    std::env::set_var("ADMIN_BEARER_TOKEN", "test-admin-secret");
-
-    let (base, _key, _h) = spawn_app().await;
-    let c = http_client();
-
-    let resp = c
-        .post(format!("{base}/admin/api-keys"))
-        .header("Authorization", "Bearer wrong-token")
-        .json(&json!({ "label": "test" }))
-        .send()
-        .await
-        .unwrap();
-    assert_eq!(resp.status(), 401);
-
-    std::env::remove_var("ADMIN_BEARER_TOKEN");
-}
-
-#[tokio::test]
-async fn test_admin_create_api_key_success() {
-    std::env::set_var("ADMIN_BEARER_TOKEN", "test-admin-ok");
-
-    let (base, _api_key, _h) = spawn_app().await;
-    let c = http_client();
-
-    // Admin endpoint requires only bearer-token auth.
-    let resp = c
-        .post(format!("{base}/admin/api-keys"))
-        .header("Authorization", "Bearer test-admin-ok")
+        .post(format!("{base}/api-keys"))
         .json(&json!({ "label": "my-agent-key" }))
         .send()
         .await
         .unwrap();
 
     assert_eq!(resp.status(), 201);
+    assert_eq!(resp.headers()["cache-control"], "no-store");
     let body: Value = resp.json().await.unwrap();
-    assert!(body["api_key"].as_str().unwrap().starts_with("ak_"));
+    let raw_key = body["api_key"].as_str().unwrap();
+    assert!(raw_key.starts_with("ak_"));
+    assert!(
+        raw_key.len() >= 46,
+        "API key should contain 256 bits of entropy"
+    );
     assert!(body["api_key_id"].is_string());
     assert_eq!(body["label"], "my-agent-key");
 
-    std::env::remove_var("ADMIN_BEARER_TOKEN");
+    let authenticated = c
+        .get(format!(
+            "{base}/wallet?agent_id=public-key-auth-check&chain=ethereum"
+        ))
+        .header("X-API-Key", raw_key)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(authenticated.status(), 200);
+}
+
+#[tokio::test]
+async fn test_public_create_api_key_rejects_oversized_label() {
+    let (base, _api_key, _h) = spawn_app().await;
+    let c = http_client();
+    let resp = c
+        .post(format!("{base}/api-keys"))
+        .json(&json!({ "label": "x".repeat(101) }))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), 400);
+}
+
+#[tokio::test]
+async fn test_public_create_api_key_rate_limit_returns_429() {
+    let client_ip_header = "x-test-client-ip";
+    let (base, _api_key, _h) = spawn_app_with_api_key_issuance(1, Some(client_ip_header)).await;
+    let c = http_client();
+    let bytes = Uuid::new_v4().into_bytes();
+    let client_ip = format!("10.{}.{}.{}", bytes[0], bytes[1], bytes[2]);
+
+    let first = c
+        .post(format!("{base}/api-keys"))
+        .header(client_ip_header, &client_ip)
+        .json(&json!({ "label": "first-key" }))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(first.status(), 201);
+
+    let second = c
+        .post(format!("{base}/api-keys"))
+        .header(client_ip_header, &client_ip)
+        .json(&json!({ "label": "second-key" }))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(second.status(), 429);
+    assert!(second.headers().contains_key("retry-after"));
+    let body: Value = second.json().await.unwrap();
+    assert_eq!(body["error"], "api_key_issuance_rate_limit_exceeded");
 }
 
 // ────────────────── GET /wallet ─────────────────────────────────────
@@ -541,9 +552,7 @@ async fn test_wallet_namespace_isolation_across_api_keys() {
     let db_pool = setup_db(&config).await;
 
     let (base, key1, _h) = spawn_app().await;
-    let (_, key2) = db::create_api_key(&db_pool, Some("key-2"), None)
-        .await
-        .unwrap();
+    let (_, key2) = db::create_api_key(&db_pool, Some("key-2")).await.unwrap();
     let c = http_client();
 
     let r1: Value = c
@@ -784,71 +793,6 @@ async fn test_aave_supply_simulate_unsupported_asset_returns_400() {
 // ────────────────── POST /execute ───────────────────────────────────
 
 #[tokio::test]
-async fn test_execute_without_payment_returns_402() {
-    let (base, api_key, _h) = spawn_app().await;
-    let c = http_client();
-
-    let resp = c
-        .post(format!("{base}/execute"))
-        .header("X-API-Key", &api_key)
-        .json(&json!({
-            "agent_id": "exec-test",
-            "chain": "ethereum",
-            "target_contract": "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238",
-            "calldata": "0xa9059cbb00000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000001",
-        }))
-        .send()
-        .await
-        .unwrap();
-
-    let status_code = resp.status();
-    let body: Value = resp.json().await.unwrap();
-
-    if status_code == 402 {
-        assert_eq!(body["error"], "payment_required");
-        assert!(body["amount_usd"].is_number());
-        assert!(body["accepted_tokens"].is_array());
-        assert!(body["payment_address"].is_string());
-    } else {
-        // Simulation succeeded → x402 middleware didn't fire → request went through
-        assert_eq!(status_code, 200);
-    }
-}
-
-#[tokio::test]
-async fn test_execute_402_includes_accepted_tokens() {
-    let (base, api_key, _h) = spawn_app().await;
-    let c = http_client();
-
-    let resp = c
-        .post(format!("{base}/execute"))
-        .header("X-API-Key", &api_key)
-        .json(&json!({
-            "agent_id": "token-check",
-            "chain": "ethereum",
-            "target_contract": "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238",
-            "calldata": "0xa9059cbb00000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000001",
-        }))
-        .send()
-        .await
-        .unwrap();
-
-    if resp.status() == 402 {
-        let body: Value = resp.json().await.unwrap();
-        let tokens: Vec<&str> = body["accepted_tokens"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .map(|t| t.as_str().unwrap())
-            .collect();
-        assert!(
-            tokens.contains(&"USDC") || tokens.contains(&"USDT"),
-            "expected USDC or USDT, got: {tokens:?}"
-        );
-    }
-}
-
-#[tokio::test]
 async fn test_execute_unsupported_chain_returns_400() {
     let (base, api_key, _h) = spawn_app().await;
     let c = http_client();
@@ -867,89 +811,6 @@ async fn test_execute_unsupported_chain_returns_400() {
         .unwrap();
 
     assert_eq!(resp.status(), 400);
-}
-
-#[tokio::test]
-async fn test_execute_invalid_payment_proof_returns_402() {
-    let (base, api_key, _h) = spawn_app().await;
-    let c = http_client();
-
-    let resp = c
-        .post(format!("{base}/execute"))
-        .header("X-API-Key", &api_key)
-        .header(
-            "X-Payment-Proof",
-            r#"{"payer":"0x0000000000000000000000000000000000000001","amount_usd":1.0,"token":"USDC","chain":"ethereum","tx_hash":"0x0000000000000000000000000000000000000000000000000000000000000001"}"#,
-        )
-        .json(&json!({
-            "agent_id": "pay-test",
-            "chain": "ethereum",
-            "target_contract": "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238",
-            "calldata": "0xa9059cbb00000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000001",
-        }))
-        .send()
-        .await
-        .unwrap();
-
-    assert_eq!(resp.status(), 402);
-    let body: Value = resp.json().await.unwrap();
-    assert_eq!(body["error"], "payment_verification_failed");
-}
-
-#[tokio::test]
-async fn test_execute_malformed_payment_proof_returns_402() {
-    let (base, api_key, _h) = spawn_app().await;
-    let c = http_client();
-
-    let resp = c
-        .post(format!("{base}/execute"))
-        .header("X-API-Key", &api_key)
-        .header("X-Payment-Proof", "this is not json")
-        .json(&json!({
-            "agent_id": "malformed",
-            "chain": "ethereum",
-            "target_contract": "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238",
-            "calldata": "0xa9059cbb00000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000001",
-        }))
-        .send()
-        .await
-        .unwrap();
-
-    assert_eq!(resp.status(), 402);
-    let body: Value = resp.json().await.unwrap();
-    assert!(body["reason"]
-        .as_str()
-        .unwrap()
-        .to_lowercase()
-        .contains("malformed"));
-}
-
-#[tokio::test]
-async fn test_execute_unsupported_token_in_proof_returns_402() {
-    let (base, api_key, _h) = spawn_app().await;
-    let c = http_client();
-
-    let resp = c
-        .post(format!("{base}/execute"))
-        .header("X-API-Key", &api_key)
-        .header(
-            "X-Payment-Proof",
-            r#"{"payer":"0x0000000000000000000000000000000000000001","amount_usd":1.0,"token":"DOGE","chain":"ethereum","tx_hash":"0x0000000000000000000000000000000000000000000000000000000000000099"}"#,
-        )
-        .json(&json!({
-            "agent_id": "doge-test",
-            "chain": "ethereum",
-            "target_contract": "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238",
-            "calldata": "0xa9059cbb00000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000001",
-        }))
-        .send()
-        .await
-        .unwrap();
-
-    assert_eq!(resp.status(), 402);
-    let body: Value = resp.json().await.unwrap();
-    let reason = body["reason"].as_str().unwrap().to_lowercase();
-    assert!(reason.contains("not accepted") || reason.contains("doge"));
 }
 
 // ────────────────── GET /status/{id} ────────────────────────────────
@@ -1024,6 +885,24 @@ async fn test_status_returns_existing_request() {
     assert_eq!(body["chain"], "ethereum");
     assert!(body["created_at"].is_string());
     assert!(body["updated_at"].is_string());
+
+    let second_key_resp = c
+        .post(format!("{base}/api-keys"))
+        .json(&json!({ "label": "status-isolation" }))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(second_key_resp.status(), 201);
+    let second_key_body: Value = second_key_resp.json().await.unwrap();
+    let second_key = second_key_body["api_key"].as_str().unwrap();
+
+    let hidden = c
+        .get(format!("{base}/status/{request_id}"))
+        .header("X-API-Key", second_key)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(hidden.status(), 404);
 }
 
 // ────────────────── Calldata validation edge cases ──────────────────

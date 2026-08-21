@@ -15,6 +15,28 @@ responses:
             error:
               type: string
 schemas:
+  ApiKeyResponse:
+    type: object
+    properties:
+      api_key_id:
+        type: string
+        format: uuid
+      api_key:
+        type: string
+      label:
+        type:
+        - string
+        - 'null'
+      created_at:
+        type: string
+        format: date-time
+      message:
+        type: string
+    required:
+    - api_key_id
+    - api_key
+    - created_at
+    - message
   BatchCall:
     type: object
     properties:
@@ -72,8 +94,6 @@ schemas:
         type: string
         enum:
         - pending
-        - payment_required
-        - payment_verified
         - queued
         - broadcasting
         - confirmed
@@ -86,10 +106,6 @@ schemas:
       estimated_gas:
         type:
         - integer
-        - 'null'
-      estimated_cost_usd:
-        type:
-        - number
         - 'null'
       tx_hash:
         type:
@@ -178,10 +194,6 @@ schemas:
         type:
         - string
         - 'null'
-      cost_usd:
-        type:
-        - number
-        - 'null'
       created_at:
         type: string
         format: date-time
@@ -194,36 +206,3 @@ schemas:
     - chain
     - created_at
     - updated_at
-  PaymentRequiredBody:
-    type: object
-    properties:
-      error:
-        type: string
-        example: payment_required
-      amount_usd:
-        type: number
-      accepted_tokens:
-        type: array
-        items:
-          type: string
-      required_amount_raw:
-        type: object
-        additionalProperties:
-          type: string
-      payment_address:
-        type: string
-      chain:
-        type: string
-      request_id:
-        type: string
-      smart_wallet_address:
-        type: string
-    required:
-    - error
-    - amount_usd
-    - accepted_tokens
-    - required_amount_raw
-    - payment_address
-    - chain
-    - request_id
-    - smart_wallet_address

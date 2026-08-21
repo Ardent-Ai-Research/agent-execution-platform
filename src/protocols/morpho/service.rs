@@ -23,7 +23,7 @@ use crate::api::services::{handle_execute, handle_simulate, resolve_chain_smart_
 use crate::execution_engine::ExecutionEngine;
 use crate::relayer::erc4337::BundlerClient;
 use crate::relayer::paymaster::PaymasterSigner;
-use crate::types::{Chain, ExecutionResponse, PaymentMode, PaymentProof};
+use crate::types::{Chain, ExecutionResponse};
 
 const WAD: u64 = 1_000_000_000_000_000_000;
 const ORACLE_PRICE_SCALE_EXPONENT: usize = 36;
@@ -168,9 +168,7 @@ macro_rules! action_handlers {
             bundler_clients: &HashMap<Chain, BundlerClient>,
             paymaster_signers: &HashMap<Chain, PaymasterSigner>,
             api_key_id: Uuid,
-            payment_mode: PaymentMode,
             req: &MorphoActionRequest,
-            payment_proof: Option<&PaymentProof>,
         ) -> Result<ExecutionResponse> {
             let (execution_req, _) =
                 prepare_action(engine, wallet_registry, api_key_id, req, $action).await?;
@@ -182,9 +180,7 @@ macro_rules! action_handlers {
                 bundler_clients,
                 paymaster_signers,
                 api_key_id,
-                payment_mode,
                 &execution_req,
-                payment_proof,
             )
             .await
             .map_err(|error| anyhow!("Morpho {} failed: {}", $action.slug(), error))
@@ -198,7 +194,6 @@ macro_rules! action_handlers {
             bundler_clients: &HashMap<Chain, BundlerClient>,
             paymaster_signers: &HashMap<Chain, PaymasterSigner>,
             api_key_id: Uuid,
-            payment_mode: PaymentMode,
             req: &MorphoActionRequest,
         ) -> Result<ExecutionResponse> {
             let (execution_req, _) =
@@ -210,7 +205,6 @@ macro_rules! action_handlers {
                 bundler_clients,
                 paymaster_signers,
                 api_key_id,
-                payment_mode,
                 &execution_req,
             )
             .await

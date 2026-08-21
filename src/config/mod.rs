@@ -1,7 +1,7 @@
 //! Application configuration loaded from environment variables.
 //!
 //! Supports **multi-chain** operation.  Each supported chain has its own
-//! RPC URL, bundler URL, native-token price feed, and payment-token map.
+//! RPC URL, bundler URL, and optional wallet-balance token map.
 //! Shared ERC-4337 contracts can be configured once for all EVM chains:
 //!
 //! ```text
@@ -18,15 +18,10 @@
 //! {CHAIN}_PAYMASTER_ADDRESS    (optional override for EVM_PAYMASTER_ADDRESS)
 //! {CHAIN}_FACTORY_ADDRESS      (optional override for EVM_FACTORY_ADDRESS)
 //! {CHAIN}_ENTRY_POINT_ADDRESS  (optional override for EVM_ENTRY_POINT_ADDRESS)
-//! {CHAIN}_PRICE_FEED_URL       (native token / USD source)
-//! {CHAIN}_ACCEPTED_TOKENS      (TOKEN=0xAddr pairs for payment verification)
-//! {CHAIN}_TOKEN_DECIMALS       (TOKEN=N decimal mappings)
+//! {CHAIN}_TRACKED_TOKENS       (TOKEN=0xAddr pairs shown by /wallet/balance)
+//! {CHAIN}_TRACKED_TOKEN_DECIMALS (TOKEN=N decimal mappings)
 //! ```
 //!
-//! Legacy single-chain env vars (`BUNDLER_RPC_URL`, `PAYMASTER_ADDRESS`,
-//! `ENTRY_POINT_ADDRESS`, `ACCOUNT_FACTORY_ADDRESS`, `ETH_PRICE_FEED_URL`)
-//! are still accepted as fallbacks.
-
 use anyhow::Result;
 use std::collections::HashMap;
 use std::fmt;
@@ -45,38 +40,29 @@ pub struct ChainConfig {
     /// JSON-RPC URL of the ERC-4337 bundler for this chain.
     pub bundler_rpc_url: String,
     /// Address of the deployed VerifyingPaymaster contract for this chain.
-    /// Empty string means paymaster is not configured (agents self-fund).
+    /// Empty string disables testnet gas sponsorship for the chain.
     pub paymaster_address: String,
     /// Address of the SimpleAccountFactory contract for this chain.
     pub factory_address: String,
     /// Address of the EntryPoint contract (default: canonical v0.9).
     pub entry_point_address: String,
-    /// Native-token/USD source.
-    ///
-    /// Supported formats:
-    /// - `chainlink://0x...` (on-chain Chainlink AggregatorV3 proxy)
-    /// - `0x...` (same as above)
-    /// - `https://...` JSON endpoint that returns a `usd` field
-    pub price_feed_url: String,
-    /// Accepted payment token symbols → contract addresses on this chain.
-    /// e.g. `{"USDC": "0x833589fC...", "USDT": "0xfde4C96c..."}`
-    pub accepted_tokens: HashMap<String, String>,
-    /// Number of decimals for each accepted token on this chain.
-    pub token_decimals: HashMap<String, u8>,
+    /// Token symbols and addresses exposed by the generic wallet balance endpoint.
+    pub tracked_tokens: HashMap<String, String>,
+    /// Number of decimals for each tracked token on this chain.
+    pub tracked_token_decimals: HashMap<String, u8>,
 }
 
 impl fmt::Debug for ChainConfig {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("ChainConfig")
             .field("chain", &self.chain)
-            .field("rpc_url", &self.rpc_url)
-            .field("bundler_rpc_url", &self.bundler_rpc_url)
+            .field("rpc_url", &"[REDACTED]")
+            .field("bundler_rpc_url", &"[REDACTED]")
             .field("paymaster_address", &self.paymaster_address)
             .field("factory_address", &self.factory_address)
             .field("entry_point_address", &self.entry_point_address)
-            .field("price_feed_url", &self.price_feed_url)
-            .field("accepted_tokens", &self.accepted_tokens)
-            .field("token_decimals", &self.token_decimals)
+            .field("tracked_tokens", &self.tracked_tokens)
+            .field("tracked_token_decimals", &self.tracked_token_decimals)
             .finish()
     }
 }
@@ -100,18 +86,6 @@ pub struct AppConfig {
     /// Default 200.  Set to a high value to effectively disable.
     pub max_concurrent_requests: u64,
 
-    // Pricing
-    pub gas_price_markup_pct: f64,
-    pub platform_fee_usd: f64,
-    /// How long (seconds) to cache the native-token/USD price before re-fetching.
-    pub price_cache_ttl_secs: u64,
-
-    // Payment verification
-    /// Platform treasury address that must be the recipient of payment transfers.
-    pub payment_address: String,
-    /// Minimum block confirmations required before accepting a payment.
-    pub min_payment_confirmations: u64,
-
     // ERC-4337 Account Abstraction — per-chain
     /// Per-chain configuration.  Only chains present in this map are
     /// considered "supported" at runtime.
@@ -123,6 +97,13 @@ pub struct AppConfig {
     // Per-API-key rate limiting
     pub per_key_rate_limit_rps: f64,
     pub per_key_rate_limit_burst: f64,
+
+    // Public API-key issuance
+    pub public_api_key_limit: u64,
+    pub public_api_key_window_secs: u64,
+    /// Header trusted as the client IP only when explicitly configured behind
+    /// a proxy that overwrites client-supplied values.
+    pub public_api_key_client_ip_header: Option<String>,
 }
 
 /// Manual `Debug` impl that redacts secret fields.
@@ -132,17 +113,21 @@ impl fmt::Debug for AppConfig {
             .field("host", &self.host)
             .field("port", &self.port)
             .field("database_url", &"[REDACTED]")
-            .field("redis_url", &self.redis_url)
+            .field("redis_url", &"[REDACTED]")
             .field("max_concurrent_requests", &self.max_concurrent_requests)
-            .field("gas_price_markup_pct", &self.gas_price_markup_pct)
-            .field("platform_fee_usd", &self.platform_fee_usd)
-            .field("price_cache_ttl_secs", &self.price_cache_ttl_secs)
-            .field("payment_address", &self.payment_address)
-            .field("min_payment_confirmations", &self.min_payment_confirmations)
             .field("chains", &self.chains)
             .field("wallet_encryption_key", &"[REDACTED]")
             .field("per_key_rate_limit_rps", &self.per_key_rate_limit_rps)
             .field("per_key_rate_limit_burst", &self.per_key_rate_limit_burst)
+            .field("public_api_key_limit", &self.public_api_key_limit)
+            .field(
+                "public_api_key_window_secs",
+                &self.public_api_key_window_secs,
+            )
+            .field(
+                "public_api_key_client_ip_header",
+                &self.public_api_key_client_ip_header,
+            )
             .finish()
     }
 }
@@ -153,6 +138,13 @@ impl AppConfig {
         dotenvy::dotenv().ok();
 
         let chains = Self::parse_chains()?;
+        let per_key_rate_limit_rps: f64 = std::env::var("PER_KEY_RATE_LIMIT_RPS")
+            .unwrap_or_else(|_| "5.0".into())
+            .parse()?;
+        let per_key_rate_limit_burst: f64 = std::env::var("PER_KEY_RATE_LIMIT_BURST")
+            .unwrap_or_else(|_| "10.0".into())
+            .parse()?;
+        Self::validate_rate_limits(per_key_rate_limit_rps, per_key_rate_limit_burst)?;
 
         Ok(Self {
             host: std::env::var("HOST").unwrap_or_else(|_| "0.0.0.0".into()),
@@ -166,27 +158,6 @@ impl AppConfig {
             max_concurrent_requests: std::env::var("MAX_CONCURRENT_REQUESTS")
                 .unwrap_or_else(|_| "200".into())
                 .parse()?,
-            gas_price_markup_pct: std::env::var("GAS_PRICE_MARKUP_PCT")
-                .unwrap_or_else(|_| "10.0".into())
-                .parse()?,
-            platform_fee_usd: std::env::var("PLATFORM_FEE_USD")
-                .unwrap_or_else(|_| "0.01".into())
-                .parse()?,
-            price_cache_ttl_secs: std::env::var("PRICE_CACHE_TTL_SECS")
-                .ok()
-                .or_else(|| std::env::var("ETH_PRICE_CACHE_TTL_SECS").ok()) // legacy
-                .unwrap_or_else(|| "60".into())
-                .parse()?,
-
-            // Payment verification
-            payment_address: std::env::var("PAYMENT_ADDRESS")
-                .map_err(|_| anyhow::anyhow!(
-                    "PAYMENT_ADDRESS env var is required — refusing to start with a default address"
-                ))?,
-            min_payment_confirmations: std::env::var("MIN_PAYMENT_CONFIRMATIONS")
-                .unwrap_or_else(|_| "1".into())
-                .parse()?,
-
             chains,
 
             wallet_encryption_key: std::env::var("WALLET_ENCRYPTION_KEY")
@@ -196,40 +167,51 @@ impl AppConfig {
                 ))?,
 
             // Per-API-key rate limiting
-            per_key_rate_limit_rps: std::env::var("PER_KEY_RATE_LIMIT_RPS")
-                .unwrap_or_else(|_| "5.0".into())
+            per_key_rate_limit_rps,
+            per_key_rate_limit_burst,
+            public_api_key_limit: std::env::var("PUBLIC_API_KEY_LIMIT")
+                .unwrap_or_else(|_| "5".into())
                 .parse()?,
-            per_key_rate_limit_burst: std::env::var("PER_KEY_RATE_LIMIT_BURST")
-                .unwrap_or_else(|_| "10.0".into())
+            public_api_key_window_secs: std::env::var("PUBLIC_API_KEY_WINDOW_SECS")
+                .unwrap_or_else(|_| "3600".into())
                 .parse()?,
+            public_api_key_client_ip_header: std::env::var(
+                "PUBLIC_API_KEY_CLIENT_IP_HEADER",
+            )
+            .ok()
+            .map(|value| value.trim().to_ascii_lowercase())
+            .filter(|value| !value.is_empty()),
         })
     }
 
     // ──────────────────── Per-chain parsing ──────────────────────────
 
-    fn shared_contract_address(chain_specific: &str, shared: &str, legacy: Option<&str>) -> String {
+    fn shared_contract_address(chain_specific: &str, shared: &str) -> String {
         std::env::var(chain_specific)
             .or_else(|_| std::env::var(shared))
-            .or_else(|_| {
-                legacy
-                    .map(std::env::var)
-                    .unwrap_or_else(|| Err(std::env::VarError::NotPresent))
-            })
             .unwrap_or_default()
     }
 
     fn shared_entry_point_address(chain_specific: &str, default_entry_point: &str) -> String {
         std::env::var(chain_specific)
             .or_else(|_| std::env::var("EVM_ENTRY_POINT_ADDRESS"))
-            .or_else(|_| std::env::var("ENTRY_POINT_ADDRESS"))
             .unwrap_or_else(|_| default_entry_point.into())
+    }
+
+    fn validate_rate_limits(rate: f64, burst: f64) -> Result<()> {
+        if !rate.is_finite() || rate < 0.0 {
+            anyhow::bail!("PER_KEY_RATE_LIMIT_RPS must be finite and non-negative");
+        }
+        if !burst.is_finite() || burst < 1.0 {
+            anyhow::bail!("PER_KEY_RATE_LIMIT_BURST must be finite and at least 1");
+        }
+        Ok(())
     }
 
     /// Parse chain configurations from environment variables.
     ///
     /// A chain is considered "configured" if its `{CHAIN}_RPC_URL` env var
-    /// is set.  Legacy single-chain env vars (e.g. `BUNDLER_RPC_URL`) are
-    /// accepted as fallbacks for the Ethereum chain.
+    /// is set.
     fn parse_chains() -> Result<HashMap<Chain, ChainConfig>> {
         /// Canonical EntryPoint v0.9 — deployed at the same address on every
         /// EVM chain via CREATE2.
@@ -244,35 +226,24 @@ impl AppConfig {
                 ChainConfig {
                     chain: Chain::Ethereum,
                     rpc_url,
-                    bundler_rpc_url: std::env::var("ETHEREUM_BUNDLER_RPC_URL")
-                        .or_else(|_| std::env::var("BUNDLER_RPC_URL")) // legacy
-                        .unwrap_or_else(|_| "http://127.0.0.1:3000/rpc".into()),
+                    bundler_rpc_url: std::env::var("ETHEREUM_BUNDLER_RPC_URL").unwrap_or_default(),
                     paymaster_address: Self::shared_contract_address(
                         "ETHEREUM_PAYMASTER_ADDRESS",
                         "EVM_PAYMASTER_ADDRESS",
-                        Some("PAYMASTER_ADDRESS"),
                     ),
                     factory_address: Self::shared_contract_address(
                         "ETHEREUM_FACTORY_ADDRESS",
                         "EVM_FACTORY_ADDRESS",
-                        Some("ACCOUNT_FACTORY_ADDRESS"),
                     ),
                     entry_point_address: Self::shared_entry_point_address(
                         "ETHEREUM_ENTRY_POINT_ADDRESS",
                         CANONICAL_EP_V09,
                     ),
-                    price_feed_url: std::env::var("ETHEREUM_PRICE_FEED_URL")
-                        .or_else(|_| std::env::var("ETH_PRICE_FEED_URL")) // legacy
-                        .map_err(|_| {
-                            anyhow::anyhow!(
-                                "ETHEREUM_PRICE_FEED_URL is required when ETHEREUM_RPC_URL is set"
-                            )
-                        })?,
-                    accepted_tokens: Self::parse_token_map(
-                        &std::env::var("ETHEREUM_ACCEPTED_TOKENS").unwrap_or_default(),
+                    tracked_tokens: Self::parse_token_map(
+                        &std::env::var("ETHEREUM_TRACKED_TOKENS").unwrap_or_default(),
                     ),
-                    token_decimals: Self::parse_decimal_map(
-                        &std::env::var("ETHEREUM_TOKEN_DECIMALS").unwrap_or_default(),
+                    tracked_token_decimals: Self::parse_decimal_map(
+                        &std::env::var("ETHEREUM_TRACKED_TOKEN_DECIMALS").unwrap_or_default(),
                     ),
                 },
             );
@@ -289,26 +260,20 @@ impl AppConfig {
                     paymaster_address: Self::shared_contract_address(
                         "BASE_PAYMASTER_ADDRESS",
                         "EVM_PAYMASTER_ADDRESS",
-                        Some("PAYMASTER_ADDRESS"),
                     ),
                     factory_address: Self::shared_contract_address(
                         "BASE_FACTORY_ADDRESS",
                         "EVM_FACTORY_ADDRESS",
-                        Some("ACCOUNT_FACTORY_ADDRESS"),
                     ),
                     entry_point_address: Self::shared_entry_point_address(
                         "BASE_ENTRY_POINT_ADDRESS",
                         CANONICAL_EP_V09,
                     ),
-                    // Base uses ETH as native gas token, but URL must still be configured explicitly.
-                    price_feed_url: std::env::var("BASE_PRICE_FEED_URL").map_err(|_| {
-                        anyhow::anyhow!("BASE_PRICE_FEED_URL is required when BASE_RPC_URL is set")
-                    })?,
-                    accepted_tokens: Self::parse_token_map(
-                        &std::env::var("BASE_ACCEPTED_TOKENS").unwrap_or_default(),
+                    tracked_tokens: Self::parse_token_map(
+                        &std::env::var("BASE_TRACKED_TOKENS").unwrap_or_default(),
                     ),
-                    token_decimals: Self::parse_decimal_map(
-                        &std::env::var("BASE_TOKEN_DECIMALS").unwrap_or_default(),
+                    tracked_token_decimals: Self::parse_decimal_map(
+                        &std::env::var("BASE_TRACKED_TOKEN_DECIMALS").unwrap_or_default(),
                     ),
                 },
             );
@@ -325,27 +290,20 @@ impl AppConfig {
                     paymaster_address: Self::shared_contract_address(
                         "ARBITRUM_PAYMASTER_ADDRESS",
                         "EVM_PAYMASTER_ADDRESS",
-                        Some("PAYMASTER_ADDRESS"),
                     ),
                     factory_address: Self::shared_contract_address(
                         "ARBITRUM_FACTORY_ADDRESS",
                         "EVM_FACTORY_ADDRESS",
-                        Some("ACCOUNT_FACTORY_ADDRESS"),
                     ),
                     entry_point_address: Self::shared_entry_point_address(
                         "ARBITRUM_ENTRY_POINT_ADDRESS",
                         CANONICAL_EP_V09,
                     ),
-                    price_feed_url: std::env::var("ARBITRUM_PRICE_FEED_URL").map_err(|_| {
-                        anyhow::anyhow!(
-                            "ARBITRUM_PRICE_FEED_URL is required when ARBITRUM_RPC_URL is set"
-                        )
-                    })?,
-                    accepted_tokens: Self::parse_token_map(
-                        &std::env::var("ARBITRUM_ACCEPTED_TOKENS").unwrap_or_default(),
+                    tracked_tokens: Self::parse_token_map(
+                        &std::env::var("ARBITRUM_TRACKED_TOKENS").unwrap_or_default(),
                     ),
-                    token_decimals: Self::parse_decimal_map(
-                        &std::env::var("ARBITRUM_TOKEN_DECIMALS").unwrap_or_default(),
+                    tracked_token_decimals: Self::parse_decimal_map(
+                        &std::env::var("ARBITRUM_TRACKED_TOKEN_DECIMALS").unwrap_or_default(),
                     ),
                 },
             );
@@ -364,7 +322,7 @@ impl AppConfig {
 
     /// Parse a `KEY=VALUE,...` string into a `HashMap<String, String>`.
     ///
-    /// Used for per-chain `{CHAIN}_ACCEPTED_TOKENS` env vars.
+    /// Used for per-chain `{CHAIN}_TRACKED_TOKENS` env vars.
     /// Format: `"USDC=0xA0b8...,USDT=0xdAC1..."`
     /// Returns an empty map if the input is empty.
     fn parse_token_map(raw: &str) -> HashMap<String, String> {
@@ -432,55 +390,75 @@ mod tests {
     }
 
     #[test]
-    fn test_config_loads_correctly() {
-        dotenvy::dotenv().ok();
-        let config = AppConfig::from_env().expect("load app config from env");
-
-        assert!(!config.chains.is_empty());
-        assert!(config.chains.contains_key(&Chain::Ethereum));
-
-        let ethereum = config
-            .chain_config(&Chain::Ethereum)
-            .expect("ethereum chain config");
-        assert!(!ethereum.rpc_url.is_empty());
-        assert!(!ethereum.bundler_rpc_url.is_empty());
-
-        for symbol in ethereum.accepted_tokens.keys() {
-            assert_eq!(symbol, &symbol.to_uppercase());
-        }
-    }
-
-    #[test]
-    fn shared_contract_address_prefers_chain_then_shared_then_legacy() {
+    fn shared_contract_address_prefers_chain_then_shared() {
         let _guard = env_lock().lock().expect("env test lock");
         let chain_var = "TEST_CHAIN_FACTORY_ADDRESS";
         let shared_var = "TEST_EVM_FACTORY_ADDRESS";
-        let legacy_var = "TEST_ACCOUNT_FACTORY_ADDRESS";
 
         std::env::remove_var(chain_var);
         std::env::remove_var(shared_var);
-        std::env::remove_var(legacy_var);
-
-        std::env::set_var(legacy_var, "0xlegacy");
         assert_eq!(
-            AppConfig::shared_contract_address(chain_var, shared_var, Some(legacy_var)),
-            "0xlegacy"
+            AppConfig::shared_contract_address(chain_var, shared_var),
+            ""
         );
 
         std::env::set_var(shared_var, "0xshared");
         assert_eq!(
-            AppConfig::shared_contract_address(chain_var, shared_var, Some(legacy_var)),
+            AppConfig::shared_contract_address(chain_var, shared_var),
             "0xshared"
         );
 
         std::env::set_var(chain_var, "0xchain");
         assert_eq!(
-            AppConfig::shared_contract_address(chain_var, shared_var, Some(legacy_var)),
+            AppConfig::shared_contract_address(chain_var, shared_var),
             "0xchain"
         );
 
         std::env::remove_var(chain_var);
         std::env::remove_var(shared_var);
-        std::env::remove_var(legacy_var);
+    }
+
+    #[test]
+    fn debug_output_redacts_connection_urls_and_encryption_key() {
+        let config = AppConfig {
+            host: "127.0.0.1".into(),
+            port: 8080,
+            database_url: "postgres://user:secret@localhost/db".into(),
+            redis_url: "redis://:secret@localhost".into(),
+            max_concurrent_requests: 10,
+            chains: HashMap::from([(
+                Chain::Base,
+                ChainConfig {
+                    chain: Chain::Base,
+                    rpc_url: "https://rpc.example/secret".into(),
+                    bundler_rpc_url: "https://bundler.example/secret".into(),
+                    paymaster_address: String::new(),
+                    factory_address: String::new(),
+                    entry_point_address: String::new(),
+                    tracked_tokens: HashMap::new(),
+                    tracked_token_decimals: HashMap::new(),
+                },
+            )]),
+            wallet_encryption_key: "super-secret".into(),
+            per_key_rate_limit_rps: 5.0,
+            per_key_rate_limit_burst: 10.0,
+            public_api_key_limit: 5,
+            public_api_key_window_secs: 3600,
+            public_api_key_client_ip_header: None,
+        };
+
+        let debug = format!("{config:?}");
+        assert!(!debug.contains("secret"));
+        assert!(debug.contains("[REDACTED]"));
+    }
+
+    #[test]
+    fn rate_limit_configuration_rejects_non_finite_or_negative_values() {
+        assert!(AppConfig::validate_rate_limits(5.0, 10.0).is_ok());
+        assert!(AppConfig::validate_rate_limits(0.0, 1.0).is_ok());
+        assert!(AppConfig::validate_rate_limits(-1.0, 10.0).is_err());
+        assert!(AppConfig::validate_rate_limits(f64::NAN, 10.0).is_err());
+        assert!(AppConfig::validate_rate_limits(5.0, f64::INFINITY).is_err());
+        assert!(AppConfig::validate_rate_limits(5.0, 0.0).is_err());
     }
 }

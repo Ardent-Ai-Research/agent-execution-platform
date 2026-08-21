@@ -8,7 +8,7 @@
 contracts/out/
 contracts/cache/
 
-# Foundry dependencies (managed via git submodules)
+# Foundry dependencies (installed locally with `forge install --no-git`)
 contracts/lib/
 # Deployment script
 contracts/scripts/

@@ -10,10 +10,11 @@ Use this endpoint to retrieve the latest state for an execution request.
 
 `X-API-Key` required.
 
+The request is visible only to the API key that created it. A valid key from a different account receives `404 Not Found`.
+
 ## Command
 
 ```bash
-
 curl "$BASE_URL/status/your_request_id" \
   -H "X-API-Key: $API_KEY"
 ```
@@ -30,7 +31,6 @@ Example:
   "status": "broadcasting",
   "chain": "ethereum",
   "tx_hash": "0x1234...abcd",
-  "cost_usd": 0.25,
   "created_at": "2026-05-05T10:00:00Z",
   "updated_at": "2026-05-05T10:00:12Z"
 }
@@ -49,11 +49,9 @@ See [Agent Integration](../agent-integration.md) for the one-line installer.
 Typical progression:
 
 1. `pending`
-2. `payment_required`
-3. `payment_verified`
-4. `queued`
-5. `broadcasting`
-6. Terminal state
+2. `queued`
+3. `broadcasting`
+4. Terminal state
    1. `confirmed`
    2. `reverted`
    3. `failed`

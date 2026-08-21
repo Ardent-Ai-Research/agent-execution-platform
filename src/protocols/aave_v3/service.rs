@@ -1,3 +1,6 @@
+// Protocol entry points mirror the explicit execution dependencies in AppState.
+#![allow(clippy::too_many_arguments)]
+
 use anyhow::Result;
 use ethers::prelude::Middleware;
 use ethers::types::{Address, Bytes, TransactionRequest, U256};
@@ -18,7 +21,7 @@ use crate::api::services::{handle_execute, handle_simulate, resolve_chain_smart_
 use crate::execution_engine::ExecutionEngine;
 use crate::relayer::erc4337::BundlerClient;
 use crate::relayer::paymaster::PaymasterSigner;
-use crate::types::{Chain, ExecutionResponse, PaymentMode, PaymentProof};
+use crate::types::{Chain, ExecutionResponse};
 
 pub async fn handle_supply(
     engine: &ExecutionEngine,
@@ -28,9 +31,7 @@ pub async fn handle_supply(
     bundler_clients: &HashMap<Chain, BundlerClient>,
     paymaster_signers: &HashMap<Chain, PaymasterSigner>,
     api_key_id: Uuid,
-    payment_mode: PaymentMode,
     req: &AaveSupplyRequest,
-    payment_proof: Option<&PaymentProof>,
 ) -> Result<ExecutionResponse> {
     let chain = Chain::from_str_loose(&req.chain)
         .ok_or_else(|| anyhow::anyhow!("unsupported chain: {}", req.chain))?;
@@ -50,12 +51,10 @@ pub async fn handle_supply(
         bundler_clients,
         paymaster_signers,
         api_key_id,
-        payment_mode,
         &execution_req,
-        payment_proof,
     )
     .await
-    .map_err(|e| anyhow::anyhow!("Aave V3 supply on {} failed: {}", chain, e))
+    .map_err(|e| anyhow::anyhow!("Aave V3 supply on {chain} failed: {e}"))
 }
 
 pub async fn handle_supply_simulate(
@@ -65,7 +64,6 @@ pub async fn handle_supply_simulate(
     bundler_clients: &HashMap<Chain, BundlerClient>,
     paymaster_signers: &HashMap<Chain, PaymasterSigner>,
     api_key_id: Uuid,
-    payment_mode: PaymentMode,
     req: &AaveSupplyRequest,
 ) -> Result<ExecutionResponse> {
     aave_v3::validate_supply_request(req)?;
@@ -85,7 +83,6 @@ pub async fn handle_supply_simulate(
         bundler_clients,
         paymaster_signers,
         api_key_id,
-        payment_mode,
         &execution_req,
     )
     .await
@@ -99,9 +96,7 @@ pub async fn handle_withdraw(
     bundler_clients: &HashMap<Chain, BundlerClient>,
     paymaster_signers: &HashMap<Chain, PaymasterSigner>,
     api_key_id: Uuid,
-    payment_mode: PaymentMode,
     req: &AaveWithdrawRequest,
-    payment_proof: Option<&PaymentProof>,
 ) -> Result<ExecutionResponse> {
     let chain = Chain::from_str_loose(&req.chain)
         .ok_or_else(|| anyhow::anyhow!("unsupported chain: {}", req.chain))?;
@@ -121,12 +116,10 @@ pub async fn handle_withdraw(
         bundler_clients,
         paymaster_signers,
         api_key_id,
-        payment_mode,
         &execution_req,
-        payment_proof,
     )
     .await
-    .map_err(|e| anyhow::anyhow!("Aave V3 withdraw on {} failed: {}", chain, e))
+    .map_err(|e| anyhow::anyhow!("Aave V3 withdraw on {chain} failed: {e}"))
 }
 
 pub async fn handle_withdraw_simulate(
@@ -136,7 +129,6 @@ pub async fn handle_withdraw_simulate(
     bundler_clients: &HashMap<Chain, BundlerClient>,
     paymaster_signers: &HashMap<Chain, PaymasterSigner>,
     api_key_id: Uuid,
-    payment_mode: PaymentMode,
     req: &AaveWithdrawRequest,
 ) -> Result<ExecutionResponse> {
     aave_v3::validate_withdraw_request(req)?;
@@ -156,7 +148,6 @@ pub async fn handle_withdraw_simulate(
         bundler_clients,
         paymaster_signers,
         api_key_id,
-        payment_mode,
         &execution_req,
     )
     .await
@@ -170,9 +161,7 @@ pub async fn handle_repay(
     bundler_clients: &HashMap<Chain, BundlerClient>,
     paymaster_signers: &HashMap<Chain, PaymasterSigner>,
     api_key_id: Uuid,
-    payment_mode: PaymentMode,
     req: &AaveRepayRequest,
-    payment_proof: Option<&PaymentProof>,
 ) -> Result<ExecutionResponse> {
     let chain = Chain::from_str_loose(&req.chain)
         .ok_or_else(|| anyhow::anyhow!("unsupported chain: {}", req.chain))?;
@@ -193,12 +182,10 @@ pub async fn handle_repay(
         bundler_clients,
         paymaster_signers,
         api_key_id,
-        payment_mode,
         &execution_req,
-        payment_proof,
     )
     .await
-    .map_err(|e| anyhow::anyhow!("Aave V3 repay on {} failed: {}", chain, e))
+    .map_err(|e| anyhow::anyhow!("Aave V3 repay on {chain} failed: {e}"))
 }
 
 pub async fn handle_repay_simulate(
@@ -208,7 +195,6 @@ pub async fn handle_repay_simulate(
     bundler_clients: &HashMap<Chain, BundlerClient>,
     paymaster_signers: &HashMap<Chain, PaymasterSigner>,
     api_key_id: Uuid,
-    payment_mode: PaymentMode,
     req: &AaveRepayRequest,
 ) -> Result<ExecutionResponse> {
     let chain = Chain::from_str_loose(&req.chain)
@@ -229,7 +215,6 @@ pub async fn handle_repay_simulate(
         bundler_clients,
         paymaster_signers,
         api_key_id,
-        payment_mode,
         &execution_req,
     )
     .await
@@ -446,9 +431,7 @@ async fn guard_borrow_health(
 
     if projected_health_factor < min_health_factor {
         anyhow::bail!(
-            "Aave borrow rejected: projected health factor {} is below minimum {}",
-            projected_health_factor,
-            min_health_factor
+            "Aave borrow rejected: projected health factor {projected_health_factor} is below minimum {min_health_factor}"
         );
     }
 
@@ -515,9 +498,7 @@ pub async fn handle_borrow(
     bundler_clients: &HashMap<Chain, BundlerClient>,
     paymaster_signers: &HashMap<Chain, PaymasterSigner>,
     api_key_id: Uuid,
-    payment_mode: PaymentMode,
     req: &AaveBorrowRequest,
-    payment_proof: Option<&PaymentProof>,
 ) -> Result<ExecutionResponse> {
     let chain = Chain::from_str_loose(&req.chain)
         .ok_or_else(|| anyhow::anyhow!("unsupported chain: {}", req.chain))?;
@@ -538,12 +519,10 @@ pub async fn handle_borrow(
         bundler_clients,
         paymaster_signers,
         api_key_id,
-        payment_mode,
         &execution_req,
-        payment_proof,
     )
     .await
-    .map_err(|e| anyhow::anyhow!("Aave V3 borrow on {} failed: {}", chain, e))
+    .map_err(|e| anyhow::anyhow!("Aave V3 borrow on {chain} failed: {e}"))
 }
 
 pub async fn handle_borrow_simulate(
@@ -553,7 +532,6 @@ pub async fn handle_borrow_simulate(
     bundler_clients: &HashMap<Chain, BundlerClient>,
     paymaster_signers: &HashMap<Chain, PaymasterSigner>,
     api_key_id: Uuid,
-    payment_mode: PaymentMode,
     req: &AaveBorrowRequest,
 ) -> Result<ExecutionResponse> {
     let chain = Chain::from_str_loose(&req.chain)
@@ -574,7 +552,6 @@ pub async fn handle_borrow_simulate(
         bundler_clients,
         paymaster_signers,
         api_key_id,
-        payment_mode,
         &execution_req,
     )
     .await
@@ -668,7 +645,7 @@ pub async fn handle_balances(
     Ok(AaveBalancesResponse {
         agent_id: query.agent_id.clone(),
         chain: query.chain.clone(),
-        smart_wallet_address: format!("{:?}", smart_wallet_address),
+        smart_wallet_address: format!("{smart_wallet_address:?}"),
         pool_address: aave_v3::pool_address().to_string(),
         assets,
     })

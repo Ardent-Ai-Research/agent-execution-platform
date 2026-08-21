@@ -1,10 +1,9 @@
 # Summary
 
-* [About Ardent Research](README.md)
+* [About Ardent AI Research](README.md)
 * [Getting Started](getting-started.md)
 * [Testnet Guide](testnet-guide.md)
 * [Authentication and Keys](authentication-and-keys.md)
-* [Payment Modes](payment-modes.md)
 * [Aave V3 Sepolia](aave-v3.md)
 * [Balancer V3 Ethereum Sepolia](balancer-v3.md)
 * [Uniswap V4 Ethereum Sepolia](uniswap-v4.md)
@@ -13,7 +12,7 @@
 * [GMX V2 Arbitrum Sepolia](gmx-v2.md)
 * [Endpoint Reference](endpoint-reference.md)
 * [Workflows](workflows/request-api-key.md)
-  * [Request API Key](workflows/request-api-key.md)
+  * [Generate API Key](workflows/request-api-key.md)
   * [Get Wallet](workflows/get-wallet.md)
   * [Get Wallet Balance](workflows/get-wallet-balance.md)
   * [Simulate Transaction](workflows/simulate.md)

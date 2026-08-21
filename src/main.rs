@@ -32,17 +32,14 @@ use zeroize::Zeroize;
 
 use agent_execution_platform::{
     agent_wallet::AgentWalletRegistry,
-    api::{
-        middleware::{x402_middleware, PaymentVerifierState},
-        routes::{self, AppState},
-    },
+    api::routes::{self, AppState},
     config::AppConfig,
     db,
     execution_engine::ExecutionEngine,
     queue,
     rate_limit::{self, RateLimiter},
     relayer::{erc4337::BundlerClient, paymaster::PaymasterSigner},
-    types::{ApiKeyContext, PaymentMode},
+    types::ApiKeyContext,
     worker::{self, WorkerContext},
 };
 
@@ -61,7 +58,7 @@ fn cors_allowed_origins(raw_origins: Option<&str>) -> Vec<HeaderValue> {
             let origin = raw_origin
                 .parse::<HeaderValue>()
                 .expect("invalid CORS_ORIGIN");
-            if !allowed_origins.iter().any(|allowed| allowed == &origin) {
+            if !allowed_origins.contains(&origin) {
                 allowed_origins.push(origin);
             }
         }
@@ -72,15 +69,6 @@ fn cors_allowed_origins(raw_origins: Option<&str>) -> Vec<HeaderValue> {
 
 fn configured_cors_layer() -> CorsLayer {
     let raw_origins = std::env::var("CORS_ORIGIN").ok();
-    if raw_origins
-        .as_deref()
-        .map(str::trim)
-        .unwrap_or("")
-        .is_empty()
-    {
-        return CorsLayer::permissive();
-    }
-
     let allowed_origins = cors_allowed_origins(raw_origins.as_deref());
 
     CorsLayer::new()
@@ -91,36 +79,20 @@ fn configured_cors_layer() -> CorsLayer {
         .allow_headers(tower_http::cors::Any)
 }
 
-#[cfg(test)]
-mod cors_tests {
-    use super::cors_allowed_origins;
-    use axum::http::HeaderValue;
-
-    #[test]
-    fn cors_always_includes_public_landing_origins() {
-        let origins = cors_allowed_origins(Some("https://ardentresearch.xyz"));
-
-        assert!(origins.contains(&HeaderValue::from_static("https://ardentresearch.xyz")));
-        assert!(origins.contains(&HeaderValue::from_static("https://www.ardentresearch.xyz")));
+fn required_contract_address(
+    value: &str,
+    variable: &str,
+) -> anyhow::Result<ethers::types::Address> {
+    if value.trim().is_empty() {
+        anyhow::bail!("{variable} is required");
     }
-
-    #[test]
-    fn cors_accepts_comma_separated_extra_origins_without_duplicates() {
-        let origins = cors_allowed_origins(Some(
-            "https://app.example.com, https://www.ardentresearch.xyz",
-        ));
-
-        assert!(origins.contains(&HeaderValue::from_static("https://app.example.com")));
-        assert_eq!(
-            origins
-                .iter()
-                .filter(|origin| {
-                    *origin == &HeaderValue::from_static("https://www.ardentresearch.xyz")
-                })
-                .count(),
-            1
-        );
+    let address = value
+        .parse::<ethers::types::Address>()
+        .with_context(|| format!("{variable} must be a valid EVM address"))?;
+    if address == ethers::types::Address::zero() {
+        anyhow::bail!("{variable} must not be the zero address");
     }
+    Ok(address)
 }
 
 /// Supervisor that restarts a worker if it panics.  Each restart recovers
@@ -165,28 +137,11 @@ async fn worker_supervisor(
 /// is attached to the request extensions so downstream handlers know which
 /// customer is calling.
 ///
-/// If `API_KEY_AUTH_DISABLED` env var is set to "true", auth is bypassed
-/// (local dev only — a default API key context is injected).
 async fn api_key_middleware(
     axum::extract::State(db_pool): axum::extract::State<sqlx::PgPool>,
     mut req: Request,
     next: axum::middleware::Next,
 ) -> impl IntoResponse {
-    // Dev bypass — if auth is explicitly disabled
-    let auth_disabled = std::env::var("API_KEY_AUTH_DISABLED")
-        .map(|v| v == "true")
-        .unwrap_or(false);
-
-    if auth_disabled {
-        // Inject a synthetic API key context for local dev
-        req.extensions_mut().insert(ApiKeyContext {
-            api_key_id: uuid::Uuid::nil(),
-            label: Some("dev-bypass".into()),
-            payment_mode: PaymentMode::Sponsored,
-        });
-        return next.run(req).await.into_response();
-    }
-
     let provided = req
         .headers()
         .get("x-api-key")
@@ -201,12 +156,9 @@ async fn api_key_middleware(
             .into_response(),
         Some(raw_key) => match db::get_api_key_by_raw(&db_pool, &raw_key).await {
             Ok(Some(api_key_row)) => {
-                let payment_mode = PaymentMode::from_str_loose(&api_key_row.payment_mode)
-                    .unwrap_or(PaymentMode::Manual);
                 req.extensions_mut().insert(ApiKeyContext {
                     api_key_id: api_key_row.id,
                     label: api_key_row.label,
-                    payment_mode,
                 });
                 next.run(req).await.into_response()
             }
@@ -234,7 +186,10 @@ async fn main() -> anyhow::Result<()> {
         .with_target(true)
         .init();
 
-    info!("starting agent-execution-platform");
+    info!(
+        version = env!("CARGO_PKG_VERSION"),
+        "starting agent-execution-platform"
+    );
 
     // ── Configuration ───────────────────────────────────────────────
     let config = AppConfig::from_env()?;
@@ -263,10 +218,12 @@ async fn main() -> anyhow::Result<()> {
         .next()
         .ok_or_else(|| anyhow::anyhow!("no chains configured"))?;
     let first_chain_cfg = config.chain_config(first_chain)?;
-    let factory_address: ethers::types::Address = first_chain_cfg
-        .factory_address
-        .parse()
-        .unwrap_or_else(|_| ethers::types::Address::zero());
+    let first_factory_variable = format!(
+        "{}_FACTORY_ADDRESS or EVM_FACTORY_ADDRESS",
+        first_chain.to_string().to_uppercase()
+    );
+    let factory_address =
+        required_contract_address(&first_chain_cfg.factory_address, &first_factory_variable)?;
     let first_provider = engine.provider_for_chain(first_chain)?;
     let wallet_registry = AgentWalletRegistry::new(
         db_pool.clone(),
@@ -284,23 +241,18 @@ async fn main() -> anyhow::Result<()> {
             tracing::warn!(chain = %chain, "no bundler URL configured — skipping bundler for this chain");
             continue;
         }
-        let ep: ethers::types::Address =
-            chain_cfg.entry_point_address.parse().unwrap_or_else(|_| {
-                "0x433709009B8330FDa32311DF1C2AFA402eD8D009"
-                    .parse()
-                    .unwrap()
-            });
-        let fa: ethers::types::Address = chain_cfg
-            .factory_address
-            .parse()
-            .unwrap_or_else(|_| ethers::types::Address::zero());
+        let prefix = chain.to_string().to_uppercase();
+        let ep = required_contract_address(
+            &chain_cfg.entry_point_address,
+            &format!("{prefix}_ENTRY_POINT_ADDRESS or EVM_ENTRY_POINT_ADDRESS"),
+        )?;
+        let fa = required_contract_address(
+            &chain_cfg.factory_address,
+            &format!("{prefix}_FACTORY_ADDRESS or EVM_FACTORY_ADDRESS"),
+        )?;
         let provider = engine.provider_for_chain(chain)?;
         let bc = BundlerClient::new(chain_cfg.bundler_rpc_url.clone(), ep, fa, provider);
-        info!(
-            chain = %chain,
-            bundler_url = %chain_cfg.bundler_rpc_url,
-            "ERC-4337 bundler client initialized"
-        );
+        info!(chain = %chain, "ERC-4337 bundler client initialized");
 
         // Validate entry point at startup (best-effort)
         if let Err(e) = bc.validate_entry_point_supported().await {
@@ -444,7 +396,7 @@ async fn main() -> anyhow::Result<()> {
     } else {
         tracing::warn!(
             "no PAYMASTER_ADDRESS set on any chain — \
-             paymaster sponsorship disabled (agents must self-fund gas)"
+             transaction execution is disabled until testnet gas sponsorship is configured"
         );
     }
 
@@ -525,31 +477,11 @@ async fn main() -> anyhow::Result<()> {
         None
     };
 
-    // ── Payment Verifier State (for x402 middleware) ────────────────
-    // Build per-chain provider map from the engine
-    let mut pv_providers = std::collections::HashMap::new();
-    for chain in config.chains.keys() {
-        if let Ok(p) = state.engine.provider_for_chain(chain) {
-            pv_providers.insert(chain.clone(), p);
-        }
-    }
-    let payment_verifier = PaymentVerifierState {
-        config: config.clone(),
-        providers: pv_providers,
-        db_pool: db_pool.clone(),
-    };
-
     // ── Router ──────────────────────────────────────────────────────
     let api_key_db_pool = db_pool.clone();
 
-    // Admin sub-router — separate auth (bearer token, not API key)
-    let admin_router = Router::new()
-        .route("/api-keys", post(routes::create_api_key_handler))
-        .layer(middleware::from_fn(routes::admin_auth_middleware))
-        .with_state(state.clone());
-
     let protected_api_router = Router::new()
-        // Execution API — x402 middleware applied
+        // Execution API
         .route("/execute", post(routes::execute_handler))
         .route("/simulate", post(routes::simulate_handler))
         .route("/status/:id", get(routes::status_handler))
@@ -837,10 +769,6 @@ async fn main() -> anyhow::Result<()> {
             post(routes::gmx_claim_simulate_handler),
         )
         .route("/protocols/gmx-v2/claims", post(routes::gmx_claim_handler))
-        .layer(middleware::from_fn_with_state(
-            payment_verifier,
-            x402_middleware,
-        ))
         // ── Per-API-key rate limiting (after auth, before business logic) ──
         .layer({
             let rl = rate_limiter.clone();
@@ -865,13 +793,13 @@ async fn main() -> anyhow::Result<()> {
         ));
 
     let app = Router::new()
-        // Health check (no auth, no payment middleware — for load balancers)
+        // Health check (no auth, for load balancers)
         .route("/health", get(routes::health_handler))
         // Public landing-page feed activity (sanitized recent events)
         .route("/feed/recent", get(routes::public_feed_handler))
-        // Admin endpoints (bearer-token auth, no x402 or API key middleware)
-        .nest("/admin", admin_router)
-        // Protected API endpoints (x402 + API key auth + per-key rate limit)
+        // Public self-service API-key issuance (independently rate-limited)
+        .route("/api-keys", post(routes::create_api_key_handler))
+        // Protected API endpoints (API key auth + per-key rate limit)
         .merge(protected_api_router)
         .layer(TraceLayer::new_for_http())
         // ── Request body size limit (1 MB — prevents OOM from giant payloads)
@@ -890,9 +818,12 @@ async fn main() -> anyhow::Result<()> {
     info!(address = %addr, "HTTP server listening");
 
     let listener = tokio::net::TcpListener::bind(addr).await?;
-    axum::serve(listener, app)
-        .with_graceful_shutdown(shutdown_signal())
-        .await?;
+    axum::serve(
+        listener,
+        app.into_make_service_with_connect_info::<SocketAddr>(),
+    )
+    .with_graceful_shutdown(shutdown_signal())
+    .await?;
 
     info!("server shut down gracefully");
     Ok(())
@@ -920,5 +851,37 @@ async fn shutdown_signal() {
     tokio::select! {
         _ = ctrl_c => info!("received SIGINT, shutting down"),
         _ = terminate => info!("received SIGTERM, shutting down"),
+    }
+}
+
+#[cfg(test)]
+mod cors_tests {
+    use super::cors_allowed_origins;
+    use axum::http::HeaderValue;
+
+    #[test]
+    fn cors_always_includes_public_landing_origins() {
+        let origins = cors_allowed_origins(Some("https://ardentresearch.xyz"));
+
+        assert!(origins.contains(&HeaderValue::from_static("https://ardentresearch.xyz")));
+        assert!(origins.contains(&HeaderValue::from_static("https://www.ardentresearch.xyz")));
+    }
+
+    #[test]
+    fn cors_accepts_comma_separated_extra_origins_without_duplicates() {
+        let origins = cors_allowed_origins(Some(
+            "https://app.example.com, https://www.ardentresearch.xyz",
+        ));
+
+        assert!(origins.contains(&HeaderValue::from_static("https://app.example.com")));
+        assert_eq!(
+            origins
+                .iter()
+                .filter(|origin| {
+                    *origin == HeaderValue::from_static("https://www.ardentresearch.xyz")
+                })
+                .count(),
+            1
+        );
     }
 }

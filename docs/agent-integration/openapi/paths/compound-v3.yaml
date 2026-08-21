@@ -22,12 +22,6 @@
 "/protocols/compound-v3/supply":
   post:
     summary: Execute Compound III Base Sepolia supply action
-    parameters:
-    - in: header
-      name: X-Payment-Proof
-      required: false
-      schema:
-        type: string
     requestBody:
       required: true
       content:
@@ -41,12 +35,6 @@
           application/json:
             schema:
               "$ref": "#/components/schemas/ExecutionResponse"
-      '402':
-        description: Payment required for manual mode
-        content:
-          application/json:
-            schema:
-              "$ref": "#/components/schemas/PaymentRequiredBody"
       '400':
         "$ref": "#/components/responses/ErrorResponse"
       '401':
@@ -74,12 +62,6 @@
 "/protocols/compound-v3/withdraw":
   post:
     summary: Execute Compound III Base Sepolia withdraw action
-    parameters:
-    - in: header
-      name: X-Payment-Proof
-      required: false
-      schema:
-        type: string
     requestBody:
       required: true
       content:
@@ -93,12 +75,6 @@
           application/json:
             schema:
               "$ref": "#/components/schemas/ExecutionResponse"
-      '402':
-        description: Payment required for manual mode
-        content:
-          application/json:
-            schema:
-              "$ref": "#/components/schemas/PaymentRequiredBody"
       '400':
         "$ref": "#/components/responses/ErrorResponse"
       '401':
@@ -126,12 +102,6 @@
 "/protocols/compound-v3/repay":
   post:
     summary: Execute Compound III Base Sepolia repay action
-    parameters:
-    - in: header
-      name: X-Payment-Proof
-      required: false
-      schema:
-        type: string
     requestBody:
       required: true
       content:
@@ -145,12 +115,6 @@
           application/json:
             schema:
               "$ref": "#/components/schemas/ExecutionResponse"
-      '402':
-        description: Payment required for manual mode
-        content:
-          application/json:
-            schema:
-              "$ref": "#/components/schemas/PaymentRequiredBody"
       '400':
         "$ref": "#/components/responses/ErrorResponse"
       '401':
@@ -180,12 +144,6 @@
   post:
     summary: Execute Compound III Base Sepolia borrow action
     description: Compound III borrows are base-asset withdrawals from Comet.
-    parameters:
-    - in: header
-      name: X-Payment-Proof
-      required: false
-      schema:
-        type: string
     requestBody:
       required: true
       content:
@@ -199,12 +157,6 @@
           application/json:
             schema:
               "$ref": "#/components/schemas/ExecutionResponse"
-      '402':
-        description: Payment required for manual mode
-        content:
-          application/json:
-            schema:
-              "$ref": "#/components/schemas/PaymentRequiredBody"
       '400':
         "$ref": "#/components/responses/ErrorResponse"
       '401':

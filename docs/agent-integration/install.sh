@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-REPO_RAW_BASE="https://raw.githubusercontent.com/Ardent-Ai-Research/agent-execution-platform/master/docs/agent-integration"
+REPO_RAW_BASE="https://raw.githubusercontent.com/ardentairesearch/agent-execution-platform/master/docs/agent-integration"
 
 INSTALL_DIR="${ARDENT_INSTALL_DIR:-${HOME}/.local/bin}"
 RUNTIME_DIR="${ARDENT_RUNTIME_DIR:-${HOME}/.ardent}"

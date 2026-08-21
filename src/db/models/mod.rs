@@ -12,7 +12,6 @@ pub struct ApiKeyRow {
     pub id: Uuid,
     pub key_hash: String,
     pub label: Option<String>,
-    pub payment_mode: String,
     pub is_active: bool,
     pub created_at: DateTime<Utc>,
 }
@@ -22,6 +21,7 @@ pub struct ApiKeyRow {
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
 pub struct ExecutionRequestRow {
     pub id: Uuid,
+    pub api_key_id: Option<Uuid>,
     pub agent_wallet: String,
     pub chain: String,
     pub target_contract: String,
@@ -29,7 +29,6 @@ pub struct ExecutionRequestRow {
     pub value: String,
     pub strategy_id: Option<String>,
     pub gas_estimate: Option<i64>,
-    pub cost_usd: Option<f64>,
     pub status: String,
     pub tx_hash: Option<String>,
     pub error_message: Option<String>,
@@ -38,7 +37,6 @@ pub struct ExecutionRequestRow {
     pub agent_id: Option<String>,
     pub smart_wallet_address: Option<String>,
     pub callback_url: Option<String>,
-    pub payload_hash: Option<String>,
 }
 
 // ──────────────────────────── transactions ───────────────────────────
@@ -53,21 +51,6 @@ pub struct TransactionRow {
     pub to_address: String,
     pub gas_used: Option<i64>,
     pub status: String,
-    pub created_at: DateTime<Utc>,
-}
-
-// ──────────────────────────── payments ───────────────────────────────
-
-#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
-pub struct PaymentRow {
-    pub id: Uuid,
-    pub request_id: Uuid,
-    pub payer: String,
-    pub amount_usd: f64,
-    pub token: String,
-    pub payment_chain: String,
-    pub payment_tx_hash: String,
-    pub verified: bool,
     pub created_at: DateTime<Utc>,
 }
 

@@ -41,6 +41,23 @@
       }
     },
     {
+      "name": "ardent_create_api_key",
+      "description": "Generate a self-service Ardent API key. The returned key is shown once and must be stored securely.",
+      "method": "POST",
+      "path": "/api-keys",
+      "authRequired": false,
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "label": {
+            "type": "string",
+            "maxLength": 100
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
       "name": "ardent_get_wallet",
       "description": "Resolve/provision an ERC-4337 wallet for an agent_id",
       "method": "GET",
@@ -175,7 +192,7 @@
     },
     {
       "name": "ardent_execute",
-      "description": "Execute request. In manual mode may return payment_required (402)",
+      "description": "Execute request.",
       "method": "POST",
       "path": "/execute",
       "authRequired": true,
@@ -241,38 +258,6 @@
               "null"
             ],
             "format": "uri"
-          },
-          "payment_proof": {
-            "type": [
-              "object",
-              "null"
-            ],
-            "description": "Optional value to encode as JSON in X-Payment-Proof header",
-            "properties": {
-              "request_id": {
-                "type": "string"
-              },
-              "payer": {
-                "type": "string"
-              },
-              "token": {
-                "type": "string"
-              },
-              "chain": {
-                "type": "string"
-              },
-              "tx_hash": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "request_id",
-              "payer",
-              "token",
-              "chain",
-              "tx_hash"
-            ],
-            "additionalProperties": false
           }
         },
         "required": [
@@ -361,7 +346,7 @@
     },
     {
       "name": "ardent_aave_supply_execute",
-      "description": "Execute supplying an asset into Aave V3 on Sepolia. In manual mode may return payment_required (402).",
+      "description": "Execute supplying an asset into Aave V3 on Sepolia.",
       "method": "POST",
       "path": "/protocols/aave-v3/supply",
       "authRequired": true,
@@ -427,38 +412,6 @@
               "null"
             ],
             "format": "uri"
-          },
-          "payment_proof": {
-            "type": [
-              "object",
-              "null"
-            ],
-            "description": "Optional value to encode as JSON in X-Payment-Proof header",
-            "properties": {
-              "request_id": {
-                "type": "string"
-              },
-              "payer": {
-                "type": "string"
-              },
-              "token": {
-                "type": "string"
-              },
-              "chain": {
-                "type": "string"
-              },
-              "tx_hash": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "request_id",
-              "payer",
-              "token",
-              "chain",
-              "tx_hash"
-            ],
-            "additionalProperties": false
           }
         },
         "required": [
@@ -546,7 +499,7 @@
     },
     {
       "name": "ardent_aave_withdraw_execute",
-      "description": "Execute withdrawing an asset from Aave V3 on Sepolia. In manual mode may return payment_required (402).",
+      "description": "Execute withdrawing an asset from Aave V3 on Sepolia.",
       "method": "POST",
       "path": "/protocols/aave-v3/withdraw",
       "authRequired": true,
@@ -611,38 +564,6 @@
               "null"
             ],
             "format": "uri"
-          },
-          "payment_proof": {
-            "type": [
-              "object",
-              "null"
-            ],
-            "description": "Optional value to encode as JSON in X-Payment-Proof header",
-            "properties": {
-              "request_id": {
-                "type": "string"
-              },
-              "payer": {
-                "type": "string"
-              },
-              "token": {
-                "type": "string"
-              },
-              "chain": {
-                "type": "string"
-              },
-              "tx_hash": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "request_id",
-              "payer",
-              "token",
-              "chain",
-              "tx_hash"
-            ],
-            "additionalProperties": false
           }
         },
         "required": [
@@ -741,7 +662,7 @@
     },
     {
       "name": "ardent_aave_repay_execute",
-      "description": "Execute repaying Aave V3 debt on Sepolia. In manual mode may return payment_required (402).",
+      "description": "Execute repaying Aave V3 debt on Sepolia.",
       "method": "POST",
       "path": "/protocols/aave-v3/repay",
       "authRequired": true,
@@ -817,38 +738,6 @@
               "null"
             ],
             "format": "uri"
-          },
-          "payment_proof": {
-            "type": [
-              "object",
-              "null"
-            ],
-            "description": "Optional value to encode as JSON in X-Payment-Proof header",
-            "properties": {
-              "request_id": {
-                "type": "string"
-              },
-              "payer": {
-                "type": "string"
-              },
-              "token": {
-                "type": "string"
-              },
-              "chain": {
-                "type": "string"
-              },
-              "tx_hash": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "request_id",
-              "payer",
-              "token",
-              "chain",
-              "tx_hash"
-            ],
-            "additionalProperties": false
           }
         },
         "required": [
@@ -963,7 +852,7 @@
     },
     {
       "name": "ardent_aave_borrow_execute",
-      "description": "Execute borrowing from Aave V3 on Sepolia after projected health-factor guard. In manual mode may return payment_required (402).",
+      "description": "Execute borrowing from Aave V3 on Sepolia after projected health-factor guard.",
       "method": "POST",
       "path": "/protocols/aave-v3/borrow",
       "authRequired": true,
@@ -1055,38 +944,6 @@
               "null"
             ],
             "format": "uri"
-          },
-          "payment_proof": {
-            "type": [
-              "object",
-              "null"
-            ],
-            "description": "Optional value to encode as JSON in X-Payment-Proof header",
-            "properties": {
-              "request_id": {
-                "type": "string"
-              },
-              "payer": {
-                "type": "string"
-              },
-              "token": {
-                "type": "string"
-              },
-              "chain": {
-                "type": "string"
-              },
-              "tx_hash": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "request_id",
-              "payer",
-              "token",
-              "chain",
-              "tx_hash"
-            ],
-            "additionalProperties": false
           }
         },
         "required": [
@@ -1309,7 +1166,7 @@
     },
     {
       "name": "ardent_gmx_create_order_execute",
-      "description": "Execute creating a GMX V2 Arbitrum Sepolia market_increase or market_swap order. In manual mode may return payment_required (402).",
+      "description": "Execute creating a GMX V2 Arbitrum Sepolia market_increase or market_swap order.",
       "method": "POST",
       "path": "/protocols/gmx-v2/orders",
       "authRequired": true,
@@ -1453,37 +1310,6 @@
               "null"
             ],
             "format": "uri"
-          },
-          "payment_proof": {
-            "type": [
-              "object",
-              "null"
-            ],
-            "properties": {
-              "request_id": {
-                "type": "string"
-              },
-              "payer": {
-                "type": "string"
-              },
-              "token": {
-                "type": "string"
-              },
-              "chain": {
-                "type": "string"
-              },
-              "tx_hash": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "request_id",
-              "payer",
-              "token",
-              "chain",
-              "tx_hash"
-            ],
-            "additionalProperties": false
           }
         },
         "required": [
@@ -1542,7 +1368,7 @@
     },
     {
       "name": "ardent_gmx_cancel_order_execute",
-      "description": "Execute cancelling a GMX V2 Arbitrum Sepolia order by bytes32 order key. In manual mode may return payment_required (402).",
+      "description": "Execute cancelling a GMX V2 Arbitrum Sepolia order by bytes32 order key.",
       "method": "POST",
       "path": "/protocols/gmx-v2/orders/cancel",
       "authRequired": true,
@@ -1574,37 +1400,6 @@
               "null"
             ],
             "format": "uri"
-          },
-          "payment_proof": {
-            "type": [
-              "object",
-              "null"
-            ],
-            "properties": {
-              "request_id": {
-                "type": "string"
-              },
-              "payer": {
-                "type": "string"
-              },
-              "token": {
-                "type": "string"
-              },
-              "chain": {
-                "type": "string"
-              },
-              "tx_hash": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "request_id",
-              "payer",
-              "token",
-              "chain",
-              "tx_hash"
-            ],
-            "additionalProperties": false
           }
         },
         "required": [
@@ -1902,7 +1697,7 @@
     },
     {
       "name": "ardent_compound_supply_execute",
-      "description": "Execute supplying base or collateral into Compound III on Base Sepolia. In manual mode may return payment_required (402).",
+      "description": "Execute supplying base or collateral into Compound III on Base Sepolia.",
       "method": "POST",
       "path": "/protocols/compound-v3/supply",
       "authRequired": true,
@@ -1926,7 +1721,7 @@
     },
     {
       "name": "ardent_compound_withdraw_execute",
-      "description": "Execute withdrawing base or collateral from Compound III on Base Sepolia. In manual mode may return payment_required (402).",
+      "description": "Execute withdrawing base or collateral from Compound III on Base Sepolia.",
       "method": "POST",
       "path": "/protocols/compound-v3/withdraw",
       "authRequired": true,
@@ -1950,7 +1745,7 @@
     },
     {
       "name": "ardent_compound_repay_execute",
-      "description": "Execute repaying Compound III base debt on Base Sepolia. In manual mode may return payment_required (402).",
+      "description": "Execute repaying Compound III base debt on Base Sepolia.",
       "method": "POST",
       "path": "/protocols/compound-v3/repay",
       "authRequired": true,
@@ -1974,7 +1769,7 @@
     },
     {
       "name": "ardent_compound_borrow_execute",
-      "description": "Execute borrowing the Compound III base asset on Base Sepolia. In manual mode may return payment_required (402).",
+      "description": "Execute borrowing the Compound III base asset on Base Sepolia.",
       "method": "POST",
       "path": "/protocols/compound-v3/borrow",
       "authRequired": true,
@@ -2350,7 +2145,7 @@
     },
     {
       "name": "ardent_balancer_swap_execute",
-      "description": "Execute a quoted Balancer V3 Ethereum Sepolia swap through the agent smart wallet. Manual mode may return payment_required.",
+      "description": "Execute a quoted Balancer V3 Ethereum Sepolia swap through the agent smart wallet.",
       "method": "POST",
       "path": "/protocols/balancer-v3/swap",
       "authRequired": true,
@@ -2368,8 +2163,7 @@
           "slippage_bps": { "type": "integer", "minimum": 0, "maximum": 10000, "default": 100 },
           "deadline": { "type": "integer", "minimum": 1 },
           "strategy_id": { "type": "string" },
-          "callback_url": { "type": "string" },
-          "payment_proof": { "type": "object" }
+          "callback_url": { "type": "string" }
         },
         "required": ["agent_id", "token_in", "token_out", "amount_raw"],
         "additionalProperties": false
@@ -2475,8 +2269,7 @@
           "slippage_bps": { "type": "integer", "minimum": 0, "maximum": 10000, "default": 100 },
           "deadline": { "type": "integer", "minimum": 1 },
           "strategy_id": { "type": "string" },
-          "callback_url": { "type": "string" },
-          "payment_proof": { "type": "object" }
+          "callback_url": { "type": "string" }
         },
         "required": ["agent_id", "pool", "amounts_in"],
         "additionalProperties": false
@@ -2576,8 +2369,7 @@
           },
           "slippage_bps": { "type": "integer", "minimum": 0, "maximum": 10000, "default": 100 },
           "strategy_id": { "type": "string" },
-          "callback_url": { "type": "string" },
-          "payment_proof": { "type": "object" }
+          "callback_url": { "type": "string" }
         },
         "required": ["agent_id", "pool", "bpt_amount_in_raw"],
         "additionalProperties": false
@@ -2730,8 +2522,7 @@
           "slippage_bps": { "type": "integer", "minimum": 0, "maximum": 10000, "default": 100 },
           "deadline": { "type": "integer", "minimum": 1 },
           "strategy_id": { "type": "string" },
-          "callback_url": { "type": "string" },
-          "payment_proof": { "type": "object" }
+          "callback_url": { "type": "string" }
         },
         "required": ["agent_id", "token_in", "token_out", "amount_raw"],
         "additionalProperties": false

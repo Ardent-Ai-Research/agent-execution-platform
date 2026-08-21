@@ -22,13 +22,6 @@
 "/protocols/aave-v3/supply":
   post:
     summary: Execute Aave V3 Sepolia supply action
-    parameters:
-    - in: header
-      name: X-Payment-Proof
-      required: false
-      description: JSON string proof header for manual payment flow re-submit.
-      schema:
-        type: string
     requestBody:
       required: true
       content:
@@ -42,12 +35,6 @@
           application/json:
             schema:
               "$ref": "#/components/schemas/ExecutionResponse"
-      '402':
-        description: Payment required for manual mode
-        content:
-          application/json:
-            schema:
-              "$ref": "#/components/schemas/PaymentRequiredBody"
       '400':
         "$ref": "#/components/responses/ErrorResponse"
       '401':
@@ -75,12 +62,6 @@
 "/protocols/aave-v3/withdraw":
   post:
     summary: Execute Aave V3 Sepolia withdraw action
-    parameters:
-    - in: header
-      name: X-Payment-Proof
-      required: false
-      schema:
-        type: string
     requestBody:
       required: true
       content:
@@ -94,12 +75,6 @@
           application/json:
             schema:
               "$ref": "#/components/schemas/ExecutionResponse"
-      '402':
-        description: Payment required for manual mode
-        content:
-          application/json:
-            schema:
-              "$ref": "#/components/schemas/PaymentRequiredBody"
       '400':
         "$ref": "#/components/responses/ErrorResponse"
       '401':
@@ -127,12 +102,6 @@
 "/protocols/aave-v3/repay":
   post:
     summary: Execute Aave V3 Sepolia repay action
-    parameters:
-    - in: header
-      name: X-Payment-Proof
-      required: false
-      schema:
-        type: string
     requestBody:
       required: true
       content:
@@ -146,12 +115,6 @@
           application/json:
             schema:
               "$ref": "#/components/schemas/ExecutionResponse"
-      '402':
-        description: Payment required for manual mode
-        content:
-          application/json:
-            schema:
-              "$ref": "#/components/schemas/PaymentRequiredBody"
       '400':
         "$ref": "#/components/responses/ErrorResponse"
       '401':
@@ -183,12 +146,6 @@
     summary: Execute Aave V3 Sepolia borrow action
     description: Checks projected health factor using Aave account data and oracle
       price before executing Pool.borrow.
-    parameters:
-    - in: header
-      name: X-Payment-Proof
-      required: false
-      schema:
-        type: string
     requestBody:
       required: true
       content:
@@ -202,12 +159,6 @@
           application/json:
             schema:
               "$ref": "#/components/schemas/ExecutionResponse"
-      '402':
-        description: Payment required for manual mode
-        content:
-          application/json:
-            schema:
-              "$ref": "#/components/schemas/PaymentRequiredBody"
       '400':
         "$ref": "#/components/responses/ErrorResponse"
       '401':

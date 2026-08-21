@@ -1,66 +1,32 @@
 # Authentication and Keys
 
-This page explains authentication for users integrating with the hosted API.
+## Public generation
 
-## 1. API key authentication
-
-Protected endpoints require `X-API-Key`.
-
-Header format:
+`POST /api-keys` requires no existing credential. It accepts an optional label of at most 100 characters and is rate-limited by client IP.
 
 ```bash
-X-API-Key: <api_key>
+curl -X POST https://api.ardentresearch.xyz/api-keys \
+  -H 'Content-Type: application/json' \
+  -d '{"label":"research-agent"}'
 ```
 
-Protected endpoints:
+The raw API key contains 256 bits of cryptographic randomness, is returned once with `Cache-Control: no-store`, and is never stored in plaintext.
 
-1. `GET /wallet`
-2. `POST /simulate`
-3. `POST /execute`
-4. `GET /status/:id`
+## Protected requests
 
-## 2. Payment proof header
+Send the key on wallet, status, simulation, execution, and protocol endpoints:
 
-For manual payment flow, after you settle payment on-chain, include `X-Payment-Proof` with JSON payload.
+```text
+X-API-Key: ak_your_api_key
+```
 
-Header format:
+Keep API keys in server-side secret storage or environment variables. Do not embed them in browser code, mobile binaries, prompts, logs, or source control.
 
 ```bash
-X-Payment-Proof: {"request_id":"your_request_id","payer":"0xYourPayer","token":"USDC","chain":"ethereum","tx_hash":"0xYourPaymentTxHash"}
+export ARDENT_API_KEY="ak_your_api_key"
+export ARDENT_BASE_URL="https://api.ardentresearch.xyz"
 ```
 
-Optional field:
+One key may own many agent wallets. Wallet identity is namespaced by the API-key ID and the stable `agent_id` supplied by the caller.
 
-1. `request_id` can be included when re-submitting against a specific quote context.
-
-## 3. API key lifecycle
-
-Hosted API users request keys through the onboarding channel.
-
-Security behavior:
-
-1. Keep key secret in server side configuration.
-2. Do not hardcode keys in frontend code.
-3. Request key rotation if exposure is suspected.
-
-## 4. Recommended local shell setup
-
-For raw curl usage:
-
-```bash
-BASE_URL="https://api.ardentresearch.xyz"
-API_KEY="ak_your_key"
-```
-
-## 5. CLI and MCP server environment variables
-
-The `ardent` CLI and the MCP server both resolve credentials from environment variables, not shell variables.
-
-```bash
-export ARDENT_API_KEY="ak_your_key"         # required for protected commands
-export ARDENT_BASE_URL="https://api.ardentresearch.xyz"  # optional, shown for reference
-```
-
-`ARDENT_BASE_URL` defaults to `https://api.ardentresearch.xyz` when not set. Override it only when pointing at a self-hosted instance or a staging environment.
-
-If `ARDENT_API_KEY` is not exported before running the CLI or starting the MCP server, protected commands will return an authentication error from the API.
+There is currently no recovery endpoint for a lost raw key. Generate a replacement key and migrate agents deliberately.

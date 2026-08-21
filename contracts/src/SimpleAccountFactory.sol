@@ -24,7 +24,6 @@ import "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
  *   3. EntryPoint's SenderCreator calls `createAccount()` during first UserOp
  *   4. Factory deploys ERC1967Proxy pointing to SimpleAccount implementation
  *
- * @custom:security-contact security@platform.example
  */
 contract SimpleAccountFactory {
     /// The canonical SimpleAccount implementation that all proxies delegate to.
@@ -53,13 +52,9 @@ contract SimpleAccountFactory {
      * @param salt  Unique salt for deterministic addressing (typically 0).
      * @return ret  The deployed (or existing) SimpleAccount proxy address.
      */
-    function createAccount(
-        address owner,
-        uint256 salt
-    ) public returns (SimpleAccount ret) {
+    function createAccount(address owner, uint256 salt) public returns (SimpleAccount ret) {
         require(
-            msg.sender == address(senderCreator),
-            NotSenderCreator(msg.sender, address(this), address(senderCreator))
+            msg.sender == address(senderCreator), NotSenderCreator(msg.sender, address(this), address(senderCreator))
         );
         address addr = getAddress(owner, salt);
         uint256 codeSize = addr.code.length;
@@ -67,12 +62,9 @@ contract SimpleAccountFactory {
             return SimpleAccount(payable(addr));
         }
         ret = SimpleAccount(
-            payable(
-                new ERC1967Proxy{salt: bytes32(salt)}(
-                    address(accountImplementation),
-                    abi.encodeCall(SimpleAccount.initialize, (owner))
-                )
-            )
+            payable(new ERC1967Proxy{salt: bytes32(salt)}(
+                    address(accountImplementation), abi.encodeCall(SimpleAccount.initialize, (owner))
+                ))
         );
     }
 
@@ -83,22 +75,15 @@ contract SimpleAccountFactory {
      * @param salt  The same salt used in `createAccount()`.
      * @return The deterministic address where the proxy would be deployed.
      */
-    function getAddress(
-        address owner,
-        uint256 salt
-    ) public view returns (address) {
-        return
-            Create2.computeAddress(
-                bytes32(salt),
-                keccak256(
-                    abi.encodePacked(
-                        type(ERC1967Proxy).creationCode,
-                        abi.encode(
-                            address(accountImplementation),
-                            abi.encodeCall(SimpleAccount.initialize, (owner))
-                        )
-                    )
+    function getAddress(address owner, uint256 salt) public view returns (address) {
+        return Create2.computeAddress(
+            bytes32(salt),
+            keccak256(
+                abi.encodePacked(
+                    type(ERC1967Proxy).creationCode,
+                    abi.encode(address(accountImplementation), abi.encodeCall(SimpleAccount.initialize, (owner)))
                 )
-            );
+            )
+        );
     }
 }

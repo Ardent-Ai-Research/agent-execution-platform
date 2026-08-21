@@ -5,7 +5,7 @@ Everything needed to connect developers, AI agents, and LLM platforms to the AI 
 ## Install
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/Ardent-Ai-Research/agent-execution-platform/master/docs/agent-integration/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/ardentairesearch/agent-execution-platform/master/docs/agent-integration/install.sh | bash
 ```
 
 The installer:
@@ -235,22 +235,6 @@ ardent gmx-claim-simulate --agent-id my-agent-001 --claim-type funding_fees --ma
 asset token balances for the smart wallet.
 GMX testnet token metadata is best-effort; unavailable symbols fall back to
 derived market labels or compact token addresses.
-
-Manual payment re-submit (after a `402` response):
-
-```bash
-ardent execute \
-  --agent-id my-agent-001 \
-  --chain ethereum \
-  --target-contract 0xTargetContract \
-  --calldata 0xCalldata \
-  --value 0 \
-  --proof-request-id your_request_id \
-  --proof-payer 0xYourPayer \
-  --proof-token USDC \
-  --proof-chain ethereum \
-  --proof-tx-hash 0xYourPaymentTxHash
-```
 
 Update CLI and runtime files:
 

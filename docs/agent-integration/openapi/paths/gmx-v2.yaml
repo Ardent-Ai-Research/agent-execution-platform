@@ -64,12 +64,6 @@
 "/protocols/gmx-v2/orders":
   post:
     summary: Execute GMX V2 Arbitrum Sepolia create order action
-    parameters:
-    - in: header
-      name: X-Payment-Proof
-      required: false
-      schema:
-        type: string
     requestBody:
       required: true
       content:
@@ -83,12 +77,6 @@
           application/json:
             schema:
               "$ref": "#/components/schemas/ExecutionResponse"
-      '402':
-        description: Payment required for manual mode
-        content:
-          application/json:
-            schema:
-              "$ref": "#/components/schemas/PaymentRequiredBody"
       '400':
         "$ref": "#/components/responses/ErrorResponse"
       '401':
@@ -138,12 +126,6 @@
 "/protocols/gmx-v2/orders/cancel":
   post:
     summary: Execute GMX V2 Arbitrum Sepolia cancel order action
-    parameters:
-    - in: header
-      name: X-Payment-Proof
-      required: false
-      schema:
-        type: string
     requestBody:
       required: true
       content:
@@ -157,12 +139,6 @@
           application/json:
             schema:
               "$ref": "#/components/schemas/ExecutionResponse"
-      '402':
-        description: Payment required for manual mode
-        content:
-          application/json:
-            schema:
-              "$ref": "#/components/schemas/PaymentRequiredBody"
       '400':
         "$ref": "#/components/responses/ErrorResponse"
       '401':
@@ -207,18 +183,6 @@
         "$ref": "#/components/responses/ErrorResponse"
       '401':
         "$ref": "#/components/responses/ErrorResponse"
-      '402':
-        description: Payment required for manual mode
-        content:
-          application/json:
-            schema:
-              "$ref": "#/components/schemas/PaymentRequiredBody"
-    parameters:
-    - in: header
-      name: X-Payment-Proof
-      required: false
-      schema:
-        type: string
 "/protocols/gmx-v2/deposits/simulate":
   post:
     summary: Simulate GMX V2 Arbitrum Sepolia create deposit action
@@ -259,18 +223,6 @@
         "$ref": "#/components/responses/ErrorResponse"
       '401':
         "$ref": "#/components/responses/ErrorResponse"
-      '402':
-        description: Payment required for manual mode
-        content:
-          application/json:
-            schema:
-              "$ref": "#/components/schemas/PaymentRequiredBody"
-    parameters:
-    - in: header
-      name: X-Payment-Proof
-      required: false
-      schema:
-        type: string
 "/protocols/gmx-v2/withdrawals/simulate":
   post:
     summary: Simulate GMX V2 Arbitrum Sepolia create withdrawal action
@@ -311,18 +263,6 @@
         "$ref": "#/components/responses/ErrorResponse"
       '401':
         "$ref": "#/components/responses/ErrorResponse"
-      '402':
-        description: Payment required for manual mode
-        content:
-          application/json:
-            schema:
-              "$ref": "#/components/schemas/PaymentRequiredBody"
-    parameters:
-    - in: header
-      name: X-Payment-Proof
-      required: false
-      schema:
-        type: string
 "/protocols/gmx-v2/requests/cancel/simulate":
   post:
     summary: Simulate GMX V2 Arbitrum Sepolia cancel request action
@@ -363,18 +303,6 @@
         "$ref": "#/components/responses/ErrorResponse"
       '401':
         "$ref": "#/components/responses/ErrorResponse"
-      '402':
-        description: Payment required for manual mode
-        content:
-          application/json:
-            schema:
-              "$ref": "#/components/schemas/PaymentRequiredBody"
-    parameters:
-    - in: header
-      name: X-Payment-Proof
-      required: false
-      schema:
-        type: string
 "/protocols/gmx-v2/claims/simulate":
   post:
     summary: Simulate GMX V2 Arbitrum Sepolia claim action
@@ -415,18 +343,6 @@
         "$ref": "#/components/responses/ErrorResponse"
       '401':
         "$ref": "#/components/responses/ErrorResponse"
-      '402':
-        description: Payment required for manual mode
-        content:
-          application/json:
-            schema:
-              "$ref": "#/components/schemas/PaymentRequiredBody"
-    parameters:
-    - in: header
-      name: X-Payment-Proof
-      required: false
-      schema:
-        type: string
 "/protocols/gmx-v2/balances":
   get:
     summary: Read GMX V2 Arbitrum Sepolia GM market and underlying token balances for an agent wallet

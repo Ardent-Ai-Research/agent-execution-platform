@@ -3,10 +3,10 @@
 //!
 //! Our `VerifyingPaymaster` contract checks that each UserOperation carries a
 //! signature from a trusted signer (our platform). This module produces that
-//! signature after the x402 payment has been verified.
+//! signature after the platform has approved the testnet execution.
 //!
 //! Flow:
-//! 1. Agent pays via x402 → platform verifies payment on-chain
+//! 1. Platform validates and simulates the requested action
 //! 2. Platform builds the UserOperation
 //! 3. This module signs the `(userOp, validUntil, validAfter)` tuple
 //! 4. The signed `paymasterAndData` is attached to the UserOp

@@ -63,8 +63,6 @@ pub struct WebhookPayload {
     pub chain: String,
     /// On-chain transaction hash (present for confirmed / reverted).
     pub tx_hash: Option<String>,
-    /// Final gas cost in USD (if available).
-    pub cost_usd: Option<f64>,
     /// Error message (if failed / reverted).
     pub error: Option<String>,
     /// When the execution request was originally created.
@@ -101,6 +99,10 @@ pub async fn deliver(
     payload: &WebhookPayload,
     signing_secret: &str,
 ) -> bool {
+    let callback_host = reqwest::Url::parse(callback_url)
+        .ok()
+        .and_then(|url| url.host_str().map(str::to_owned))
+        .unwrap_or_else(|| "invalid-host".to_string());
     let body = match serde_json::to_string(payload) {
         Ok(b) => b,
         Err(e) => {
@@ -134,7 +136,7 @@ pub async fn deliver(
                 if status.is_success() {
                     info!(
                         request_id = %payload.request_id,
-                        callback_url,
+                        callback_host,
                         attempt,
                         status = %status,
                         "webhook delivered successfully"
@@ -145,7 +147,7 @@ pub async fn deliver(
                 // Non-2xx — treat as failure and retry
                 warn!(
                     request_id = %payload.request_id,
-                    callback_url,
+                    callback_host,
                     attempt,
                     status = %status,
                     "webhook endpoint returned non-success status"
@@ -154,7 +156,7 @@ pub async fn deliver(
             Err(e) => {
                 warn!(
                     request_id = %payload.request_id,
-                    callback_url,
+                    callback_host,
                     attempt,
                     error = %e,
                     "webhook delivery failed"
@@ -170,7 +172,7 @@ pub async fn deliver(
 
     error!(
         request_id = %payload.request_id,
-        callback_url,
+        callback_host,
         max_retries = MAX_RETRIES,
         "webhook delivery exhausted all retries"
     );
@@ -201,6 +203,8 @@ mod tests {
     use std::sync::Arc;
     use tokio::sync::Mutex;
 
+    type TestWebhookState = (Arc<AtomicUsize>, Arc<Mutex<Option<String>>>);
+
     fn sample_payload() -> WebhookPayload {
         WebhookPayload {
             event_id: Uuid::new_v4(),
@@ -209,7 +213,6 @@ mod tests {
             status: ExecutionStatus::Confirmed,
             chain: "ethereum".into(),
             tx_hash: Some("0xabc".into()),
-            cost_usd: Some(1.23),
             error: None,
             created_at: Utc::now(),
             completed_at: Utc::now(),
@@ -243,7 +246,7 @@ mod tests {
         let captured_sig: Arc<Mutex<Option<String>>> = Arc::new(Mutex::new(None));
 
         async fn handler(
-            State((hits, sig_store)): State<(Arc<AtomicUsize>, Arc<Mutex<Option<String>>>)>,
+            State((hits, sig_store)): State<TestWebhookState>,
             headers: HeaderMap,
         ) -> StatusCode {
             hits.fetch_add(1, Ordering::SeqCst);

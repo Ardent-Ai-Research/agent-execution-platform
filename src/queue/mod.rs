@@ -33,7 +33,7 @@ const DLQ_KEY: &str = "execution_jobs:dead_letter";
 pub const MAX_JOB_ATTEMPTS: u32 = 3;
 
 #[cfg(test)]
-pub(crate) static TEST_QUEUE_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+pub(crate) static TEST_QUEUE_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 
 /// Create a Redis connection manager (multiplexed, reconnect-aware).
 pub async fn create_redis_connection(redis_url: &str) -> Result<ConnectionManager> {
@@ -247,8 +247,9 @@ mod tests {
     }
 
     #[tokio::test]
+    #[ignore = "requires Redis"]
     async fn test_queue_enqueue_and_dequeue() {
-        let _guard = TEST_QUEUE_LOCK.lock().expect("queue test lock");
+        let _guard = TEST_QUEUE_LOCK.lock().await;
         let mut conn = setup_redis().await;
         let worker_id = 199u32;
         clear_keys(&mut conn, worker_id).await;
@@ -270,8 +271,9 @@ mod tests {
     }
 
     #[tokio::test]
+    #[ignore = "requires Redis"]
     async fn test_queue_recover_stale_jobs() {
-        let _guard = TEST_QUEUE_LOCK.lock().expect("queue test lock");
+        let _guard = TEST_QUEUE_LOCK.lock().await;
         let mut conn = setup_redis().await;
         let worker_id = 197u32;
         clear_keys(&mut conn, worker_id).await;
@@ -290,8 +292,9 @@ mod tests {
     }
 
     #[tokio::test]
+    #[ignore = "requires Redis"]
     async fn test_queue_dead_letter() {
-        let _guard = TEST_QUEUE_LOCK.lock().expect("queue test lock");
+        let _guard = TEST_QUEUE_LOCK.lock().await;
         let mut conn = setup_redis().await;
         let worker_id = 198u32;
         clear_keys(&mut conn, worker_id).await;

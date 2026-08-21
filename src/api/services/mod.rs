@@ -1,9 +1,11 @@
 //! Service layer — thin wrappers that coordinate between the execution engine,
-//! agent wallet registry, database, queue, and payment verification for each
-//! API endpoint.
+//! agent wallet registry, database, and queue for each API endpoint.
 //!
 //! With ERC-4337, the flow is:
-//!   validate → resolve smart wallet → simulate → price → check payment → enqueue
+//!   validate → resolve smart wallet → simulate → enqueue
+
+// Orchestration functions receive explicit shared dependencies from Axum state.
+#![allow(clippy::too_many_arguments)]
 
 use anyhow::Result;
 use chrono::Utc;
@@ -12,7 +14,7 @@ use ethers::prelude::Middleware;
 use ethers::types::{Address, Bytes, TransactionRequest, U256};
 use redis::aio::ConnectionManager;
 use sqlx::PgPool;
-use std::collections::HashMap;
+use std::{collections::HashMap, net::IpAddr};
 use tracing::info;
 use uuid::Uuid;
 
@@ -23,7 +25,6 @@ use crate::queue;
 use crate::relayer::erc4337::BundlerClient;
 use crate::relayer::paymaster::PaymasterSigner;
 use crate::types::*;
-use crate::worker::{self, WorkerContext};
 
 async fn simulate_request(
     engine: &ExecutionEngine,
@@ -185,8 +186,7 @@ async fn simulate_batch_user_op(
             );
 
             Ok(SimulationResult {
-                // Keep gas_estimate compatible with the current pricing path,
-                // which adds ERC-4337 overhead separately.
+                // Preserve the public response's call-gas estimate convention.
                 gas_estimate: call_gas.as_u64(),
                 success: true,
                 return_data: Some(format!(
@@ -302,7 +302,7 @@ fn extract_revert_hex(error_text: &str) -> Option<String> {
 
 fn decode_execute_error(raw: &str) -> Option<String> {
     let bytes = hex::decode(raw.trim_start_matches("0x")).ok()?;
-    if bytes.len() < 4 || &bytes[..4] != [0x5a, 0x15, 0x46, 0x75] {
+    if bytes.len() < 4 || bytes[..4] != [0x5a, 0x15, 0x46, 0x75] {
         return decode_known_revert_selector(&bytes).map(str::to_string);
     }
 
@@ -324,15 +324,15 @@ fn decode_execute_error(raw: &str) -> Option<String> {
 
 fn decode_truncated_execute_error(raw: Option<&str>) -> Option<String> {
     let bytes = hex::decode(raw?.trim_start_matches("0x")).ok()?;
-    if bytes.len() >= 10 && &bytes[..4] == [0x5a, 0x15, 0x46, 0x75] {
-        if bytes
+    if bytes.len() >= 10
+        && bytes[..4] == [0x5a, 0x15, 0x46, 0x75]
+        && bytes
             .windows(4)
             .any(|window| window == [0xcc, 0x34, 0x59, 0xff])
-        {
-            return Some(
-                "smart account ExecuteError with truncated inner=UnexpectedMarket()".to_string(),
-            );
-        }
+    {
+        return Some(
+            "smart account ExecuteError with truncated inner=UnexpectedMarket()".to_string(),
+        );
     }
     None
 }
@@ -343,24 +343,6 @@ fn decode_known_revert_selector(bytes: &[u8]) -> Option<&'static str> {
         [0xcc, 0x34, 0x59, 0xff] => Some("UnexpectedMarket()"),
         _ => None,
     }
-}
-
-fn usd_to_token_raw_amount(usd: f64, decimals: u8) -> Result<U256> {
-    if !usd.is_finite() || usd < 0.0 {
-        anyhow::bail!("invalid USD amount: {}", usd);
-    }
-
-    let scaled = usd * 10f64.powi(decimals as i32);
-    if !scaled.is_finite() || scaled < 0.0 {
-        anyhow::bail!("invalid scaled token amount for usd {}", usd);
-    }
-
-    let rounded = scaled.ceil();
-    if rounded > u128::MAX as f64 {
-        anyhow::bail!("token amount overflow for usd {}", usd);
-    }
-
-    Ok(U256::from(rounded as u128))
 }
 
 /// Resolve the smart wallet address that must be used as the ERC-4337 sender
@@ -384,9 +366,9 @@ pub async fn resolve_chain_smart_wallet_address(
     let factory_address: Address = chain_cfg
         .factory_address
         .parse()
-        .map_err(|e| anyhow::anyhow!("invalid factory address for {}: {}", chain, e))?;
+        .map_err(|e| anyhow::anyhow!("invalid factory address for {chain}: {e}"))?;
     if factory_address == Address::zero() {
-        anyhow::bail!("factory address is not configured for {}", chain);
+        anyhow::bail!("factory address is not configured for {chain}");
     }
 
     let provider = engine.provider_for_chain(chain)?;
@@ -411,7 +393,7 @@ pub async fn resolve_chain_smart_wallet_address(
 }
 
 /// Handle a full execution request:
-/// validate → resolve smart wallet → simulate → price → check payment → enqueue.
+/// validate → resolve smart wallet → simulate → enqueue.
 pub async fn handle_execute(
     engine: &ExecutionEngine,
     pool: &PgPool,
@@ -420,9 +402,7 @@ pub async fn handle_execute(
     bundler_clients: &HashMap<Chain, BundlerClient>,
     paymaster_signers: &HashMap<Chain, PaymasterSigner>,
     api_key_id: Uuid,
-    payment_mode: PaymentMode,
     req: &ExecutionRequest,
-    payment_proof: Option<&PaymentProof>,
 ) -> Result<ExecutionResponse> {
     // 1. Validate
     let chain = engine.validate(req)?;
@@ -430,7 +410,10 @@ pub async fn handle_execute(
     // Resolve the bundler client for this chain
     let bundler_client = bundler_clients
         .get(&chain)
-        .ok_or_else(|| anyhow::anyhow!("no bundler configured for chain {}", chain))?;
+        .ok_or_else(|| anyhow::anyhow!("no bundler configured for chain {chain}"))?;
+    let paymaster_signer = paymaster_signers.get(&chain).ok_or_else(|| {
+        anyhow::anyhow!("testnet gas sponsorship is not configured for chain {chain}")
+    })?;
 
     // Validate callback_url if provided
     let callback_url = validate_callback_url(req.callback_url.as_deref())?;
@@ -441,11 +424,12 @@ pub async fn handle_execute(
         .await?;
     let smart_wallet_address =
         resolve_chain_smart_wallet_address(engine, &chain, &agent_wallet).await?;
-    let smart_wallet_str = format!("{:?}", smart_wallet_address);
+    let smart_wallet_str = format!("{smart_wallet_address:?}");
 
     // 3. Persist initial request
     let db_row = db::insert_execution_request(
         pool,
+        api_key_id,
         req,
         &ExecutionStatus::Pending,
         Some(&smart_wallet_str),
@@ -458,7 +442,7 @@ pub async fn handle_execute(
     let sim = simulate_request(
         engine,
         bundler_client,
-        paymaster_signers.get(&chain),
+        Some(paymaster_signer),
         wallet_registry,
         req,
         &chain,
@@ -475,7 +459,6 @@ pub async fn handle_execute(
             None,
             sim.error.as_deref(),
             None,
-            None,
         )
         .await?;
 
@@ -484,173 +467,35 @@ pub async fn handle_execute(
             status: ExecutionStatus::Failed,
             smart_wallet_address: Some(smart_wallet_str.clone()),
             estimated_gas: None,
-            estimated_cost_usd: None,
             tx_hash: None,
             message: format!("simulation failed: {}", sim.error.unwrap_or_default()),
         });
     }
 
-    // 5. Price (includes ERC-4337 overhead) and payment policy by mode.
-    // Quote locking is only applied in manual mode.
-    let quote_request_id = payment_proof.and_then(|p| p.quote_request_id);
-    let locked_quote_cost = if payment_mode == PaymentMode::Manual {
-        match quote_request_id {
-            Some(quote_id) => {
-                db::get_locked_quote_cost(pool, quote_id, req, &smart_wallet_str).await?
-            }
-            None => None,
-        }
-    } else {
-        None
-    };
-
-    if payment_mode == PaymentMode::Manual
-        && quote_request_id.is_some()
-        && locked_quote_cost.is_none()
-    {
-        db::update_execution_status(
-            pool,
-            request_id,
-            &ExecutionStatus::Failed,
-            None,
-            Some("invalid or mismatched payment quote request_id"),
-            Some(sim.gas_estimate as i64),
-            None,
-        )
-        .await?;
-
-        return Ok(ExecutionResponse {
-            request_id,
-            status: ExecutionStatus::Failed,
-            smart_wallet_address: Some(smart_wallet_str.clone()),
-            estimated_gas: Some(sim.gas_estimate),
-            estimated_cost_usd: None,
-            tx_hash: None,
-            message: "invalid or mismatched payment quote request_id".into(),
-        });
-    }
-
-    let payable_cost = match payment_mode {
-        PaymentMode::Manual => match locked_quote_cost {
-            Some(locked) => locked,
-            None => {
-                engine
-                    .estimate_cost_with_mode(&chain, sim.gas_estimate, bundler_client, true)
-                    .await?
-            }
-        },
-        PaymentMode::Auto => {
-            engine
-                .estimate_cost_with_mode(&chain, sim.gas_estimate, bundler_client, false)
-                .await?
-        }
-        PaymentMode::Sponsored => 0.0,
-    };
-
-    let initial_status = if payment_mode == PaymentMode::Sponsored {
-        ExecutionStatus::PaymentVerified
-    } else {
-        ExecutionStatus::PaymentRequired
-    };
-
-    let initial_message = if payment_mode == PaymentMode::Sponsored {
-        Some("payment mode sponsored: external payment not required")
-    } else {
-        None
-    };
-
+    // Persist the simulation estimate before queueing. Testnet execution is free
+    // to callers; the configured paymaster sponsors UserOperation gas.
     db::update_execution_status(
         pool,
         request_id,
-        &initial_status,
+        &ExecutionStatus::Pending,
         None,
-        initial_message,
+        None,
         Some(sim.gas_estimate as i64),
-        Some(payable_cost),
     )
     .await?;
 
-    // 6. Payment mode behavior
-    match payment_mode {
-        PaymentMode::Manual => match payment_proof {
-            None => {
-                return Ok(ExecutionResponse {
-                    request_id,
-                    status: ExecutionStatus::PaymentRequired,
-                    smart_wallet_address: Some(smart_wallet_str.clone()),
-                    estimated_gas: Some(sim.gas_estimate),
-                    estimated_cost_usd: Some(payable_cost),
-                    tx_hash: None,
-                    message: "payment required — include X-Payment-Proof header".into(),
-                });
-            }
-            Some(proof) => {
-                if let Some(resp) = validate_and_record_payment(
-                    engine,
-                    pool,
-                    request_id,
-                    &chain,
-                    sim.gas_estimate,
-                    payable_cost,
-                    &smart_wallet_str,
-                    proof,
-                )
-                .await?
-                {
-                    return Ok(resp);
-                }
-            }
-        },
-        PaymentMode::Auto => {
-            if let Some(proof) = payment_proof {
-                if let Some(resp) = validate_and_record_payment(
-                    engine,
-                    pool,
-                    request_id,
-                    &chain,
-                    sim.gas_estimate,
-                    payable_cost,
-                    &smart_wallet_str,
-                    proof,
-                )
-                .await?
-                {
-                    return Ok(resp);
-                }
-            } else {
-                let auto_payment = execute_auto_payment(
-                    engine,
-                    pool,
-                    wallet_registry,
-                    bundler_clients,
-                    paymaster_signers,
-                    request_id,
-                    &req.agent_id,
-                    &chain,
-                    payable_cost,
-                    &smart_wallet_str,
-                    &agent_wallet.eoa_address,
-                )
-                .await?;
-
-                if let Some(resp) = auto_payment {
-                    return Ok(resp);
-                }
-            }
-        }
-        PaymentMode::Sponsored => {}
-    }
-
-    // 7. Enqueue — the job now carries smart wallet + EOA for the worker
+    // 5. Enqueue — the job now carries smart wallet + EOA for the worker
     //    to build a UserOperation.
     let gas_limit_with_buffer = sim.gas_estimate.saturating_mul(120) / 100;
 
     // Resolve API key hash for webhook HMAC signing (only if callback_url is set)
     let api_key_hash = if callback_url.is_some() {
-        db::get_api_key_hash_by_id(pool, api_key_id)
-            .await
-            .ok()
-            .flatten()
+        Some(
+            db::get_api_key_hash_by_id(pool, api_key_id)
+                .await
+                .map_err(|error| anyhow::anyhow!("failed to load webhook signing secret: {error}"))?
+                .ok_or_else(|| anyhow::anyhow!("authenticated API key is unavailable"))?,
+        )
     } else {
         None
     };
@@ -673,16 +518,8 @@ pub async fn handle_execute(
     };
     queue::enqueue_job(redis_conn, &job).await?;
 
-    db::update_execution_status(
-        pool,
-        request_id,
-        &ExecutionStatus::Queued,
-        None,
-        None,
-        None,
-        None,
-    )
-    .await?;
+    db::update_execution_status(pool, request_id, &ExecutionStatus::Queued, None, None, None)
+        .await?;
 
     info!(
         request_id = %request_id,
@@ -702,207 +539,9 @@ pub async fn handle_execute(
         status: ExecutionStatus::Queued,
         smart_wallet_address: Some(smart_wallet_str),
         estimated_gas: Some(sim.gas_estimate),
-        estimated_cost_usd: Some(payable_cost),
         tx_hash: None,
         message,
     })
-}
-
-async fn execute_auto_payment(
-    engine: &ExecutionEngine,
-    pool: &PgPool,
-    wallet_registry: &AgentWalletRegistry,
-    bundler_clients: &HashMap<Chain, BundlerClient>,
-    paymaster_signers: &HashMap<Chain, PaymasterSigner>,
-    request_id: Uuid,
-    agent_id: &str,
-    chain: &Chain,
-    cost_usd: f64,
-    smart_wallet_address: &str,
-    eoa_address: &ethers::types::Address,
-) -> Result<Option<ExecutionResponse>> {
-    let chain_cfg = engine.config.chain_config(chain)?.clone();
-
-    let smart_wallet_addr: Address = smart_wallet_address
-        .parse()
-        .map_err(|e| anyhow::anyhow!("invalid smart wallet address for auto payment: {e}"))?;
-
-    let mut token_symbols = chain_cfg
-        .accepted_tokens
-        .keys()
-        .cloned()
-        .collect::<Vec<_>>();
-    token_symbols.sort();
-    if token_symbols.is_empty() {
-        return Err(anyhow::anyhow!(
-            "auto payment unavailable: no accepted tokens configured"
-        ));
-    }
-
-    let mut selected: Option<(String, String, U256)> = None;
-    let provider = engine.provider_for_chain(chain)?;
-
-    for symbol in token_symbols {
-        let token_contract = match chain_cfg.accepted_tokens.get(&symbol) {
-            Some(addr) => addr.clone(),
-            None => continue,
-        };
-        let decimals = chain_cfg.token_decimals.get(&symbol).copied().unwrap_or(6);
-        let required_raw = usd_to_token_raw_amount(cost_usd, decimals)?;
-
-        if required_raw.is_zero() {
-            selected = Some((symbol, token_contract, required_raw));
-            break;
-        }
-
-        let balance_raw =
-            fetch_erc20_balance_of(provider.as_ref(), &token_contract, smart_wallet_addr)
-                .await
-                .map_err(|e| {
-                    anyhow::anyhow!("auto payment balance check failed for {}: {}", symbol, e)
-                })?;
-
-        if balance_raw >= required_raw {
-            selected = Some((symbol, token_contract, required_raw));
-            break;
-        }
-    }
-
-    let (token_symbol, token_contract, required_amount_raw) = selected.ok_or_else(|| {
-        anyhow::anyhow!(
-            "auto payment unavailable: no accepted token balance can cover required amount"
-        )
-    })?;
-
-    if required_amount_raw.is_zero() {
-        db::update_execution_status(
-            pool,
-            request_id,
-            &ExecutionStatus::PaymentVerified,
-            None,
-            Some("payment mode auto: zero-cost quote, no transfer required"),
-            None,
-            None,
-        )
-        .await?;
-        return Ok(None);
-    }
-
-    let transfer_calldata =
-        encode_erc20_transfer(&engine.config.payment_address, required_amount_raw)?;
-
-    let payment_job = ExecutionJob {
-        request_id,
-        agent_id: agent_id.to_string(),
-        smart_wallet_address: smart_wallet_address.to_string(),
-        eoa_address: format!("{eoa_address:?}"),
-        chain: chain.clone(),
-        target_contract: token_contract.clone(),
-        calldata: transfer_calldata,
-        value: "0".to_string(),
-        gas_limit: 120_000,
-        created_at: Utc::now(),
-        attempt_count: 0,
-        batch_calls: None,
-        callback_url: None,
-        api_key_hash: None,
-    };
-
-    let immediate_ctx = WorkerContext {
-        db_pool: pool.clone(),
-        wallet_registry: wallet_registry.clone(),
-        bundler_clients: bundler_clients.clone(),
-        paymaster_signers: paymaster_signers.clone(),
-        webhook_client: crate::webhook::build_http_client(),
-    };
-
-    let auto_result = worker::execute_erc4337_now(&immediate_ctx, &payment_job).await;
-    if !auto_result.success {
-        let reason = auto_result
-            .error
-            .unwrap_or_else(|| "auto payment transaction failed".to_string());
-        db::update_execution_status(
-            pool,
-            request_id,
-            &ExecutionStatus::Failed,
-            None,
-            Some(&reason),
-            None,
-            None,
-        )
-        .await?;
-
-        return Ok(Some(ExecutionResponse {
-            request_id,
-            status: ExecutionStatus::Failed,
-            smart_wallet_address: Some(smart_wallet_address.to_string()),
-            estimated_gas: None,
-            estimated_cost_usd: Some(cost_usd),
-            tx_hash: None,
-            message: format!("payment mode auto failed: {}", reason),
-        }));
-    }
-
-    let payment_tx_hash = auto_result.tx_hash;
-    let proof = PaymentProof {
-        payment_id: Uuid::new_v4(),
-        quote_request_id: Some(request_id),
-        payer: smart_wallet_address.to_string(),
-        amount_usd: cost_usd,
-        token: token_symbol,
-        chain: chain.to_string(),
-        tx_hash: payment_tx_hash,
-        verified: true,
-        verified_at: Utc::now(),
-        confirmed_amount_raw: Some(required_amount_raw.to_string()),
-        block_confirmations: None,
-        token_contract: Some(token_contract),
-    };
-
-    let inserted = db::insert_payment(pool, request_id, &proof).await?;
-    if inserted.is_none() {
-        return Ok(Some(ExecutionResponse {
-            request_id,
-            status: ExecutionStatus::Failed,
-            smart_wallet_address: Some(smart_wallet_address.to_string()),
-            estimated_gas: None,
-            estimated_cost_usd: Some(cost_usd),
-            tx_hash: None,
-            message: "payment mode auto failed: replay-protected payment hash conflict".into(),
-        }));
-    }
-
-    db::update_execution_status(
-        pool,
-        request_id,
-        &ExecutionStatus::PaymentVerified,
-        None,
-        Some("payment mode auto: onchain transfer confirmed"),
-        None,
-        None,
-    )
-    .await?;
-
-    Ok(None)
-}
-
-fn encode_erc20_transfer(to: &str, amount: U256) -> Result<String> {
-    let to_addr: ethers::types::Address = to
-        .parse()
-        .map_err(|e| anyhow::anyhow!("invalid PAYMENT_ADDRESS for auto payment: {e}"))?;
-
-    let mut data = Vec::with_capacity(4 + 32 + 32);
-    data.extend_from_slice(&[0xa9, 0x05, 0x9c, 0xbb]);
-
-    let mut addr_slot = [0u8; 32];
-    addr_slot[12..32].copy_from_slice(to_addr.as_bytes());
-    data.extend_from_slice(&addr_slot);
-
-    let mut amount_slot = [0u8; 32];
-    amount.to_big_endian(&mut amount_slot);
-    data.extend_from_slice(&amount_slot);
-
-    Ok(format!("0x{}", hex::encode(data)))
 }
 
 async fn fetch_erc20_balance_of(
@@ -912,7 +551,7 @@ async fn fetch_erc20_balance_of(
 ) -> Result<U256> {
     let token_addr: Address = token_contract
         .parse()
-        .map_err(|e| anyhow::anyhow!("invalid token contract address {}: {e}", token_contract))?;
+        .map_err(|e| anyhow::anyhow!("invalid token contract address {token_contract}: {e}"))?;
 
     let mut data = Vec::with_capacity(4 + 32);
     data.extend_from_slice(&[0x70, 0xa0, 0x82, 0x31]);
@@ -934,136 +573,6 @@ async fn fetch_erc20_balance_of(
     Ok(U256::from_big_endian(&amount_slot))
 }
 
-async fn validate_and_record_payment(
-    engine: &ExecutionEngine,
-    pool: &PgPool,
-    request_id: Uuid,
-    chain: &Chain,
-    gas_estimate: u64,
-    cost: f64,
-    smart_wallet_str: &str,
-    proof: &PaymentProof,
-) -> Result<Option<ExecutionResponse>> {
-    let chain_cfg = engine.config.chain_config(chain)?;
-    let token_upper = proof.token.to_uppercase();
-    let token_decimals = chain_cfg
-        .token_decimals
-        .get(&token_upper)
-        .copied()
-        .unwrap_or(6);
-
-    let required_amount_raw = match usd_to_token_raw_amount(cost, token_decimals) {
-        Ok(value) => value,
-        Err(error) => {
-            db::update_execution_status(
-                pool,
-                request_id,
-                &ExecutionStatus::Failed,
-                None,
-                Some(&format!("invalid required payment amount: {}", error)),
-                None,
-                None,
-            )
-            .await?;
-
-            return Ok(Some(ExecutionResponse {
-                request_id,
-                status: ExecutionStatus::Failed,
-                smart_wallet_address: Some(smart_wallet_str.to_string()),
-                estimated_gas: Some(gas_estimate),
-                estimated_cost_usd: Some(cost),
-                tx_hash: None,
-                message: format!("invalid required payment amount: {}", error),
-            }));
-        }
-    };
-
-    let confirmed_amount_raw = match proof.confirmed_amount_raw.as_deref() {
-        Some(raw) => U256::from_dec_str(raw)
-            .map_err(|e| anyhow::anyhow!("invalid confirmed_amount_raw in payment proof: {e}"))?,
-        None => {
-            db::update_execution_status(
-                pool,
-                request_id,
-                &ExecutionStatus::Failed,
-                None,
-                Some("payment proof missing confirmed_amount_raw"),
-                None,
-                None,
-            )
-            .await?;
-
-            return Ok(Some(ExecutionResponse {
-                request_id,
-                status: ExecutionStatus::Failed,
-                smart_wallet_address: Some(smart_wallet_str.to_string()),
-                estimated_gas: Some(gas_estimate),
-                estimated_cost_usd: Some(cost),
-                tx_hash: None,
-                message: "payment proof missing confirmed_amount_raw".into(),
-            }));
-        }
-    };
-
-    if confirmed_amount_raw < required_amount_raw {
-        db::update_execution_status(
-            pool,
-            request_id,
-            &ExecutionStatus::Failed,
-            None,
-            Some(&format!(
-                "underpayment: paid {} raw {}, required {} raw {}",
-                confirmed_amount_raw, token_upper, required_amount_raw, token_upper,
-            )),
-            None,
-            None,
-        )
-        .await?;
-
-        return Ok(Some(ExecutionResponse {
-            request_id,
-            status: ExecutionStatus::Failed,
-            smart_wallet_address: Some(smart_wallet_str.to_string()),
-            estimated_gas: Some(gas_estimate),
-            estimated_cost_usd: Some(cost),
-            tx_hash: None,
-            message: format!(
-                "underpayment: paid {} raw {}, required {} raw {}",
-                confirmed_amount_raw, token_upper, required_amount_raw, token_upper,
-            ),
-        }));
-    }
-
-    let inserted = db::insert_payment(pool, request_id, proof).await?;
-    if inserted.is_none() {
-        return Ok(Some(ExecutionResponse {
-            request_id,
-            status: ExecutionStatus::Failed,
-            smart_wallet_address: Some(smart_wallet_str.to_string()),
-            estimated_gas: Some(gas_estimate),
-            estimated_cost_usd: Some(cost),
-            tx_hash: None,
-            message: format!(
-                "payment tx {} has already been used (replay rejected)",
-                proof.tx_hash
-            ),
-        }));
-    }
-
-    db::update_execution_status(
-        pool,
-        request_id,
-        &ExecutionStatus::PaymentVerified,
-        None,
-        None,
-        None,
-        None,
-    )
-    .await?;
-
-    Ok(None)
-}
-
 /// Resolve the agent's smart wallet and return ERC-20 + native token balances.
 pub async fn handle_get_wallet_balance(
     engine: &ExecutionEngine,
@@ -1073,13 +582,13 @@ pub async fn handle_get_wallet_balance(
     chain_str: &str,
 ) -> Result<WalletBalanceResponse> {
     let chain = Chain::from_str_loose(chain_str)
-        .ok_or_else(|| anyhow::anyhow!("unsupported chain: {}", chain_str))?;
+        .ok_or_else(|| anyhow::anyhow!("unsupported chain: {chain_str}"))?;
 
     let chain_cfg = engine
         .config
         .chains
         .get(&chain)
-        .ok_or_else(|| anyhow::anyhow!("chain {} is not configured", chain_str))?
+        .ok_or_else(|| anyhow::anyhow!("chain {chain_str} is not configured"))?
         .clone();
 
     let provider = engine.provider_for_chain(&chain)?;
@@ -1109,8 +618,12 @@ pub async fn handle_get_wallet_balance(
     // Reuse the existing fetch_erc20_balance_of helper (reads last 32 bytes
     // of the call response, handles short-return gracefully).
     let mut tokens = Vec::new();
-    for (symbol, contract_addr_str) in &chain_cfg.accepted_tokens {
-        let decimals = chain_cfg.token_decimals.get(symbol).copied().unwrap_or(6);
+    for (symbol, contract_addr_str) in &chain_cfg.tracked_tokens {
+        let decimals = chain_cfg
+            .tracked_token_decimals
+            .get(symbol)
+            .copied()
+            .unwrap_or(6);
 
         let raw_balance =
             fetch_erc20_balance_of(provider.as_ref(), contract_addr_str, smart_wallet_address)
@@ -1148,7 +661,7 @@ pub async fn handle_get_wallet_balance(
     })
 }
 
-/// Handle a simulation-only request (no payment, no queue).
+/// Handle a simulation-only request (no queue).
 pub async fn handle_simulate(
     engine: &ExecutionEngine,
     pool: &PgPool,
@@ -1156,14 +669,16 @@ pub async fn handle_simulate(
     bundler_clients: &HashMap<Chain, BundlerClient>,
     paymaster_signers: &HashMap<Chain, PaymasterSigner>,
     api_key_id: Uuid,
-    payment_mode: PaymentMode,
     req: &ExecutionRequest,
 ) -> Result<ExecutionResponse> {
     let chain = engine.validate(req)?;
 
     let bundler_client = bundler_clients
         .get(&chain)
-        .ok_or_else(|| anyhow::anyhow!("no bundler configured for chain {}", chain))?;
+        .ok_or_else(|| anyhow::anyhow!("no bundler configured for chain {chain}"))?;
+    let paymaster_signer = paymaster_signers.get(&chain).ok_or_else(|| {
+        anyhow::anyhow!("testnet gas sponsorship is not configured for chain {chain}")
+    })?;
 
     // Resolve agent's smart wallet
     let agent_wallet = wallet_registry
@@ -1171,10 +686,11 @@ pub async fn handle_simulate(
         .await?;
     let smart_wallet_address =
         resolve_chain_smart_wallet_address(engine, &chain, &agent_wallet).await?;
-    let smart_wallet_str = format!("{:?}", smart_wallet_address);
+    let smart_wallet_str = format!("{smart_wallet_address:?}");
 
     let db_row = db::insert_execution_request(
         pool,
+        api_key_id,
         req,
         &ExecutionStatus::Pending,
         Some(&smart_wallet_str),
@@ -1186,7 +702,7 @@ pub async fn handle_simulate(
     let sim = simulate_request(
         engine,
         bundler_client,
-        paymaster_signers.get(&chain),
+        Some(paymaster_signer),
         wallet_registry,
         req,
         &chain,
@@ -1195,24 +711,6 @@ pub async fn handle_simulate(
         &smart_wallet_str,
     )
     .await?;
-    let cost = if sim.success {
-        match payment_mode {
-            PaymentMode::Manual => Some(
-                engine
-                    .estimate_cost_with_mode(&chain, sim.gas_estimate, bundler_client, true)
-                    .await?,
-            ),
-            PaymentMode::Auto => Some(
-                engine
-                    .estimate_cost_with_mode(&chain, sim.gas_estimate, bundler_client, false)
-                    .await?,
-            ),
-            PaymentMode::Sponsored => Some(0.0),
-        }
-    } else {
-        None
-    };
-
     db::update_execution_status(
         pool,
         request_id,
@@ -1224,7 +722,6 @@ pub async fn handle_simulate(
         None,
         sim.error.as_deref(),
         Some(sim.gas_estimate as i64),
-        cost,
     )
     .await?;
 
@@ -1237,7 +734,6 @@ pub async fn handle_simulate(
         },
         smart_wallet_address: Some(smart_wallet_str),
         estimated_gas: Some(sim.gas_estimate),
-        estimated_cost_usd: cost,
         tx_hash: None,
         message: if sim.success {
             "simulation succeeded".into()
@@ -1262,7 +758,7 @@ pub async fn handle_get_wallet(
 
     // Validate chain
     let resolved_chain = crate::types::Chain::from_str_loose(chain)
-        .ok_or_else(|| anyhow::anyhow!("unsupported chain: {}", chain))?;
+        .ok_or_else(|| anyhow::anyhow!("unsupported chain: {chain}"))?;
 
     // Validate agent_id
     if agent_id.trim().is_empty() {
@@ -1289,15 +785,13 @@ pub async fn handle_get_wallet(
 
     let message = if deployed {
         format!(
-            "Wallet is deployed. Send any ERC-20 tokens or native currency to {} before executing transactions that spend them.",
-            smart_wallet_str,
+            "Wallet is deployed. Send any ERC-20 tokens or native currency to {smart_wallet_str} before executing transactions that spend them.",
         )
     } else {
         format!(
-            "Wallet is not yet deployed (counterfactual). You can still safely send ERC-20 tokens and native currency to {} — \
+            "Wallet is not yet deployed (counterfactual). You can still safely send ERC-20 tokens and native currency to {smart_wallet_str} — \
              the address is deterministic via CREATE2. The wallet contract will be automatically deployed \
              on your first transaction. Tokens sent now will be fully accessible after deployment.",
-            smart_wallet_str,
         )
     };
 
@@ -1317,6 +811,8 @@ pub async fn handle_get_wallet(
 ///   - Must be `https://` (no plaintext HTTP — webhook payloads contain
 ///     sensitive execution data and HMAC signatures).
 ///   - Must be parseable as a URL.
+///   - Must not contain credentials, fragments, localhost, or a non-public
+///     literal IP address.
 ///   - Maximum length: 2048 characters.
 ///
 /// Returns `Ok(None)` if the input is `None`.
@@ -1331,17 +827,69 @@ fn validate_callback_url(url: Option<&str>) -> Result<Option<String>> {
             if trimmed.len() > 2048 {
                 anyhow::bail!("callback_url too long (max 2048 characters)");
             }
-            if !trimmed.starts_with("https://") {
-                anyhow::bail!(
-                    "callback_url must use HTTPS (got: {})",
-                    &trimmed[..trimmed.len().min(40)]
-                );
+            let parsed = reqwest::Url::parse(trimmed)
+                .map_err(|_| anyhow::anyhow!("callback_url must be a valid absolute URL"))?;
+            if parsed.scheme() != "https" {
+                anyhow::bail!("callback_url must use HTTPS");
             }
-            // Basic URL structure check — must have a host after "https://"
-            if trimmed.len() <= "https://".len() {
-                anyhow::bail!("callback_url is missing a host");
+            if !parsed.username().is_empty() || parsed.password().is_some() {
+                anyhow::bail!("callback_url must not contain credentials");
             }
-            Ok(Some(trimmed.to_string()))
+            if parsed.fragment().is_some() {
+                anyhow::bail!("callback_url must not contain a fragment");
+            }
+            let host = parsed
+                .host_str()
+                .ok_or_else(|| anyhow::anyhow!("callback_url is missing a host"))?;
+            if host.eq_ignore_ascii_case("localhost")
+                || host.to_ascii_lowercase().ends_with(".localhost")
+            {
+                anyhow::bail!("callback_url must use a public host");
+            }
+            let ip_literal = host
+                .strip_prefix('[')
+                .and_then(|value| value.strip_suffix(']'))
+                .unwrap_or(host);
+            if ip_literal
+                .parse::<IpAddr>()
+                .is_ok_and(is_non_public_callback_ip)
+            {
+                anyhow::bail!("callback_url must use a public IP address");
+            }
+            Ok(Some(parsed.to_string()))
+        }
+    }
+}
+
+fn is_non_public_callback_ip(ip: IpAddr) -> bool {
+    match ip {
+        IpAddr::V4(ip) => {
+            let [a, b, c, _] = ip.octets();
+            a == 0
+                || a == 10
+                || a == 127
+                || (a == 100 && (64..=127).contains(&b))
+                || (a == 169 && b == 254)
+                || (a == 172 && (16..=31).contains(&b))
+                || (a == 192 && b == 168)
+                || (a == 192 && b == 0 && c == 0)
+                || (a == 192 && b == 0 && c == 2)
+                || (a == 198 && (b == 18 || b == 19))
+                || (a == 198 && b == 51 && c == 100)
+                || (a == 203 && b == 0 && c == 113)
+                || a >= 224
+        }
+        IpAddr::V6(ip) => {
+            if let Some(ipv4) = ip.to_ipv4() {
+                return is_non_public_callback_ip(IpAddr::V4(ipv4));
+            }
+            let segments = ip.segments();
+            ip.is_unspecified()
+                || ip.is_loopback()
+                || (segments[0] & 0xfe00) == 0xfc00
+                || (segments[0] & 0xffc0) == 0xfe80
+                || (segments[0] & 0xff00) == 0xff00
+                || (segments[0] == 0x2001 && segments[1] == 0x0db8)
         }
     }
 }
@@ -1379,6 +927,33 @@ mod tests {
         let required = batch_native_value_required(&req).expect("sum batch values");
 
         assert_eq!(required, U256::from(300u64));
+    }
+
+    #[test]
+    fn callback_url_accepts_and_normalizes_public_https_url() {
+        let url = validate_callback_url(Some("  https://hooks.example.com/events  "))
+            .expect("valid callback URL");
+        assert_eq!(url.as_deref(), Some("https://hooks.example.com/events"));
+    }
+
+    #[test]
+    fn callback_url_rejects_unsafe_targets() {
+        for url in [
+            "http://hooks.example.com/events",
+            "https://localhost/events",
+            "https://service.localhost/events",
+            "https://127.0.0.1/events",
+            "https://10.0.0.1/events",
+            "https://[::1]/events",
+            "https://user:password@example.com/events",
+            "https://hooks.example.com/events#secret",
+            "not a URL",
+        ] {
+            assert!(
+                validate_callback_url(Some(url)).is_err(),
+                "unsafe callback URL was accepted: {url}"
+            );
+        }
     }
 
     #[test]

@@ -8,8 +8,7 @@ This endpoint submits a transaction request for execution.
 
 ## Authentication
 
-1. `X-API-Key` required.
-2. `X-Payment-Proof` required only when needed by payment mode and payment state.
+`X-API-Key` required.
 
 ## Request shapes
 
@@ -54,20 +53,6 @@ Two request shapes are supported.
 
 Use one shape at a time for clean client behavior.
 
-## Testnet payment tokens
-
-Current accepted x402 payment tokens in the hosted testnet environment:
-
-| Payload chain | USDC | aUSD |
-| --- | --- | --- |
-| `ethereum` | `0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238` | `0xE9df660c675F6f649677Ae408FCf6665D4F0F5Be` |
-| `base` | `0x036CbD53842c5426634e7929541eC2318f3dCF7e` | `0xE9df660c675F6f649677Ae408FCf6665D4F0F5Be` |
-| `arbitrum` | `0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d` | `0xE9df660c675F6f649677Ae408FCf6665D4F0F5Be` |
-
-Circle faucet USDC is available at `https://faucet.circle.com`; choose the Sepolia network that matches your request `chain`. Ethereum Sepolia may also accept `USDT` at `0xd077A400968890Eacc75cdc901F0356c943e4fDb` when enabled for your environment.
-
-Always trust live `402` response fields (`accepted_tokens`, `required_amount_raw`, and `payment_address`) over static assumptions.
-The exact token list in a `402` response can vary by your assigned environment and policy.
 
 ## First execute command
 
@@ -84,44 +69,6 @@ curl -X POST "$BASE_URL/execute" \
   }'
 ```
 
-## Manual mode payment required response
-
-Status code: `402 Payment Required`
-
-Example:
-
-```json
-{
-  "error": "payment_required",
-  "amount_usd": 0.25,
-  "accepted_tokens": ["USDC", "USDT", "aUSD"],
-  "required_amount_raw": {
-    "USDC": "250000",
-    "USDT": "250000",
-    "aUSD": "250000"
-  },
-  "payment_address": "0x742d35Cc6634C0532925a3b844Bc9e7595f2bD18",
-  "chain": "ethereum",
-  "request_id": "your_request_id",
-  "smart_wallet_address": "0x1234567890abcdef1234567890abcdef12345678"
-}
-```
-
-## Re submit with payment proof
-
-```bash
-curl -X POST "$BASE_URL/execute" \
-  -H "Content-Type: application/json" \
-  -H "X-API-Key: $API_KEY" \
-  -H 'X-Payment-Proof: {"request_id":"your_request_id","payer":"0xYourPayer","token":"USDC","chain":"ethereum","tx_hash":"0xYourPaymentTxHash"}' \
-  -d '{
-    "agent_id": "my-agent-001",
-    "chain": "ethereum",
-    "target_contract": "0xTargetContract",
-    "calldata": "0xCalldata",
-    "value": "0"
-  }'
-```
 
 ## Success response
 
@@ -135,7 +82,6 @@ Example:
   "status": "queued",
   "smart_wallet_address": "0xAgentSmartWallet",
   "estimated_gas": 52000,
-  "estimated_cost_usd": 0.25,
   "tx_hash": null,
   "message": "execution queued"
 }
@@ -152,21 +98,6 @@ ardent execute \
   --value 0
 ```
 
-For manual payment re-submit after `402`:
-
-```bash
-ardent execute \
-  --agent-id my-agent-001 \
-  --chain ethereum \
-  --target-contract 0xTargetContract \
-  --calldata 0xCalldata \
-  --value 0 \
-  --proof-request-id your_request_id \
-  --proof-payer 0xYourPayer \
-  --proof-token USDC \
-  --proof-chain ethereum \
-  --proof-tx-hash 0xYourPaymentTxHash
-```
 
 See [Agent Integration](../agent-integration.md) for the one-line installer.
 
@@ -217,20 +148,6 @@ ardent aave-supply \
   --agent-id my-agent-001 \
   --asset USDC \
   --amount 1.25
-```
-
-For manual payment re-submit after `402`:
-
-```bash
-ardent aave-supply \
-  --agent-id my-agent-001 \
-  --asset USDC \
-  --amount 1.25 \
-  --proof-request-id your_request_id \
-  --proof-payer 0xYourPayer \
-  --proof-token USDC \
-  --proof-chain ethereum \
-  --proof-tx-hash 0xYourPaymentTxHash
 ```
 
 The adapter compiles the request into an atomic `approve -> Pool.supply` batch
@@ -600,15 +517,10 @@ for the agent's ERC-4337 smart wallet. `execution_fee_raw` is paid as ETH value
 to the GMX router call, so the smart wallet must hold enough Arbitrum Sepolia
 ETH for the GMX keeper fee.
 
-## Notes by payment mode
-
-1. Manual mode often requires two calls if proof is absent on the first call.
-2. Auto mode can proceed in one call when auto transfer succeeds.
-3. Sponsored mode proceeds without any external payment proof (i.e. execution is sponsored).
 
 ## Testnet execution tips
 
-1. Use `chain: "ethereum"` for Sepolia testnet execution flow.
-2. Confirm token symbol in `X-Payment-Proof` matches one of the server returned `accepted_tokens`.
-3. Send payment to the exact `payment_address` returned by `402` response.
-4. Keep payment and execute requests tied to the same `agent_id` context.
+1. Simulate before every execution.
+2. Fund assets consumed by the target protocol.
+3. Fund protocol-required native value such as GMX keeper fees.
+4. Keep each logical agent on a stable `agent_id`.

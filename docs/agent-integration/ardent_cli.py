@@ -4,6 +4,7 @@
 Commands:
 - health
 - feed
+- api-key-create
 - wallet
 - wallet-balance
 - simulate
@@ -65,17 +66,13 @@ from urllib.error import HTTPError, URLError
 
 
 VERSION = "0.9.0"
-REPO_RAW_BASE = "https://raw.githubusercontent.com/Ardent-Ai-Research/agent-execution-platform/master/docs/agent-integration"
+REPO_RAW_BASE = "https://raw.githubusercontent.com/ardentairesearch/agent-execution-platform/master/docs/agent-integration"
 RUNTIME_DIR = Path(os.getenv("ARDENT_RUNTIME_DIR", str(Path.home() / ".ardent")))
 
 
 def parse_json_file(path: str) -> Any:
     with Path(path).expanduser().open("r", encoding="utf-8") as file_handle:
         return json.load(file_handle)
-
-
-def parse_json_string(raw: str) -> Any:
-    return json.loads(raw)
 
 
 def output(payload: Any) -> None:
@@ -96,7 +93,6 @@ def call_api(
     *,
     body: dict[str, Any] | None = None,
     api_key: str | None = None,
-    payment_proof: dict[str, Any] | None = None,
 ) -> tuple[int, Any]:
     headers: dict[str, str] = {
         "Accept": "application/json",
@@ -105,9 +101,6 @@ def call_api(
 
     if api_key:
         headers["X-API-Key"] = api_key
-
-    if payment_proof is not None:
-        headers["X-Payment-Proof"] = json.dumps(payment_proof, separators=(",", ":"))
 
     data: bytes | None = None
     if body is not None:
@@ -182,42 +175,6 @@ def resolve_request_body(args: argparse.Namespace) -> dict[str, Any]:
     return body
 
 
-def resolve_payment_proof(args: argparse.Namespace) -> dict[str, Any] | None:
-    if args.payment_proof_file:
-        proof = parse_json_file(args.payment_proof_file)
-        if not isinstance(proof, dict):
-            raise ValueError("payment proof file must contain a JSON object")
-        return proof
-
-    if args.payment_proof_json:
-        proof = parse_json_string(args.payment_proof_json)
-        if not isinstance(proof, dict):
-            raise ValueError("--payment-proof-json must be a JSON object")
-        return proof
-
-    proof_fields = [
-        args.proof_request_id,
-        args.proof_payer,
-        args.proof_token,
-        args.proof_chain,
-        args.proof_tx_hash,
-    ]
-    if any(proof_fields):
-        if not all(proof_fields):
-            raise ValueError(
-                "when using --proof-* flags, provide all fields: request-id, payer, token, chain, tx-hash"
-            )
-        return {
-            "request_id": args.proof_request_id,
-            "payer": args.proof_payer,
-            "token": args.proof_token,
-            "chain": args.proof_chain,
-            "tx_hash": args.proof_tx_hash,
-        }
-
-    return None
-
-
 def run_health(args: argparse.Namespace) -> int:
     url = f"{build_base_url(args)}/health"
     status, payload = call_api("GET", url)
@@ -229,6 +186,14 @@ def run_feed(args: argparse.Namespace) -> int:
     qs = parse.urlencode({"limit": args.limit})
     url = f"{build_base_url(args)}/feed/recent?{qs}"
     status, payload = call_api("GET", url)
+    output({"status": status, "data": payload})
+    return 0 if 200 <= status < 300 else 1
+
+
+def run_api_key_create(args: argparse.Namespace) -> int:
+    url = f"{build_base_url(args)}/api-keys"
+    body = {"label": args.label} if args.label else {}
+    status, payload = call_api("POST", url, body=body)
     output({"status": status, "data": payload})
     return 0 if 200 <= status < 300 else 1
 
@@ -263,9 +228,8 @@ def run_simulate(args: argparse.Namespace) -> int:
 def run_execute(args: argparse.Namespace) -> int:
     api_key = require_api_key(args)
     body = resolve_request_body(args)
-    payment_proof = resolve_payment_proof(args)
     url = f"{build_base_url(args)}/execute"
-    status, payload = call_api("POST", url, body=body, api_key=api_key, payment_proof=payment_proof)
+    status, payload = call_api("POST", url, body=body, api_key=api_key)
     output({"status": status, "data": payload})
     return 0 if 200 <= status < 300 else 1
 
@@ -315,9 +279,8 @@ def run_aave_supply_simulate(args: argparse.Namespace) -> int:
 def run_aave_supply(args: argparse.Namespace) -> int:
     api_key = require_api_key(args)
     body = resolve_aave_action_body(args)
-    payment_proof = resolve_payment_proof(args)
     url = f"{build_base_url(args)}/protocols/aave-v3/supply"
-    status, payload = call_api("POST", url, body=body, api_key=api_key, payment_proof=payment_proof)
+    status, payload = call_api("POST", url, body=body, api_key=api_key)
     output({"status": status, "data": payload})
     return 0 if 200 <= status < 300 else 1
 
@@ -334,9 +297,8 @@ def run_aave_withdraw_simulate(args: argparse.Namespace) -> int:
 def run_aave_withdraw(args: argparse.Namespace) -> int:
     api_key = require_api_key(args)
     body = resolve_aave_action_body(args)
-    payment_proof = resolve_payment_proof(args)
     url = f"{build_base_url(args)}/protocols/aave-v3/withdraw"
-    status, payload = call_api("POST", url, body=body, api_key=api_key, payment_proof=payment_proof)
+    status, payload = call_api("POST", url, body=body, api_key=api_key)
     output({"status": status, "data": payload})
     return 0 if 200 <= status < 300 else 1
 
@@ -353,9 +315,8 @@ def run_aave_repay_simulate(args: argparse.Namespace) -> int:
 def run_aave_repay(args: argparse.Namespace) -> int:
     api_key = require_api_key(args)
     body = resolve_aave_action_body(args)
-    payment_proof = resolve_payment_proof(args)
     url = f"{build_base_url(args)}/protocols/aave-v3/repay"
-    status, payload = call_api("POST", url, body=body, api_key=api_key, payment_proof=payment_proof)
+    status, payload = call_api("POST", url, body=body, api_key=api_key)
     output({"status": status, "data": payload})
     return 0 if 200 <= status < 300 else 1
 
@@ -372,9 +333,8 @@ def run_aave_borrow_simulate(args: argparse.Namespace) -> int:
 def run_aave_borrow(args: argparse.Namespace) -> int:
     api_key = require_api_key(args)
     body = resolve_aave_action_body(args)
-    payment_proof = resolve_payment_proof(args)
     url = f"{build_base_url(args)}/protocols/aave-v3/borrow"
-    status, payload = call_api("POST", url, body=body, api_key=api_key, payment_proof=payment_proof)
+    status, payload = call_api("POST", url, body=body, api_key=api_key)
     output({"status": status, "data": payload})
     return 0 if 200 <= status < 300 else 1
 
@@ -434,9 +394,8 @@ def run_compound_supply_simulate(args: argparse.Namespace) -> int:
 def run_compound_supply(args: argparse.Namespace) -> int:
     api_key = require_api_key(args)
     body = resolve_compound_action_body(args)
-    payment_proof = resolve_payment_proof(args)
     url = f"{build_base_url(args)}/protocols/compound-v3/supply"
-    status, payload = call_api("POST", url, body=body, api_key=api_key, payment_proof=payment_proof)
+    status, payload = call_api("POST", url, body=body, api_key=api_key)
     output({"status": status, "data": payload})
     return 0 if 200 <= status < 300 else 1
 
@@ -453,9 +412,8 @@ def run_compound_withdraw_simulate(args: argparse.Namespace) -> int:
 def run_compound_withdraw(args: argparse.Namespace) -> int:
     api_key = require_api_key(args)
     body = resolve_compound_action_body(args)
-    payment_proof = resolve_payment_proof(args)
     url = f"{build_base_url(args)}/protocols/compound-v3/withdraw"
-    status, payload = call_api("POST", url, body=body, api_key=api_key, payment_proof=payment_proof)
+    status, payload = call_api("POST", url, body=body, api_key=api_key)
     output({"status": status, "data": payload})
     return 0 if 200 <= status < 300 else 1
 
@@ -472,9 +430,8 @@ def run_compound_repay_simulate(args: argparse.Namespace) -> int:
 def run_compound_repay(args: argparse.Namespace) -> int:
     api_key = require_api_key(args)
     body = resolve_compound_action_body(args)
-    payment_proof = resolve_payment_proof(args)
     url = f"{build_base_url(args)}/protocols/compound-v3/repay"
-    status, payload = call_api("POST", url, body=body, api_key=api_key, payment_proof=payment_proof)
+    status, payload = call_api("POST", url, body=body, api_key=api_key)
     output({"status": status, "data": payload})
     return 0 if 200 <= status < 300 else 1
 
@@ -491,9 +448,8 @@ def run_compound_borrow_simulate(args: argparse.Namespace) -> int:
 def run_compound_borrow(args: argparse.Namespace) -> int:
     api_key = require_api_key(args)
     body = resolve_compound_action_body(args)
-    payment_proof = resolve_payment_proof(args)
     url = f"{build_base_url(args)}/protocols/compound-v3/borrow"
-    status, payload = call_api("POST", url, body=body, api_key=api_key, payment_proof=payment_proof)
+    status, payload = call_api("POST", url, body=body, api_key=api_key)
     output({"status": status, "data": payload})
     return 0 if 200 <= status < 300 else 1
 
@@ -567,8 +523,7 @@ def run_morpho_action(args: argparse.Namespace) -> int:
     body = resolve_morpho_action_body(args)
     suffix = "" if args.execute else "/simulate"
     url = f"{build_base_url(args)}/protocols/morpho/{args.endpoint}{suffix}"
-    payment_proof = resolve_payment_proof(args) if args.execute else None
-    status, payload = call_api("POST", url, body=body, api_key=api_key, payment_proof=payment_proof)
+    status, payload = call_api("POST", url, body=body, api_key=api_key)
     output({"status": status, "data": payload})
     return 0 if 200 <= status < 300 else 1
 
@@ -646,14 +601,12 @@ def run_balancer_swap_simulate(args: argparse.Namespace) -> int:
 def run_balancer_swap(args: argparse.Namespace) -> int:
     api_key = require_api_key(args)
     body = resolve_balancer_swap_body(args)
-    payment_proof = resolve_payment_proof(args)
     url = f"{build_base_url(args)}/protocols/balancer-v3/swap"
     status, payload = call_api(
         "POST",
         url,
         body=body,
         api_key=api_key,
-        payment_proof=payment_proof,
     )
     output({"status": status, "data": payload})
     return 0 if 200 <= status < 300 else 1
@@ -733,9 +686,8 @@ def run_uniswap_v4_swap(args: argparse.Namespace) -> int:
     body = resolve_uniswap_v4_swap_body(args)
     suffix = "" if args.execute else "/simulate"
     url = f"{build_base_url(args)}/protocols/uniswap-v4/swap{suffix}"
-    payment_proof = resolve_payment_proof(args) if args.execute else None
     status, payload = call_api(
-        "POST", url, body=body, api_key=api_key, payment_proof=payment_proof
+        "POST", url, body=body, api_key=api_key
     )
     output({"status": status, "data": payload})
     return 0 if 200 <= status < 300 else 1
@@ -857,15 +809,11 @@ def run_balancer_liquidity(args: argparse.Namespace) -> int:
     suffix = f"/protocols/balancer-v3/liquidity/{args.liquidity_action}"
     if args.liquidity_mode != "execute":
         suffix += f"/{args.liquidity_mode}"
-    payment_proof = (
-        resolve_payment_proof(args) if args.liquidity_mode == "execute" else None
-    )
     status, payload = call_api(
         "POST",
         f"{build_base_url(args)}{suffix}",
         body=body,
         api_key=api_key,
-        payment_proof=payment_proof,
     )
     output({"status": status, "data": payload})
     return 0 if 200 <= status < 300 else 1
@@ -989,9 +937,8 @@ def run_gmx_update_order(args: argparse.Namespace) -> int:
             "auto_cancel",
         ],
     )
-    payment_proof = resolve_payment_proof(args)
     url = f"{build_base_url(args)}/protocols/gmx-v2/orders/update"
-    status, payload = call_api("POST", url, body=body, api_key=api_key, payment_proof=payment_proof)
+    status, payload = call_api("POST", url, body=body, api_key=api_key)
     output({"status": status, "data": payload})
     return 0 if 200 <= status < 300 else 1
 
@@ -1008,9 +955,8 @@ def run_gmx_create_order_simulate(args: argparse.Namespace) -> int:
 def run_gmx_create_order(args: argparse.Namespace) -> int:
     api_key = require_api_key(args)
     body = resolve_gmx_create_order_body(args)
-    payment_proof = resolve_payment_proof(args)
     url = f"{build_base_url(args)}/protocols/gmx-v2/orders"
-    status, payload = call_api("POST", url, body=body, api_key=api_key, payment_proof=payment_proof)
+    status, payload = call_api("POST", url, body=body, api_key=api_key)
     output({"status": status, "data": payload})
     return 0 if 200 <= status < 300 else 1
 
@@ -1027,9 +973,8 @@ def run_gmx_cancel_order_simulate(args: argparse.Namespace) -> int:
 def run_gmx_cancel_order(args: argparse.Namespace) -> int:
     api_key = require_api_key(args)
     body = resolve_gmx_cancel_order_body(args)
-    payment_proof = resolve_payment_proof(args)
     url = f"{build_base_url(args)}/protocols/gmx-v2/orders/cancel"
-    status, payload = call_api("POST", url, body=body, api_key=api_key, payment_proof=payment_proof)
+    status, payload = call_api("POST", url, body=body, api_key=api_key)
     output({"status": status, "data": payload})
     return 0 if 200 <= status < 300 else 1
 
@@ -1153,9 +1098,8 @@ def run_gmx_create_deposit_simulate(args: argparse.Namespace) -> int:
 def run_gmx_create_deposit(args: argparse.Namespace) -> int:
     api_key = require_api_key(args)
     body = resolve_gmx_deposit_body(args)
-    payment_proof = resolve_payment_proof(args)
     url = f"{build_base_url(args)}/protocols/gmx-v2/deposits"
-    status, payload = call_api("POST", url, body=body, api_key=api_key, payment_proof=payment_proof)
+    status, payload = call_api("POST", url, body=body, api_key=api_key)
     output({"status": status, "data": payload})
     return 0 if 200 <= status < 300 else 1
 
@@ -1172,9 +1116,8 @@ def run_gmx_create_withdrawal_simulate(args: argparse.Namespace) -> int:
 def run_gmx_create_withdrawal(args: argparse.Namespace) -> int:
     api_key = require_api_key(args)
     body = resolve_gmx_withdrawal_body(args)
-    payment_proof = resolve_payment_proof(args)
     url = f"{build_base_url(args)}/protocols/gmx-v2/withdrawals"
-    status, payload = call_api("POST", url, body=body, api_key=api_key, payment_proof=payment_proof)
+    status, payload = call_api("POST", url, body=body, api_key=api_key)
     output({"status": status, "data": payload})
     return 0 if 200 <= status < 300 else 1
 
@@ -1191,9 +1134,8 @@ def run_gmx_cancel_simulate(args: argparse.Namespace) -> int:
 def run_gmx_cancel(args: argparse.Namespace) -> int:
     api_key = require_api_key(args)
     body = resolve_gmx_simple_body(args, ["request_type", "key"])
-    payment_proof = resolve_payment_proof(args)
     url = f"{build_base_url(args)}/protocols/gmx-v2/requests/cancel"
-    status, payload = call_api("POST", url, body=body, api_key=api_key, payment_proof=payment_proof)
+    status, payload = call_api("POST", url, body=body, api_key=api_key)
     output({"status": status, "data": payload})
     return 0 if 200 <= status < 300 else 1
 
@@ -1210,9 +1152,8 @@ def run_gmx_claim_simulate(args: argparse.Namespace) -> int:
 def run_gmx_claim(args: argparse.Namespace) -> int:
     api_key = require_api_key(args)
     body = resolve_gmx_claim_body(args)
-    payment_proof = resolve_payment_proof(args)
     url = f"{build_base_url(args)}/protocols/gmx-v2/claims"
-    status, payload = call_api("POST", url, body=body, api_key=api_key, payment_proof=payment_proof)
+    status, payload = call_api("POST", url, body=body, api_key=api_key)
     output({"status": status, "data": payload})
     return 0 if 200 <= status < 300 else 1
 
@@ -1361,17 +1302,6 @@ def add_morpho_action_flags(
     parser.add_argument("--strategy-id", help="Optional strategy ID")
     parser.add_argument("--callback-url", help="Optional callback webhook URL")
     parser.add_argument("--body-file", help="Path to full request JSON object (overrides payload flags)")
-
-
-def add_payment_proof_flags(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument("--payment-proof-json", help="Inline JSON object for X-Payment-Proof")
-    parser.add_argument("--payment-proof-file", help="Path to JSON object for X-Payment-Proof")
-    parser.add_argument("--proof-request-id", help="Payment proof request_id")
-    parser.add_argument("--proof-payer", help="Payment proof payer")
-    parser.add_argument("--proof-token", help="Payment proof token, e.g. USDC")
-    parser.add_argument("--proof-chain", help="Payment proof chain")
-    parser.add_argument("--proof-tx-hash", help="Payment proof transaction hash")
-
 
 def add_gmx_create_order_flags(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--agent-id", required=True, help="Agent identifier")
@@ -1723,6 +1653,11 @@ def build_parser() -> argparse.ArgumentParser:
     p_feed.add_argument("--limit", type=int, default=12, help="Feed item limit (1-50)")
     p_feed.set_defaults(func=run_feed)
 
+    p_api_key = subparsers.add_parser("api-key-create", help="POST /api-keys")
+    add_global_flags(p_api_key)
+    p_api_key.add_argument("--label", help="Optional API key label (max 100 characters)")
+    p_api_key.set_defaults(func=run_api_key_create)
+
     p_wallet = subparsers.add_parser("wallet", help="GET /wallet")
     add_global_flags(p_wallet)
     p_wallet.add_argument("--agent-id", required=True, help="Agent identifier")
@@ -1743,7 +1678,6 @@ def build_parser() -> argparse.ArgumentParser:
     p_exec = subparsers.add_parser("execute", help="POST /execute")
     add_global_flags(p_exec)
     add_execution_payload_flags(p_exec)
-    add_payment_proof_flags(p_exec)
     p_exec.set_defaults(func=run_execute)
 
     p_aave_sim = subparsers.add_parser("aave-supply-simulate", help="POST /protocols/aave-v3/supply/simulate")
@@ -1754,7 +1688,6 @@ def build_parser() -> argparse.ArgumentParser:
     p_aave_exec = subparsers.add_parser("aave-supply", help="POST /protocols/aave-v3/supply")
     add_global_flags(p_aave_exec)
     add_aave_supply_flags(p_aave_exec)
-    add_payment_proof_flags(p_aave_exec)
     p_aave_exec.set_defaults(func=run_aave_supply)
 
     p_aave_withdraw_sim = subparsers.add_parser("aave-withdraw-simulate", help="POST /protocols/aave-v3/withdraw/simulate")
@@ -1767,7 +1700,6 @@ def build_parser() -> argparse.ArgumentParser:
     add_global_flags(p_aave_withdraw)
     add_aave_amount_action_flags(p_aave_withdraw, allow_max=True)
     p_aave_withdraw.add_argument("--to", help="Optional recipient address; defaults to agent wallet")
-    add_payment_proof_flags(p_aave_withdraw)
     p_aave_withdraw.set_defaults(func=run_aave_withdraw)
 
     p_aave_repay_sim = subparsers.add_parser("aave-repay-simulate", help="POST /protocols/aave-v3/repay/simulate")
@@ -1782,7 +1714,6 @@ def build_parser() -> argparse.ArgumentParser:
     add_aave_amount_action_flags(p_aave_repay, allow_max=True)
     p_aave_repay.add_argument("--interest-rate-mode", type=int, choices=[1, 2], default=2, help="1 stable, 2 variable")
     p_aave_repay.add_argument("--on-behalf-of", help="Optional debt owner; defaults to agent wallet")
-    add_payment_proof_flags(p_aave_repay)
     p_aave_repay.set_defaults(func=run_aave_repay)
 
     p_aave_borrow_sim = subparsers.add_parser("aave-borrow-simulate", help="POST /protocols/aave-v3/borrow/simulate")
@@ -1801,7 +1732,6 @@ def build_parser() -> argparse.ArgumentParser:
     p_aave_borrow.add_argument("--referral-code", type=int, help="Optional Aave referral code")
     p_aave_borrow.add_argument("--on-behalf-of", help="Optional debt owner; defaults to agent wallet")
     p_aave_borrow.add_argument("--min-health-factor", help="Minimum projected health factor after borrow; default 1.05")
-    add_payment_proof_flags(p_aave_borrow)
     p_aave_borrow.set_defaults(func=run_aave_borrow)
 
     p_aave_position = subparsers.add_parser("aave-position", help="GET /protocols/aave-v3/position")
@@ -1824,7 +1754,6 @@ def build_parser() -> argparse.ArgumentParser:
     p_compound_supply = subparsers.add_parser("compound-supply", help="POST /protocols/compound-v3/supply")
     add_global_flags(p_compound_supply)
     add_compound_amount_action_flags(p_compound_supply, allow_max=True)
-    add_payment_proof_flags(p_compound_supply)
     p_compound_supply.set_defaults(func=run_compound_supply)
 
     p_compound_withdraw_sim = subparsers.add_parser("compound-withdraw-simulate", help="POST /protocols/compound-v3/withdraw/simulate")
@@ -1835,7 +1764,6 @@ def build_parser() -> argparse.ArgumentParser:
     p_compound_withdraw = subparsers.add_parser("compound-withdraw", help="POST /protocols/compound-v3/withdraw")
     add_global_flags(p_compound_withdraw)
     add_compound_amount_action_flags(p_compound_withdraw, allow_max=True)
-    add_payment_proof_flags(p_compound_withdraw)
     p_compound_withdraw.set_defaults(func=run_compound_withdraw)
 
     p_compound_repay_sim = subparsers.add_parser("compound-repay-simulate", help="POST /protocols/compound-v3/repay/simulate")
@@ -1846,7 +1774,6 @@ def build_parser() -> argparse.ArgumentParser:
     p_compound_repay = subparsers.add_parser("compound-repay", help="POST /protocols/compound-v3/repay")
     add_global_flags(p_compound_repay)
     add_compound_amount_action_flags(p_compound_repay, allow_max=True, base_only=True)
-    add_payment_proof_flags(p_compound_repay)
     p_compound_repay.set_defaults(func=run_compound_repay)
 
     p_compound_borrow_sim = subparsers.add_parser("compound-borrow-simulate", help="POST /protocols/compound-v3/borrow/simulate")
@@ -1857,7 +1784,6 @@ def build_parser() -> argparse.ArgumentParser:
     p_compound_borrow = subparsers.add_parser("compound-borrow", help="POST /protocols/compound-v3/borrow")
     add_global_flags(p_compound_borrow)
     add_compound_amount_action_flags(p_compound_borrow, base_only=True)
-    add_payment_proof_flags(p_compound_borrow)
     p_compound_borrow.set_defaults(func=run_compound_borrow)
 
     p_compound_position = subparsers.add_parser("compound-position", help="GET /protocols/compound-v3/position")
@@ -1954,7 +1880,6 @@ def build_parser() -> argparse.ArgumentParser:
         add_morpho_action_flags(
             execute, allow_max=allow_max, health_guard=health_guard
         )
-        add_payment_proof_flags(execute)
         execute.set_defaults(func=run_morpho_action, endpoint=endpoint, execute=True)
 
     p_balancer_swap_sim = subparsers.add_parser(
@@ -1971,7 +1896,6 @@ def build_parser() -> argparse.ArgumentParser:
     )
     add_global_flags(p_balancer_swap)
     add_balancer_swap_flags(p_balancer_swap)
-    add_payment_proof_flags(p_balancer_swap)
     p_balancer_swap.set_defaults(func=run_balancer_swap)
 
     p_balancer_quote = subparsers.add_parser(
@@ -2006,8 +1930,7 @@ def build_parser() -> argparse.ArgumentParser:
         add_global_flags(liquidity_parser)
         add_balancer_add_liquidity_flags(liquidity_parser)
         if mode == "execute":
-            add_payment_proof_flags(liquidity_parser)
-        liquidity_parser.set_defaults(
+                liquidity_parser.set_defaults(
             func=run_balancer_liquidity,
             liquidity_action=action,
             liquidity_mode=mode,
@@ -2037,8 +1960,7 @@ def build_parser() -> argparse.ArgumentParser:
         add_global_flags(liquidity_parser)
         add_balancer_remove_liquidity_flags(liquidity_parser)
         if mode == "execute":
-            add_payment_proof_flags(liquidity_parser)
-        liquidity_parser.set_defaults(
+                liquidity_parser.set_defaults(
             func=run_balancer_liquidity,
             liquidity_action=action,
             liquidity_mode=mode,
@@ -2093,8 +2015,7 @@ def build_parser() -> argparse.ArgumentParser:
         add_global_flags(uniswap_swap)
         add_uniswap_v4_swap_flags(uniswap_swap)
         if execute:
-            add_payment_proof_flags(uniswap_swap)
-        uniswap_swap.set_defaults(func=run_uniswap_v4_swap, execute=execute)
+                uniswap_swap.set_defaults(func=run_uniswap_v4_swap, execute=execute)
 
     p_uniswap_quote = subparsers.add_parser(
         "uniswap-v4-quote", help="POST /protocols/uniswap-v4/swap/quote"
@@ -2148,7 +2069,6 @@ def build_parser() -> argparse.ArgumentParser:
     p_gmx_create_order = subparsers.add_parser("gmx-create-order", help="POST /protocols/gmx-v2/orders")
     add_global_flags(p_gmx_create_order)
     add_gmx_create_order_flags(p_gmx_create_order)
-    add_payment_proof_flags(p_gmx_create_order)
     p_gmx_create_order.set_defaults(func=run_gmx_create_order)
 
     p_gmx_cancel_order_sim = subparsers.add_parser("gmx-cancel-order-simulate", help="POST /protocols/gmx-v2/orders/cancel/simulate")
@@ -2159,7 +2079,6 @@ def build_parser() -> argparse.ArgumentParser:
     p_gmx_cancel_order = subparsers.add_parser("gmx-cancel-order", help="POST /protocols/gmx-v2/orders/cancel")
     add_global_flags(p_gmx_cancel_order)
     add_gmx_cancel_order_flags(p_gmx_cancel_order)
-    add_payment_proof_flags(p_gmx_cancel_order)
     p_gmx_cancel_order.set_defaults(func=run_gmx_cancel_order)
 
     p_gmx_markets = subparsers.add_parser("gmx-markets", help="GET /protocols/gmx-v2/markets")
@@ -2193,7 +2112,6 @@ def build_parser() -> argparse.ArgumentParser:
     p_gmx_update_order = subparsers.add_parser("gmx-update-order", help="POST /protocols/gmx-v2/orders/update")
     add_global_flags(p_gmx_update_order)
     add_gmx_update_order_flags(p_gmx_update_order)
-    add_payment_proof_flags(p_gmx_update_order)
     p_gmx_update_order.set_defaults(func=run_gmx_update_order)
 
     p_gmx_deposit_sim = subparsers.add_parser("gmx-create-deposit-simulate", help="POST /protocols/gmx-v2/deposits/simulate")
@@ -2204,7 +2122,6 @@ def build_parser() -> argparse.ArgumentParser:
     p_gmx_deposit = subparsers.add_parser("gmx-create-deposit", help="POST /protocols/gmx-v2/deposits")
     add_global_flags(p_gmx_deposit)
     add_gmx_deposit_flags(p_gmx_deposit)
-    add_payment_proof_flags(p_gmx_deposit)
     p_gmx_deposit.set_defaults(func=run_gmx_create_deposit)
 
     p_gmx_withdrawal_sim = subparsers.add_parser("gmx-create-withdrawal-simulate", help="POST /protocols/gmx-v2/withdrawals/simulate")
@@ -2215,7 +2132,6 @@ def build_parser() -> argparse.ArgumentParser:
     p_gmx_withdrawal = subparsers.add_parser("gmx-create-withdrawal", help="POST /protocols/gmx-v2/withdrawals")
     add_global_flags(p_gmx_withdrawal)
     add_gmx_withdrawal_flags(p_gmx_withdrawal)
-    add_payment_proof_flags(p_gmx_withdrawal)
     p_gmx_withdrawal.set_defaults(func=run_gmx_create_withdrawal)
 
     p_gmx_cancel_sim = subparsers.add_parser("gmx-cancel-simulate", help="POST /protocols/gmx-v2/requests/cancel/simulate")
@@ -2226,7 +2142,6 @@ def build_parser() -> argparse.ArgumentParser:
     p_gmx_cancel = subparsers.add_parser("gmx-cancel", help="POST /protocols/gmx-v2/requests/cancel")
     add_global_flags(p_gmx_cancel)
     add_gmx_cancel_flags(p_gmx_cancel)
-    add_payment_proof_flags(p_gmx_cancel)
     p_gmx_cancel.set_defaults(func=run_gmx_cancel)
 
     p_gmx_claim_sim = subparsers.add_parser("gmx-claim-simulate", help="POST /protocols/gmx-v2/claims/simulate")
@@ -2237,7 +2152,6 @@ def build_parser() -> argparse.ArgumentParser:
     p_gmx_claim = subparsers.add_parser("gmx-claim", help="POST /protocols/gmx-v2/claims")
     add_global_flags(p_gmx_claim)
     add_gmx_claim_flags(p_gmx_claim)
-    add_payment_proof_flags(p_gmx_claim)
     p_gmx_claim.set_defaults(func=run_gmx_claim)
 
     p_status = subparsers.add_parser("status", help="GET /status/{id}")

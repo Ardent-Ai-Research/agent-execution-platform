@@ -17,6 +17,7 @@ API_KEY="your_api_key"
 
 1. `GET /health`
 2. `GET /feed/recent`
+3. `POST /api-keys`
 
 ### `GET /health`
 
@@ -48,12 +49,6 @@ Authentication:
 
 ```bash
 X-API-Key: <api_key>
-```
-
-Optional execution payment header (for manual API key users):
-
-```bash
-X-Payment-Proof: {"request_id":"your_request_id","payer":"0xYourPayer","token":"USDC","chain":"ethereum","tx_hash":"0xYourPaymentTxHash"}
 ```
 
 ### `GET /wallet`
@@ -100,21 +95,6 @@ curl -X POST "$BASE_URL/execute" \
   }'
 ```
 
-Manual payment mode re-submit (after `402 Payment Required`):
-
-```bash
-curl -X POST "$BASE_URL/execute" \
-  -H "Content-Type: application/json" \
-  -H "X-API-Key: $API_KEY" \
-  -H 'X-Payment-Proof: {"request_id":"your_request_id","payer":"0xYourPayer","token":"USDC","chain":"ethereum","tx_hash":"0xYourPaymentTxHash"}' \
-  -d '{
-    "agent_id": "my-agent-001",
-    "chain": "ethereum",
-    "target_contract": "0xTargetContract",
-    "calldata": "0xCalldata",
-    "value": "0"
-  }'
-```
 
 ### `GET /status/:id`
 
@@ -241,7 +221,6 @@ Content-Type: application/json
 1. `200 OK`
 2. `400 Bad Request`
 3. `401 Unauthorized`
-4. `402 Payment Required`
-5. `404 Not Found`
-6. `429 Too Many Requests`
-7. `500 Internal Server Error`
+4. `404 Not Found`
+5. `429 Too Many Requests`
+6. `500 Internal Server Error`

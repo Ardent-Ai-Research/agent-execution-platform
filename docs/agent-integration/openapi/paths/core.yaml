@@ -38,6 +38,35 @@
                   type: array
                   items:
                     type: object
+"/api-keys":
+  post:
+    summary: Generate a public self-service API key
+    security: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              label:
+                type:
+                - string
+                - 'null'
+                maxLength: 100
+    responses:
+      "201":
+        description: API key created; the raw key is shown once
+        content:
+          application/json:
+            schema:
+              "$ref": "#/components/schemas/ApiKeyResponse"
+      "400":
+        "$ref": "#/components/responses/ErrorResponse"
+      "429":
+        "$ref": "#/components/responses/ErrorResponse"
+      "503":
+        "$ref": "#/components/responses/ErrorResponse"
 "/wallet":
   get:
     summary: Resolve or provision smart wallet
@@ -112,14 +141,7 @@
         "$ref": "#/components/responses/ErrorResponse"
 "/execute":
   post:
-    summary: Execute transaction (or return payment quote)
-    parameters:
-    - in: header
-      name: X-Payment-Proof
-      required: false
-      description: JSON string proof header for manual payment flow re-submit.
-      schema:
-        type: string
+    summary: Execute a testnet transaction with sponsored gas
     requestBody:
       required: true
       content:
@@ -133,12 +155,6 @@
           application/json:
             schema:
               "$ref": "#/components/schemas/ExecutionResponse"
-      '402':
-        description: Payment required for manual mode
-        content:
-          application/json:
-            schema:
-              "$ref": "#/components/schemas/PaymentRequiredBody"
       '400':
         "$ref": "#/components/responses/ErrorResponse"
       '401':

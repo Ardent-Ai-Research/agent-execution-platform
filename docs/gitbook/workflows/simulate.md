@@ -1,6 +1,6 @@
 # Simulate Transaction
 
-Use simulation to validate execution and estimate payable cost before submitting live execution.
+Use simulation to validate the exact wallet call before submitting live execution.
 
 ## Endpoint
 
@@ -37,7 +37,6 @@ Example:
   "status": "pending",
   "smart_wallet_address": "0xAgentSmartWallet",
   "estimated_gas": 52000,
-  "estimated_cost_usd": 0.23,
   "tx_hash": null,
   "message": "simulation succeeded"
 }
@@ -56,16 +55,11 @@ ardent simulate \
 
 See [Agent Integration](../agent-integration.md) for the one-line installer.
 
-## Cost semantics by payment mode
-
-1. Manual includes platform fee.
-2. Auto excludes platform fee.
-3. Sponsored returns zero payable cost.
 
 ## Typical use
 
 1. Call simulate first.
-2. Validate gas and cost constraints.
+2. Validate the result and gas estimate.
 3. Continue to execute only when output is acceptable.
 
 ## Batch simulation semantics
