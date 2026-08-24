@@ -35,7 +35,7 @@ Aave V3, Compound III, GMX V2, Balancer V3, Morpho Blue, and Uniswap V4 testnet 
 ## Is there a CLI?
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/ardentairesearch/agent-execution-platform/master/docs/agent-integration/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/ardentairesearch/agent-execution-platform/V2/docs/agent-integration/install.sh | bash
 ```
 
 Run `ardent --help` after installation.

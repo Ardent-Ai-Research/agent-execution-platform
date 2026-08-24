@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-REPO_RAW_BASE="https://raw.githubusercontent.com/ardentairesearch/agent-execution-platform/master/docs/agent-integration"
+REPO_RAW_BASE="https://raw.githubusercontent.com/ardentairesearch/agent-execution-platform/V2/docs/agent-integration"
 
 INSTALL_DIR="${ARDENT_INSTALL_DIR:-${HOME}/.local/bin}"
 RUNTIME_DIR="${ARDENT_RUNTIME_DIR:-${HOME}/.ardent}"
@@ -99,6 +99,7 @@ curl -fsSL "${REPO_RAW_BASE}/mcp_server.py" -o "${RUNTIME_DIR}/mcp_server.py"
 curl -fsSL "${REPO_RAW_BASE}/mcp-tools.json" -o "${RUNTIME_DIR}/mcp-tools.json"
 curl -fsSL "${REPO_RAW_BASE}/skills.md" -o "${RUNTIME_DIR}/skills.md"
 curl -fsSL "${REPO_RAW_BASE}/openapi.yaml" -o "${RUNTIME_DIR}/openapi.yaml"
+chmod +x "${RUNTIME_DIR}/mcp_server.py"
 
 # ── Shared helper: patch an mcpServers-style config (Claude, Cursor, Windsurf)
 patch_mcp_servers_config() {
@@ -245,6 +246,105 @@ else
   echo "Windsurf not detected — skipping."
 fi
 
+# ── Hermes Agent ─────────────────────────────────────────────────────────────
+# Hermes owns a YAML config. Use its config CLI so YAML types, unrelated
+# settings, profiles, and other MCP entries are preserved by Hermes itself.
+HERMES_BIN=""
+if command -v hermes &>/dev/null; then
+  HERMES_BIN="$(command -v hermes)"
+else
+  for candidate in \
+    "${HOME}/.local/bin/hermes" \
+    "${HOME}/.hermes/bin/hermes" \
+    "${HOME}/.hermes/hermes-agent/venv/bin/hermes"; do
+    if [[ -x "${candidate}" ]]; then
+      HERMES_BIN="${candidate}"
+      break
+    fi
+  done
+fi
+
+if [[ -n "${HERMES_BIN}" ]]; then
+  if ! "${HERMES_BIN}" config set --help &>/dev/null \
+      || ! "${HERMES_BIN}" config unset --help &>/dev/null; then
+    echo "Detected Hermes Agent, but this version cannot patch MCP config — skipping."
+    echo "  ℹ️  Update Hermes and re-run this installer to configure Ardent automatically."
+  elif ! hermes_config_probe="$("${HERMES_BIN}" config get model --json 2>&1)"; then
+    echo "Detected Hermes Agent, but its config could not be read safely — skipping."
+    echo "  ℹ️  Run 'hermes config check', fix the reported issue, and re-run this installer."
+  elif [[ "${hermes_config_probe}" == *"Failed to parse"* ]]; then
+    echo "Detected Hermes Agent, but config.yaml contains invalid YAML — skipping."
+    echo "  ℹ️  Run 'hermes config check', fix the YAML, and re-run this installer."
+  else
+    echo "Detected Hermes Agent — patching MCP config..."
+
+    if "${HERMES_BIN}" config get mcp_servers.ardent.env.ARDENT_API_KEY --json \
+        &>/dev/null; then
+      hermes_has_api_key=1
+    else
+      hermes_has_api_key=0
+    fi
+
+    hermes_config_ok=1
+
+    # Execute the downloaded server directly. This avoids encoding a YAML list
+    # through `hermes config set`, whose scalar interface would store it as text.
+    if "${HERMES_BIN}" config set \
+        mcp_servers.ardent.command "${RUNTIME_DIR}/mcp_server.py" --force >/dev/null; then
+      "${HERMES_BIN}" config unset mcp_servers.ardent.args >/dev/null 2>&1 || true
+    else
+      hermes_config_ok=0
+    fi
+    if ! "${HERMES_BIN}" config set \
+        mcp_servers.ardent.enabled true --force >/dev/null; then
+      hermes_config_ok=0
+    fi
+
+    if [[ "${hermes_has_api_key}" -eq 0 ]] \
+        && ! "${HERMES_BIN}" config set \
+          mcp_servers.ardent.env.ARDENT_API_KEY your_api_key_here --force >/dev/null; then
+      hermes_config_ok=0
+    fi
+
+    # Verify the effective values. Some managed Hermes installations can
+    # reject writes while keeping the CLI process itself alive.
+    expected_hermes_command="$(python3 -c \
+      'import json, sys; print(json.dumps(sys.argv[1]))' \
+      "${RUNTIME_DIR}/mcp_server.py")"
+    actual_hermes_command="$("${HERMES_BIN}" config get \
+      mcp_servers.ardent.command --json 2>/dev/null || true)"
+    actual_hermes_enabled="$("${HERMES_BIN}" config get \
+      mcp_servers.ardent.enabled --json 2>/dev/null || true)"
+
+    if [[ "${actual_hermes_command}" != "${expected_hermes_command}" \
+        || "${actual_hermes_enabled}" != "true" ]]; then
+      hermes_config_ok=0
+    fi
+    if "${HERMES_BIN}" config get mcp_servers.ardent.args --json &>/dev/null; then
+      hermes_config_ok=0
+    fi
+    if ! "${HERMES_BIN}" config get \
+        mcp_servers.ardent.env.ARDENT_API_KEY --json &>/dev/null; then
+      hermes_config_ok=0
+    fi
+
+    if [[ "${hermes_config_ok}" -eq 1 ]]; then
+      echo "  ✅ Hermes Agent config updated."
+      if [[ "${hermes_has_api_key}" -eq 0 ]]; then
+        echo "  ⚠️  Set your real API key in: ${HERMES_HOME:-${HOME}/.hermes}/config.yaml"
+      else
+        echo "  ✅ Preserved the existing Hermes ARDENT_API_KEY."
+      fi
+      echo "  ℹ️  Run /reload-mcp in Hermes, or restart Hermes, to load the tools."
+    else
+      echo "  ⚠️  Hermes MCP configuration could not be completed."
+      echo "     Update Hermes and re-run this installer, or configure the server manually."
+    fi
+  fi
+else
+  echo "Hermes Agent not detected — skipping."
+fi
+
 echo
 echo "✅ Install complete"
 echo "CLI path: ${INSTALL_DIR}/ardent"
@@ -253,6 +353,7 @@ echo
 echo "Next steps:"
 echo "  1. Replace 'your_api_key_here' with your real key in any config files updated above"
 echo "  2. Fully quit and reopen any patched apps (Cmd+Q) — Codex, Claude, ChatGPT, Cursor, Windsurf"
+echo "     For Hermes Agent, run /reload-mcp or restart Hermes"
 echo "  3. Restart your terminal, or run: export PATH=\"${INSTALL_DIR}:\${PATH}\""
 echo "  4. Look for the tools icon/list in your AI app to confirm Ardent is loaded"
 echo

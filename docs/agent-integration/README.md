@@ -5,7 +5,7 @@ Everything needed to connect developers, AI agents, and LLM platforms to the AI 
 ## Install
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/ardentairesearch/agent-execution-platform/master/docs/agent-integration/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/ardentairesearch/agent-execution-platform/V2/docs/agent-integration/install.sh | bash
 ```
 
 The installer:
@@ -13,7 +13,7 @@ The installer:
 - Places the `ardent` CLI in `~/.local/bin`
 - Adds `~/.local/bin` to common shell startup files (`.zshrc`, `.zprofile`, `.bashrc`, `.bash_profile`, `.profile`, and fish config when relevant) so new terminals can find `ardent`
 - Downloads MCP server + runtime files into `~/.ardent/`
-- Configures **Codex** MCP by default, and auto-patches MCP configs for **Claude Desktop, ChatGPT Desktop, Cursor, and Windsurf** when detected
+- Configures **Codex** MCP by default, and auto-patches MCP configs for **Claude Desktop, ChatGPT Desktop, Cursor, Windsurf, and Hermes Agent** when detected
 - Preserves any existing `ARDENT_API_KEY` already set in those configs
 
 ## Set credentials
@@ -249,7 +249,7 @@ ardent self-update --cli-only   # updates only the CLI
 | --- | --- | --- |
 | `install.sh` | One-line installer | Everyone |
 | `ardent_cli.py` | Zero-dependency CLI | Developers, scripts, CI |
-| `mcp_server.py` | stdio MCP server | Codex, Claude, ChatGPT, Cursor, Windsurf |
+| `mcp_server.py` | stdio MCP server | Codex, Claude, ChatGPT, Cursor, Windsurf, Hermes |
 | `mcp-tools.json` | MCP tool definitions | `mcp_server.py` |
 | `openapi.yaml` | Generated bundled OpenAPI 3.1 spec | ChatGPT custom actions, code generators |
 | `openapi/` | Split OpenAPI source + bundler | Maintainers |

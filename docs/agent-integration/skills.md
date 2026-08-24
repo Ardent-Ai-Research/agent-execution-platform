@@ -9,7 +9,7 @@ This file covers everything needed to get started with AI Agent Blockchain Execu
 ### 1) Install CLI
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/ardentairesearch/agent-execution-platform/master/docs/agent-integration/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/ardentairesearch/agent-execution-platform/V2/docs/agent-integration/install.sh | bash
 ```
 
 This installs an `ardent` command in `~/.local/bin` and downloads runtime files (MCP server, OpenAPI spec) into `~/.ardent/`.
@@ -49,7 +49,7 @@ ardent self-update --cli-only   # updates only the CLI
 
 ### Optional: MCP server for AI tool runtimes
 
-The installer registers Ardent in Codex by default and automatically patches Claude Desktop, ChatGPT Desktop, Cursor, and Windsurf when detected. Just restart the app after install.
+The installer registers Ardent in Codex by default and automatically patches Claude Desktop, ChatGPT Desktop, Cursor, Windsurf, and Hermes Agent when detected. Restart the app after install; Hermes users can instead run `/reload-mcp`.
 
 > **After install, open the patched config file and replace the `ARDENT_API_KEY` placeholder with your real key before restarting the app.**
 > The installer prints the exact path of every file it patches.

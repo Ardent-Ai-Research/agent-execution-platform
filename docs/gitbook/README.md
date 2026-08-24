@@ -97,7 +97,7 @@ Ardent AI Research ships an integration pack that makes it fast to connect any d
 It includes:
 
 1. A zero-dependency CLI (`ardent`) with a one-line installer.
-2. An MCP server that exposes all platform tools to Codex, Claude Desktop, ChatGPT Desktop, Cursor, and Windsurf.
+2. An MCP server that exposes all platform tools to Codex, Claude Desktop, ChatGPT Desktop, Cursor, Windsurf, and Hermes Agent.
 3. An OpenAPI 3.1 spec for ChatGPT custom actions and code generators.
 
 The installer auto-patches desktop AI configs and preserves any existing API key.

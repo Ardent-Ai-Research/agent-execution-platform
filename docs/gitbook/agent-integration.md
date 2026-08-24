@@ -7,7 +7,7 @@ It includes a one-line installer, a zero-dependency CLI, an MCP server for AI de
 Run the installer once to get everything:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/ardentairesearch/agent-execution-platform/master/docs/agent-integration/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/ardentairesearch/agent-execution-platform/V2/docs/agent-integration/install.sh | bash
 ```
 
 Then set your key:
@@ -109,7 +109,7 @@ ardent self-update --cli-only           # updates only the CLI
 
 ### AI assistant users — the MCP server
 
-**Best for:** developers and power users who run Codex, Claude Desktop, ChatGPT Desktop, Cursor, or Windsurf and want their AI tool to call the Ardent platform directly during a session.
+**Best for:** developers and power users who run Codex, Claude Desktop, ChatGPT Desktop, Cursor, Windsurf, or Hermes Agent and want their AI tool to call the Ardent platform directly during a session.
 
 The MCP server (`~/.ardent/mcp_server.py`) speaks the Model Context Protocol over stdio. Once registered, the AI assistant can invoke Ardent tools in response to natural language without you writing any code or curl commands.
 
@@ -122,6 +122,7 @@ The installer configures Codex by default and automatically patches the config f
 | ChatGPT Desktop | `~/Library/Application Support/com.openai.chat/mcp_servers.json` |
 | Cursor | `~/.cursor/mcp.json` |
 | Windsurf | `~/.codeium/windsurf/mcp_config.json` |
+| Hermes Agent | `~/.hermes/config.yaml` |
 
 > **You must insert your API key manually after install.**
 > The installer writes `your_api_key_here` as a placeholder in the `env` block of each patched config. Open the file the installer reports and replace that value with your real key, then fully quit and reopen the app (Cmd+Q — not just close the window).
@@ -129,6 +130,8 @@ The installer configures Codex by default and automatically patches the config f
 > The patched entry looks like this: `"env": { "ARDENT_API_KEY": "your_api_key_here" }`
 >
 > Replace `your_api_key_here` with your actual `ARDENT_API_KEY`. If you re-run the installer after already setting a real key, it preserves the existing value.
+>
+> Hermes users can run `/reload-mcp` after installation instead of restarting Hermes.
 
 **When to use it:**
 
@@ -245,7 +248,7 @@ The `skills.md` file is designed to be loaded as a system prompt or injected as 
 2. Guardrails that prevent common agent mistakes, including executing without simulating or assuming a wallet is funded.
 
 Full skills file:
-`https://raw.githubusercontent.com/ardentairesearch/agent-execution-platform/master/docs/agent-integration/skills.md`
+`https://raw.githubusercontent.com/ardentairesearch/agent-execution-platform/V2/docs/agent-integration/skills.md`
 
 ---
 
@@ -255,7 +258,7 @@ Full skills file:
 | --- | --- | --- |
 | `install.sh` | One-line installer | Everyone |
 | `ardent_cli.py` | Zero-dependency CLI | Developers, scripts, CI |
-| `mcp_server.py` | stdio MCP server | Codex, Claude, ChatGPT, Cursor, Windsurf |
+| `mcp_server.py` | stdio MCP server | Codex, Claude, ChatGPT, Cursor, Windsurf, Hermes |
 | `mcp-tools.json` | MCP tool definitions | `mcp_server.py` |
 | `openapi.yaml` | Generated bundled OpenAPI 3.1 spec | ChatGPT custom actions, code generators, framework builders |
 | `openapi/` | Split OpenAPI source + bundler | Maintainers |

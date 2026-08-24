@@ -66,7 +66,7 @@ from urllib.error import HTTPError, URLError
 
 
 VERSION = "0.9.0"
-REPO_RAW_BASE = "https://raw.githubusercontent.com/ardentairesearch/agent-execution-platform/master/docs/agent-integration"
+REPO_RAW_BASE = "https://raw.githubusercontent.com/ardentairesearch/agent-execution-platform/V2/docs/agent-integration"
 RUNTIME_DIR = Path(os.getenv("ARDENT_RUNTIME_DIR", str(Path.home() / ".ardent")))
 
 
