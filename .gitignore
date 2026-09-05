@@ -1,5 +1,15 @@
 /target
 .env
+.env.*
+.envrc
+!deploy/.env.production.example
+deploy/backups/
+*.dump
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
 *.swp
 *.swo
 .DS_Store

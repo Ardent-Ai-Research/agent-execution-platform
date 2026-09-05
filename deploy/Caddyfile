@@ -1,0 +1,25 @@
+{
+	email {$ACME_EMAIL}
+	admin off
+}
+
+{$API_DOMAIN} {
+	encode zstd gzip
+
+	header {
+		-Server
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "no-referrer"
+		Permissions-Policy "camera=(), geolocation=(), microphone=()"
+	}
+
+	reverse_proxy api:8080 {
+		# The API trusts this private header only because Caddy removes any client
+		# value and writes the address of the direct peer itself.
+		header_up -X-Execute-Client-IP
+		header_up X-Execute-Client-IP {remote_host}
+		health_uri /health
+		health_interval 15s
+		fail_duration 30s
+	}
+}
