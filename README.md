@@ -134,14 +134,6 @@ cargo run
 
 Database migrations run automatically at startup.
 
-## Production Deployment
-
-The deployed Testnet V2 backend can run as a single Rust API/worker service
-behind Caddy, with private PostgreSQL and Redis containers. Oracle Cloud Always
-Free ARM is the supported low-cost target. See
-[deploy/README.md](deploy/README.md) for the Railway-to-Oracle migration,
-database continuity requirements, startup commands, and backup procedure.
-
 ## Generate an API Key
 
 API-key creation is public and does not require an existing credential:
